@@ -147,6 +147,11 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define DISPLAY_BASE       0x70020
 #define DISPLAY_BASE_MASK  0x03fffffc
 
+#define DISPLAY_ARB			0x70030
+#define DISPLAY_ARB_AEND_MASK		0x1ff
+#define DISPLAY_ARB_AEND_SHIFT		0
+#define DISPLAY_ARB_BEND_MASK		0x3ff
+#define DISPLAY_ARB_BEND_SHIFT		9
 
 /* Cursor control registers, pp383-384
  */
@@ -662,6 +667,8 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define DPLL_B		0x06018
 #define FPA0		0x06040
 #define FPA1		0x06044
+#define FPB0		0x06048
+#define FPB1		0x0604c
 
 #define I830_HTOTAL_MASK 	0xfff0000
 #define I830_HACTIVE_MASK	0x7ff
@@ -956,6 +963,20 @@ typedef enum {
 #define PIPE_B_SHIFT			8
 #define PIPE_SHIFT(n)			((n) == 0 ? \
 					 PIPE_A_SHIFT : PIPE_B_SHIFT)
+
+#define VGACNTRL		0x71400
+#define VGA_CNTRL_DISABLE			(1 << 31)
+#define VGA_CNTRL_ENABLE			0
+#define VGA_CNTRL_PIPE_SELECT_SHIFT		29
+#define VGA_CNTRL_PALETTE_READ_SELECT		23
+#define VGA_CNTRL_PALETTE_A_WRITE_DISABLE	(1 << 22)
+#define VGA_CNTRL_PALETTE_B_WRITE_DISABLE	(1 << 21)
+#define VGA_CNTRL_LEGACY_PALETTE		(1 << 20)
+#define VGA_CNTRL_6BIT_DAC			0
+#define VGA_CNTRL_8BIT_DAC			(1 << 20)
+
+#define ADD_ID			0x71408
+#define ADD_ID_MASK			0xff
 
 /*
  * Some BIOS scratch area registers.  The 845 (and 830?) store the amount
