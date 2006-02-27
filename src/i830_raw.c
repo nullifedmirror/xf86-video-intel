@@ -674,3 +674,4 @@ I830RawSetMode(ScrnInfoPtr pScrn, DisplayModePtr mode)
   return ret;
 
 }
+

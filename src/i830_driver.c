@@ -2085,6 +2085,52 @@ I830UseDDC(ScrnInfoPtr pScrn)
    return mon_range->max_clock;
 }
 
+void 
+I830PreInitDDC(ScrnInfoPtr pScrn)
+{
+    I830Ptr pI830 = I830PTR(pScrn);
+
+    if (!xf86LoadSubModule(pScrn, "ddc")) {
+	pI830->ddc2 = FALSE;
+    } else {
+	xf86LoaderReqSymLists(I810ddcSymbols, NULL);
+	pI830->ddc2 = TRUE;
+    }
+
+    /* DDC can use I2C bus */
+    /* Load I2C if we have the code to use it */
+    if (pI830->ddc2) {
+	if (xf86LoadSubModule(pScrn, "i2c")) {
+	    xf86LoaderReqSymLists(I810i2cSymbols,NULL);
+	    pI830->ddc2 = I830I2cInit(pScrn);
+	}
+	else pI830->ddc2 = FALSE;
+    }
+
+}
+
+void I830DetectMonitors(ScrnInfoPtr pScrn)
+{
+  volatile xf86MonPtr MonInfo[3];
+  I830Ptr pI830 = I830PTR(pScrn);
+  int i;
+  int DDCReg[] = {GPIOA, GPIOB, GPIOC};
+
+  for (i=0; i<3; i++)
+  {
+    pI830->DDCReg = DDCReg[i];
+
+    MonInfo[i] = xf86DoEDID_DDC2(pScrn->scrnIndex, pI830->pI2CBus);
+    
+    xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "doing monitor %d\n", i);
+    xf86PrintEDID(MonInfo[i]);
+    
+  }
+
+  return;
+
+}
+
 static void
 PreInitCleanup(ScrnInfoPtr pScrn)
 {
@@ -2570,6 +2616,9 @@ I830BIOSPreInit(ScrnInfoPtr pScrn, int flags)
          pI830->fixedPipe = 1;
    }
 
+   I830PreInitDDC(pScrn);
+
+   I830DetectMonitors(pScrn);
    pI830->MonType1 = PIPE_NONE;
    pI830->MonType2 = PIPE_NONE;
    pI830->specifiedMonitor = FALSE;

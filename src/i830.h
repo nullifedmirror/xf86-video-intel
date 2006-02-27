@@ -441,6 +441,10 @@ typedef struct _I830Rec {
    OsTimerPtr devicesTimer;
    Bool rawmode;
    int MaxClock;
+  Bool              ddc2;
+  I2CBusPtr         pI2CBus;
+  CARD32            DDCReg;
+
 } I830Rec;
 
 #define I830PTR(p) ((I830Ptr)((p)->driverPrivate))

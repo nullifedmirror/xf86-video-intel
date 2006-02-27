@@ -81,6 +81,7 @@ extern const char *I810fbSymbols[];
 extern const char *I810xaaSymbols[];
 extern const char *I810shadowFBSymbols[];
 extern const char *I810shadowSymbols[];
+extern const char *I810i2cSymbols[];
 #ifdef XF86DRI
 extern const char *I810driSymbols[];
 extern const char *I810drmSymbols[];

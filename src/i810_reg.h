@@ -263,7 +263,9 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define HSYNC_ON               0x00
 #define HSYNC_OFF              0x02
 
-
+#define GPIOA             0x5010
+#define GPIOB             0x5014
+#define GPIOC             0x501C
 
 /* p317, 319
  */
