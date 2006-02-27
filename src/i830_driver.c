@@ -3305,7 +3305,7 @@ I830BIOSPreInit(ScrnInfoPtr pScrn, int flags)
        pI830->MaxClock = 136000;
        break;
      case 32:				/* not supported */
-       pI830->MaxClock = 86000;
+       pI830->MaxClock = 150000;
      }
      
      clockRanges = xnfcalloc(sizeof(ClockRange), 1);
@@ -3319,8 +3319,8 @@ I830BIOSPreInit(ScrnInfoPtr pScrn, int flags)
      
      i = xf86ValidateModes(pScrn, pScrn->monitor->Modes,
 			   pScrn->display->modes, clockRanges,
-			   0, 320, 1600, 64 * pScrn->bitsPerPixel,
-			   200, 1200,
+			   0, 320, MAX_DISPLAY_PITCH, 64 * pScrn->bitsPerPixel,
+			   200, MAX_DISPLAY_HEIGHT,
 			   pScrn->display->virtualX, pScrn->display->virtualY,
 			   memsize, LOOKUP_BEST_REFRESH);
    }
@@ -4369,6 +4369,9 @@ I830SetupDSPRegisters(ScrnInfoPtr pScrn, DisplayModePtr pMode)
       }
    }
 
+#if 1
+   I830DumpModeDebugInfo(pScrn);
+#endif
 }
 
 static Bool
@@ -4435,10 +4438,6 @@ I830VESASetMode(ScrnInfoPtr pScrn, DisplayModePtr pMode)
    }
 
    I830SetupDSPRegisters(pScrn, pMode);
-
-#if 1
-   I830DumpModeDebugInfo(pScrn);
-#endif
 
    xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Mode bandwidth is %d Mpixel/s\n",
 	      pMode->HDisplay * pMode->VDisplay * refresh / 1000000);

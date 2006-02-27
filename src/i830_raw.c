@@ -671,7 +671,6 @@ I830RawSetMode(ScrnInfoPtr pScrn, DisplayModePtr mode)
   I830RawSetHw(pScrn, mode);
   ret=I830ProgramModeReg(pScrn, mode);
 
-  I830DumpModeDebugInfo(pScrn);
   return ret;
 
 }
