@@ -665,10 +665,59 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #define DPLL_A		0x06014
 #define DPLL_B		0x06018
+#define DPLL_VCO_ENABLE			(1 << 31)
+#define DPLL_2X_CLOCK_ENABLE		(1 << 30)
+#define DPLL_SYNCLOCK_ENABLE		(1 << 29)
+#define DPLL_VGA_MODE_DISABLE		(1 << 28)
+#define DPLL_P2_MASK			1
+#define DPLL_P2_SHIFT			23
+#define DPLL_P1_FORCE_DIV2		(1 << 21)
+#define DPLL_P1_MASK			0x1f
+#define DPLL_P1_SHIFT			16
+#define DPLL_REFERENCE_SELECT_MASK	(0x3 << 13)
+#define DPLL_REFERENCE_DEFAULT		(0x0 << 13)
+#define DPLL_REFERENCE_TVCLK		(0x2 << 13)
+#define DPLL_RATE_SELECT_MASK		(1 << 8)
+#define DPLL_RATE_SELECT_FP0		(0 << 8)
+#define DPLL_RATE_SELECT_FP1		(1 << 8)
+
 #define FPA0		0x06040
 #define FPA1		0x06044
 #define FPB0		0x06048
 #define FPB1		0x0604c
+#define FP_DIVISOR_MASK			0x3f
+#define FP_N_DIVISOR_SHIFT		16
+#define FP_M1_DIVISOR_SHIFT		8
+#define FP_M2_DIVISOR_SHIFT		0
+
+
+/* PLL parameters (these are for 852GM/855GM/865G, check earlier chips). */
+/* Clock values are in units of kHz */
+#define PLL_REFCLK		48000
+#define MIN_VCO_FREQ		930000
+#define MAX_VCO_FREQ		1400000
+#define MIN_CLOCK		25000
+#define MAX_CLOCK		350000
+#define P_TRANSITION_CLOCK	165000
+#define MIN_M			108
+#define MAX_M			140
+#define MIN_M1			18
+#define MAX_M1			26
+#define MIN_M2			6
+#define MAX_M2			16
+#define MIN_P			4
+#define MAX_P			128
+#define MIN_P1			0
+#define MAX_P1			31
+#define MIN_N			3
+#define MAX_N			16
+
+#define CALC_VCLOCK(m1, m2, n, p1, p2) \
+        ((PLL_REFCLK * (5 * ((m1) + 2) + ((m2) + 2)) / ((n) + 2)) / \
+        (((p1) + 2) * (1 << (p2 + 1))))
+
+#define CALC_VCLOCK3(m, n, p)	((PLL_REFCLK * (m) / (n)) / (p))
+
 
 #define I830_HTOTAL_MASK 	0xfff0000
 #define I830_HACTIVE_MASK	0x7ff
@@ -778,6 +827,35 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define DSPASIZE		0x70190
 #define DSPBPOS			0x7118C
 #define DSPBSIZE		0x71190
+
+#define HTOTAL_MASK			0xfff
+#define HTOTAL_SHIFT			16
+#define HACTIVE_MASK			0x7ff
+#define HACTIVE_SHIFT			0
+#define HBLANKEND_MASK			0xfff
+#define HBLANKEND_SHIFT			16
+#define HBLANKSTART_MASK		0xfff
+#define HBLANKSTART_SHIFT		0
+#define HSYNCEND_MASK			0xfff
+#define HSYNCEND_SHIFT			16
+#define HSYNCSTART_MASK			0xfff
+#define HSYNCSTART_SHIFT		0
+#define VTOTAL_MASK			0xfff
+#define VTOTAL_SHIFT			16
+#define VACTIVE_MASK			0x7ff
+#define VACTIVE_SHIFT			0
+#define VBLANKEND_MASK			0xfff
+#define VBLANKEND_SHIFT			16
+#define VBLANKSTART_MASK		0xfff
+#define VBLANKSTART_SHIFT		0
+#define VSYNCEND_MASK			0xfff
+#define VSYNCEND_SHIFT			16
+#define VSYNCSTART_MASK			0xfff
+#define VSYNCSTART_SHIFT		0
+#define SRC_SIZE_HORIZ_MASK		0x7ff
+#define SRC_SIZE_HORIZ_SHIFT		16
+#define SRC_SIZE_VERT_MASK		0x7ff
+#define SRC_SIZE_VERT_SHIFT		0
 
 /* Various masks for reserved bits, etc. */
 #define I830_FWATER1_MASK        (~((1<<11)|(1<<10)|(1<<9)|      \

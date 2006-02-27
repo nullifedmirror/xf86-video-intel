@@ -244,7 +244,8 @@ typedef enum {
    OPTION_CHECKDEVICES,
    OPTION_FIXEDPIPE,
    OPTION_ROTATE,
-   OPTION_LINEARALLOC
+   OPTION_LINEARALLOC,
+   OPTION_RAWMODE,
 } I830Opts;
 
 static OptionInfoRec I830BIOSOptions[] = {
@@ -266,6 +267,7 @@ static OptionInfoRec I830BIOSOptions[] = {
    {OPTION_FIXEDPIPE,   "FixedPipe",    OPTV_ANYSTR, 	{0},	FALSE},
    {OPTION_ROTATE,      "Rotate",       OPTV_ANYSTR,    {0},    FALSE},
    {OPTION_LINEARALLOC, "LinearAlloc",  OPTV_INTEGER,   {0},    FALSE},
+   {OPTION_RAWMODE,     "RawMode",      OPTV_BOOLEAN, {0},      FALSE},
    {-1,			NULL,		OPTV_NONE,	{0},	FALSE}
 };
 /* *INDENT-ON* */
@@ -310,6 +312,83 @@ I830DPRINTF_stub(const char *filename, int line, const char *function,
    /* do nothing */
 }
 #endif /* #ifdef I830DEBUG */
+
+void
+I830DumpModeDebugInfo(ScrnInfoPtr pScrn)
+{
+  I830Ptr pI830 = I830PTR(pScrn);
+  CARD32 temp, planeA, planeB;
+
+  planeA = INREG(DSPACNTR);
+  planeB = INREG(DSPBCNTR);
+#if 1
+  /* Print out some CRTC/display information. */
+  temp = INREG(HTOTAL_A);
+  ErrorF("Horiz active: %d, Horiz total: %d\n", temp & 0x7ff,
+	 (temp >> 16) & 0xfff);
+  temp = INREG(HBLANK_A);
+  ErrorF("Horiz blank start: %d, Horiz blank end: %d\n", temp & 0xfff,
+	  (temp >> 16) & 0xfff);
+  temp = INREG(HSYNC_A);
+  ErrorF("Horiz sync start: %d, Horiz sync end: %d\n", temp & 0xfff,
+	 (temp >> 16) & 0xfff);
+  temp = INREG(VTOTAL_A);
+  ErrorF("Vert active: %d, Vert total: %d\n", temp & 0x7ff,
+	 (temp >> 16) & 0xfff);
+  temp = INREG(VBLANK_A);
+  ErrorF("Vert blank start: %d, Vert blank end: %d\n", temp & 0xfff,
+	 (temp >> 16) & 0xfff);
+  temp = INREG(VSYNC_A);
+  ErrorF("Vert sync start: %d, Vert sync end: %d\n", temp & 0xfff,
+	 (temp >> 16) & 0xfff);
+  temp = INREG(PIPEASRC);
+  ErrorF("Image size: %dx%d (%dx%d)\n",
+	 (temp >> 16) & 0x7ff, temp & 0x7ff,
+	 (((temp >> 16) & 0x7ff) + 1), ((temp & 0x7ff) + 1));
+  ErrorF("Pixel multiply is %d\n", (planeA >> 20) & 0x3);
+  temp = INREG(DSPABASE);
+  ErrorF("Plane A start offset is %d\n", temp);
+  temp = INREG(DSPASTRIDE);
+  ErrorF("Plane A stride is %d bytes (%d pixels)\n", temp, temp / pI830->cpp);
+  temp = INREG(DSPAPOS);
+  ErrorF("Plane A position %d %d\n", temp & 0xffff, (temp & 0xffff0000) >> 16);
+  temp = INREG(DSPASIZE);
+  ErrorF("Plane A size %d %d\n", temp & 0xffff, (temp & 0xffff0000) >> 16);
+  
+  /* Print out some CRTC/display information. */
+  temp = INREG(HTOTAL_B);
+  ErrorF("Horiz active: %d, Horiz total: %d\n", temp & 0x7ff,
+	 (temp >> 16) & 0xfff);
+  temp = INREG(HBLANK_B);
+  ErrorF("Horiz blank start: %d, Horiz blank end: %d\n", temp & 0xfff,
+	 (temp >> 16) & 0xfff);
+  temp = INREG(HSYNC_B);
+  ErrorF("Horiz sync start: %d, Horiz sync end: %d\n", temp & 0xfff,
+	  (temp >> 16) & 0xfff);
+  temp = INREG(VTOTAL_B);
+  ErrorF("Vert active: %d, Vert total: %d\n", temp & 0x7ff,
+	 (temp >> 16) & 0xfff);
+  temp = INREG(VBLANK_B);
+  ErrorF("Vert blank start: %d, Vert blank end: %d\n", temp & 0xfff,
+	 (temp >> 16) & 0xfff);
+  temp = INREG(VSYNC_B);
+  ErrorF("Vert sync start: %d, Vert sync end: %d\n", temp & 0xfff,
+	 (temp >> 16) & 0xfff);
+  temp = INREG(PIPEBSRC);
+  ErrorF("Image size: %dx%d (%dx%d)\n",
+	 (temp >> 16) & 0x7ff, temp & 0x7ff,
+	 (((temp >> 16) & 0x7ff) + 1), ((temp & 0x7ff) + 1));
+  ErrorF("Pixel multiply is %d\n", (planeA >> 20) & 0x3);
+  temp = INREG(DSPBBASE);
+  ErrorF("Plane B start offset is %d\n", temp);
+  temp = INREG(DSPBSTRIDE);
+  ErrorF("Plane B stride is %d bytes (%d pixels)\n", temp, temp / pI830->cpp);
+  temp = INREG(DSPBPOS);
+  ErrorF("Plane B position %d %d\n", temp & 0xffff, (temp & 0xffff0000) >> 16);
+  temp = INREG(DSPBSIZE);
+  ErrorF("Plane B size %d %d\n", temp & 0xffff, (temp & 0xffff0000) >> 16);
+#endif
+}
 
 /* XXX Check if this is still needed. */
 const OptionInfoRec *
@@ -2446,6 +2525,10 @@ I830BIOSPreInit(ScrnInfoPtr pScrn, int flags)
       pI830->StolenOnly = TRUE;
    }
 
+   if (xf86ReturnOptValBool(pI830->Options, OPTION_RAWMODE, FALSE)) {
+     xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "setting rawmode TRUE\n");
+      pI830->rawmode = TRUE;
+   }
    if (xf86ReturnOptValBool(pI830->Options, OPTION_NOACCEL, FALSE)) {
       pI830->noAccel = TRUE;
    }
@@ -3196,36 +3279,6 @@ I830BIOSPreInit(ScrnInfoPtr pScrn, int flags)
 
    DDCclock = I830UseDDC(pScrn);
 
-   /*
-    * Note: VBE modes (> 0x7f) won't work with Intel's extended BIOS
-    * functions. 
-    */
-   pScrn->modePool = I830GetModePool(pScrn, pI830->pVbe, pI830->vbeInfo);
-
-   if (!pScrn->modePool) {
-      xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
-		 "No Video BIOS modes for chosen depth.\n");
-      PreInitCleanup(pScrn);
-      return FALSE;
-   }
-
-   /* This may look a little weird, but to notify that we're using the
-    * default hsync/vrefresh we need to unset what we just set .....
-    */
-   if (defmon & 1) {
-      pScrn->monitor->hsync[0].lo = 0;
-      pScrn->monitor->hsync[0].hi = 0;
-      pScrn->monitor->nHsync = 0;
-   }
-
-   if (defmon & 2) {
-      pScrn->monitor->vrefresh[0].lo = 0;
-      pScrn->monitor->vrefresh[0].hi = 0;
-      pScrn->monitor->nVrefresh = 0;
-   }
-
-   SetPipeAccess(pScrn);
-   VBESetModeNames(pScrn->modePool);
 
    /*
     * XXX DDC information: There's code in xf86ValidateModes
@@ -3236,17 +3289,86 @@ I830BIOSPreInit(ScrnInfoPtr pScrn, int flags)
 
    /* XXX Need to get relevant modes and virtual parameters. */
    /* Do the mode validation without regard to special scanline pitches. */
-   SetPipeAccess(pScrn);
-   n = VBEValidateModes(pScrn, NULL, pScrn->display->modes, NULL,
-			NULL, 0, MAX_DISPLAY_PITCH, 1,
-			0, MAX_DISPLAY_HEIGHT,
-			pScrn->display->virtualX,
-			pScrn->display->virtualY,
-			memsize, LOOKUP_BEST_REFRESH);
+
+   if (pI830->rawmode)
+   {
+     ClockRangePtr clockRanges;
+     
+     switch (pScrn->bitsPerPixel) {
+     case 8:
+       pI830->MaxClock = 203000;
+       break;
+     case 16:
+       pI830->MaxClock = 163000;
+       break;
+     case 24:
+       pI830->MaxClock = 136000;
+       break;
+     case 32:				/* not supported */
+       pI830->MaxClock = 86000;
+     }
+     
+     clockRanges = xnfcalloc(sizeof(ClockRange), 1);
+     clockRanges->next = NULL;
+     /* 9.4MHz appears to be the smallest that works. */
+     clockRanges->minClock = 9500;
+     clockRanges->maxClock = pI830->MaxClock;
+     clockRanges->clockIndex = -1;
+     clockRanges->interlaceAllowed = TRUE;
+     clockRanges->doubleScanAllowed = FALSE;
+     
+     i = xf86ValidateModes(pScrn, pScrn->monitor->Modes,
+			   pScrn->display->modes, clockRanges,
+			   0, 320, 1600, 64 * pScrn->bitsPerPixel,
+			   200, 1200,
+			   pScrn->display->virtualX, pScrn->display->virtualY,
+			   memsize, LOOKUP_BEST_REFRESH);
+   }
+   else {
+     /*
+      * Note: VBE modes (> 0x7f) won't work with Intel's extended BIOS
+      * functions. 
+      */
+     pScrn->modePool = I830GetModePool(pScrn, pI830->pVbe, pI830->vbeInfo);
+     
+     if (!pScrn->modePool) {
+       xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
+		  "No Video BIOS modes for chosen depth.\n");
+       PreInitCleanup(pScrn);
+       return FALSE;
+     }
+     
+     /* This may look a little weird, but to notify that we're using the
+      * default hsync/vrefresh we need to unset what we just set .....
+      */
+     if (defmon & 1) {
+       pScrn->monitor->hsync[0].lo = 0;
+       pScrn->monitor->hsync[0].hi = 0;
+       pScrn->monitor->nHsync = 0;
+     }
+     
+     if (defmon & 2) {
+       pScrn->monitor->vrefresh[0].lo = 0;
+       pScrn->monitor->vrefresh[0].hi = 0;
+       pScrn->monitor->nVrefresh = 0;
+     }
+     
+     SetPipeAccess(pScrn);
+     VBESetModeNames(pScrn->modePool);
+     
+     SetPipeAccess(pScrn);
+     n = VBEValidateModes(pScrn, NULL, pScrn->display->modes, NULL,
+			  NULL, 0, MAX_DISPLAY_PITCH, 1,
+			  0, MAX_DISPLAY_HEIGHT,
+			  pScrn->display->virtualX,
+			  pScrn->display->virtualY,
+			  memsize, LOOKUP_BEST_REFRESH);
+   }
+   
    if (n <= 0) {
-      xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "No valid modes.\n");
-      PreInitCleanup(pScrn);
-      return FALSE;
+     xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "No valid modes.\n");
+     PreInitCleanup(pScrn);
+     return FALSE;
    }
 
    /* Only use this if we've got DDC available */
@@ -3288,21 +3410,26 @@ I830BIOSPreInit(ScrnInfoPtr pScrn, int flags)
       return FALSE;
    }
 
-   /* Now we check the VESA BIOS's displayWidth and reset if necessary */
-   p = pScrn->modes;
-   do {
-      VbeModeInfoData *data = (VbeModeInfoData *) p->Private;
-      VbeModeInfoBlock *modeInfo;
-
-      /* Get BytesPerScanline so we can reset displayWidth */
-      if ((modeInfo = VBEGetModeInfo(pI830->pVbe, data->mode))) {
+   if (pI830->rawmode)
+     xf86SetCrtcForModes(pScrn, INTERLACE_HALVE_V);
+   else
+   {
+     /* Now we check the VESA BIOS's displayWidth and reset if necessary */
+     p = pScrn->modes;
+     do {
+       VbeModeInfoData *data = (VbeModeInfoData *) p->Private;
+       VbeModeInfoBlock *modeInfo;
+       
+       /* Get BytesPerScanline so we can reset displayWidth */
+       if ((modeInfo = VBEGetModeInfo(pI830->pVbe, data->mode))) {
          if (pScrn->displayWidth < modeInfo->BytesPerScanline / pI830->cpp) {
-            xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Correcting stride (%d -> %d)\n", pScrn->displayWidth, modeInfo->BytesPerScanline);
-	    pScrn->displayWidth = modeInfo->BytesPerScanline / pI830->cpp;
+	   xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Correcting stride (%d -> %d)\n", pScrn->displayWidth, modeInfo->BytesPerScanline);
+	   pScrn->displayWidth = modeInfo->BytesPerScanline / pI830->cpp;
 	 }
-      } 
-      p = p->next;
-   } while (p != NULL && p != pScrn->modes);
+       } 
+       p = p->next;
+     } while (p != NULL && p != pScrn->modes);
+   }
 
    pScrn->currentMode = pScrn->modes;
 
@@ -3733,6 +3860,12 @@ SaveHWState(ScrnInfoPtr pScrn)
 
    DPRINTF(PFX, "SaveHWState\n");
 
+   if (pI830->rawmode)
+   {
+     I830RawSaveState(pScrn, &pI830->SavedReg);
+     return TRUE;
+   }
+
    if (I830IsPrimary(pScrn) && pI830->pipe != pI830->origPipe)
       SetBIOSPipe(pScrn, pI830->origPipe);
    else
@@ -4061,69 +4194,12 @@ I830VESASetVBEMode(ScrnInfoPtr pScrn, int mode, VbeCRTCInfoBlock * block)
    return ret;
 }
 
-static Bool
-I830VESASetMode(ScrnInfoPtr pScrn, DisplayModePtr pMode)
+Bool
+I830SetupDSPRegisters(ScrnInfoPtr pScrn, DisplayModePtr pMode)
 {
    I830Ptr pI830 = I830PTR(pScrn);
-   vbeInfoPtr pVbe = pI830->pVbe;
-   VbeModeInfoData *data = (VbeModeInfoData *) pMode->Private;
-   int mode, i;
+   int i;
    CARD32 planeA, planeB, temp;
-   int refresh = 60;
-#ifdef XF86DRI
-   Bool didLock = FALSE;
-#endif
-
-   DPRINTF(PFX, "I830VESASetMode\n");
-
-   /* Always Enable Linear Addressing */
-   mode = data->mode | (1 << 15) | (1 << 14);
-
-#ifdef XF86DRI
-   didLock = I830DRILock(pScrn);
-#endif
-
-   if (pI830->Clone) {
-      pI830->CloneHDisplay = pMode->HDisplay;
-      pI830->CloneVDisplay = pMode->VDisplay;
-   }
-
-#ifndef MODESWITCH_RESET_STATE
-#define MODESWITCH_RESET_STATE 0
-#endif
-#if MODESWITCH_RESET_STATE
-   ResetState(pScrn, TRUE);
-#endif
-
-   SetPipeAccess(pScrn);
-
-   if (I830VESASetVBEMode(pScrn, mode, data->block) == FALSE) {
-      xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "Set VBE Mode failed!\n");
-      return FALSE;
-   }
-
-   /*
-    * The BIOS may not set a scanline pitch that would require more video
-    * memory than it's aware of.  We check for this later, and set it
-    * explicitly if necessary.
-    */
-   if (data->data->XResolution != pI830->displayWidth) {
-      if (pI830->Clone) {
-         SetBIOSPipe(pScrn, !pI830->pipe);
-         VBESetLogicalScanline(pVbe, pI830->displayWidth);
-      }
-      SetPipeAccess(pScrn);
-      VBESetLogicalScanline(pVbe, pI830->displayWidth);
-   }
-
-   if (pScrn->bitsPerPixel >= 8 && pI830->vbeInfo->Capabilities[0] & 0x01) {
-      if (pI830->Clone) {
-         SetBIOSPipe(pScrn, !pI830->pipe);
-         VBESetGetDACPaletteFormat(pVbe, 8);
-      }
-      SetPipeAccess(pScrn);
-      VBESetGetDACPaletteFormat(pVbe, 8);
-   }
 
    /* XXX Fix plane A with pipe A, and plane B with pipe B. */
    planeA = INREG(DSPACNTR);
@@ -4293,72 +4369,75 @@ I830VESASetMode(ScrnInfoPtr pScrn, DisplayModePtr pMode)
       }
    }
 
-#if 0
-   /* Print out some CRTC/display information. */
-   temp = INREG(HTOTAL_A);
-   ErrorF("Horiz active: %d, Horiz total: %d\n", temp & 0x7ff,
-	  (temp >> 16) & 0xfff);
-   temp = INREG(HBLANK_A);
-   ErrorF("Horiz blank start: %d, Horiz blank end: %d\n", temp & 0xfff,
-	  (temp >> 16) & 0xfff);
-   temp = INREG(HSYNC_A);
-   ErrorF("Horiz sync start: %d, Horiz sync end: %d\n", temp & 0xfff,
-	  (temp >> 16) & 0xfff);
-   temp = INREG(VTOTAL_A);
-   ErrorF("Vert active: %d, Vert total: %d\n", temp & 0x7ff,
-	  (temp >> 16) & 0xfff);
-   temp = INREG(VBLANK_A);
-   ErrorF("Vert blank start: %d, Vert blank end: %d\n", temp & 0xfff,
-	  (temp >> 16) & 0xfff);
-   temp = INREG(VSYNC_A);
-   ErrorF("Vert sync start: %d, Vert sync end: %d\n", temp & 0xfff,
-	  (temp >> 16) & 0xfff);
-   temp = INREG(PIPEASRC);
-   ErrorF("Image size: %dx%d (%dx%d)\n",
-          (temp >> 16) & 0x7ff, temp & 0x7ff,
-	  (((temp >> 16) & 0x7ff) + 1), ((temp & 0x7ff) + 1));
-   ErrorF("Pixel multiply is %d\n", (planeA >> 20) & 0x3);
-   temp = INREG(DSPABASE);
-   ErrorF("Plane A start offset is %d\n", temp);
-   temp = INREG(DSPASTRIDE);
-   ErrorF("Plane A stride is %d bytes (%d pixels)\n", temp, temp / pI830->cpp);
-   temp = INREG(DSPAPOS);
-   ErrorF("Plane A position %d %d\n", temp & 0xffff, (temp & 0xffff0000) >> 16);
-   temp = INREG(DSPASIZE);
-   ErrorF("Plane A size %d %d\n", temp & 0xffff, (temp & 0xffff0000) >> 16);
+}
 
-   /* Print out some CRTC/display information. */
-   temp = INREG(HTOTAL_B);
-   ErrorF("Horiz active: %d, Horiz total: %d\n", temp & 0x7ff,
-	  (temp >> 16) & 0xfff);
-   temp = INREG(HBLANK_B);
-   ErrorF("Horiz blank start: %d, Horiz blank end: %d\n", temp & 0xfff,
-	  (temp >> 16) & 0xfff);
-   temp = INREG(HSYNC_B);
-   ErrorF("Horiz sync start: %d, Horiz sync end: %d\n", temp & 0xfff,
-	  (temp >> 16) & 0xfff);
-   temp = INREG(VTOTAL_B);
-   ErrorF("Vert active: %d, Vert total: %d\n", temp & 0x7ff,
-	  (temp >> 16) & 0xfff);
-   temp = INREG(VBLANK_B);
-   ErrorF("Vert blank start: %d, Vert blank end: %d\n", temp & 0xfff,
-	  (temp >> 16) & 0xfff);
-   temp = INREG(VSYNC_B);
-   ErrorF("Vert sync start: %d, Vert sync end: %d\n", temp & 0xfff,
-	  (temp >> 16) & 0xfff);
-   temp = INREG(PIPEBSRC);
-   ErrorF("Image size: %dx%d (%dx%d)\n",
-          (temp >> 16) & 0x7ff, temp & 0x7ff,
-	  (((temp >> 16) & 0x7ff) + 1), ((temp & 0x7ff) + 1));
-   ErrorF("Pixel multiply is %d\n", (planeA >> 20) & 0x3);
-   temp = INREG(DSPBBASE);
-   ErrorF("Plane B start offset is %d\n", temp);
-   temp = INREG(DSPBSTRIDE);
-   ErrorF("Plane B stride is %d bytes (%d pixels)\n", temp, temp / pI830->cpp);
-   temp = INREG(DSPBPOS);
-   ErrorF("Plane B position %d %d\n", temp & 0xffff, (temp & 0xffff0000) >> 16);
-   temp = INREG(DSPBSIZE);
-   ErrorF("Plane B size %d %d\n", temp & 0xffff, (temp & 0xffff0000) >> 16);
+static Bool
+I830VESASetMode(ScrnInfoPtr pScrn, DisplayModePtr pMode)
+{
+   I830Ptr pI830 = I830PTR(pScrn);
+   vbeInfoPtr pVbe = pI830->pVbe;
+   VbeModeInfoData *data = (VbeModeInfoData *) pMode->Private;
+   int mode;
+   int refresh = 60;
+#ifdef XF86DRI
+   Bool didLock = FALSE;
+#endif
+
+   DPRINTF(PFX, "I830VESASetMode\n");
+
+   /* Always Enable Linear Addressing */
+   mode = data->mode | (1 << 15) | (1 << 14);
+
+#ifdef XF86DRI
+   didLock = I830DRILock(pScrn);
+#endif
+
+   if (pI830->Clone) {
+      pI830->CloneHDisplay = pMode->HDisplay;
+      pI830->CloneVDisplay = pMode->VDisplay;
+   }
+
+#ifndef MODESWITCH_RESET_STATE
+#define MODESWITCH_RESET_STATE 0
+#endif
+#if MODESWITCH_RESET_STATE
+   ResetState(pScrn, TRUE);
+#endif
+
+   SetPipeAccess(pScrn);
+
+   if (I830VESASetVBEMode(pScrn, mode, data->block) == FALSE) {
+      xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "Set VBE Mode failed!\n");
+      return FALSE;
+   }
+
+   /*
+    * The BIOS may not set a scanline pitch that would require more video
+    * memory than it's aware of.  We check for this later, and set it
+    * explicitly if necessary.
+    */
+   if (data->data->XResolution != pI830->displayWidth) {
+      if (pI830->Clone) {
+         SetBIOSPipe(pScrn, !pI830->pipe);
+         VBESetLogicalScanline(pVbe, pI830->displayWidth);
+      }
+      SetPipeAccess(pScrn);
+      VBESetLogicalScanline(pVbe, pI830->displayWidth);
+   }
+
+   if (pScrn->bitsPerPixel >= 8 && pI830->vbeInfo->Capabilities[0] & 0x01) {
+      if (pI830->Clone) {
+         SetBIOSPipe(pScrn, !pI830->pipe);
+         VBESetGetDACPaletteFormat(pVbe, 8);
+      }
+      SetPipeAccess(pScrn);
+      VBESetGetDACPaletteFormat(pVbe, 8);
+   }
+
+   I830SetupDSPRegisters(pScrn, pMode);
+
+#if 1
+   I830DumpModeDebugInfo(pScrn);
 #endif
 
    xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Mode bandwidth is %d Mpixel/s\n",
@@ -5583,8 +5662,12 @@ I830BIOSEnterVT(int scrnIndex, int flags)
    /* Detect monitor change and switch to suitable mode */
    if (!pI830->starting)
       I830DetectMonitorChange(pScrn);
-	    
-   if (!I830VESASetMode(pScrn, pScrn->currentMode))
+
+   if (pI830->rawmode==TRUE) {
+     if (!I830RawSetMode(pScrn, pScrn->currentMode))
+       return FALSE;
+   }
+   else if (!I830VESASetMode(pScrn, pScrn->currentMode))
       return FALSE;
    
 #ifdef I830_XV
@@ -5627,6 +5710,7 @@ I830BIOSEnterVT(int scrnIndex, int flags)
 
    return TRUE;
 }
+
 
 static Bool
 I830BIOSSwitchMode(int scrnIndex, DisplayModePtr mode, int flags)
@@ -5695,6 +5779,23 @@ I830BIOSSwitchMode(int scrnIndex, DisplayModePtr mode, int flags)
 
    return ret;
 }
+
+static Bool
+I830SwitchMode(int scrnIndex, DisplayModePtr mode, int flags)
+{
+   ScrnInfoPtr pScrn = xf86Screens[scrnIndex];
+   I830Ptr pI830 = I830PTR(pScrn);
+   Bool ret = TRUE;
+   
+   if (pI830->rawmode)
+     return I830RawSwitchMode(scrnIndex, mode, flags);
+   else
+   {
+     xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "call BIOS\n");
+     return I830BIOSSwitchMode(scrnIndex, mode, flags);
+   }
+}
+     
 
 static Bool
 I830BIOSSaveScreen(ScreenPtr pScreen, int mode)
@@ -6221,7 +6322,7 @@ I830CheckDevicesTimer(OsTimerPtr timer, CARD32 now, pointer arg)
          } 
 
          pI830->currentMode = NULL;
-         I830BIOSSwitchMode(pScrn->pScreen->myNum, pScrn->currentMode, 0);
+         I830SwitchMode(pScrn->pScreen->myNum, pScrn->currentMode, 0);
          I830BIOSAdjustFrame(pScrn->pScreen->myNum, pScrn->frameX0, pScrn->frameY0, 0);
 
          if (xf86IsEntityShared(pScrn->entityList[0])) {
@@ -6240,7 +6341,7 @@ I830CheckDevicesTimer(OsTimerPtr timer, CARD32 now, pointer arg)
                miPointerPosition(&x, &y);
 
             pI8302->currentMode = NULL;
-            I830BIOSSwitchMode(pScrn2->pScreen->myNum, pScrn2->currentMode, 0);
+            I830SwitchMode(pScrn2->pScreen->myNum, pScrn2->currentMode, 0);
             I830BIOSAdjustFrame(pScrn2->pScreen->myNum, pScrn2->frameX0, pScrn2->frameY0, 0);
 
  	    (*pScrn2->EnableDisableFBAccess) (pScrn2->pScreen->myNum, FALSE);
@@ -6289,7 +6390,7 @@ I830InitpScrn(ScrnInfoPtr pScrn)
 {
    pScrn->PreInit = I830BIOSPreInit;
    pScrn->ScreenInit = I830BIOSScreenInit;
-   pScrn->SwitchMode = I830BIOSSwitchMode;
+   pScrn->SwitchMode = I830SwitchMode;
    pScrn->AdjustFrame = I830BIOSAdjustFrame;
    pScrn->EnterVT = I830BIOSEnterVT;
    pScrn->LeaveVT = I830BIOSLeaveVT;

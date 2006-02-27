@@ -36,7 +36,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
  */
 
-#if 0
+#if 1
 #define I830DEBUG
 #endif
 
@@ -141,10 +141,6 @@ typedef struct {
 } I830RingBuffer;
 
 typedef struct {
-   unsigned int Fence[8];
-} I830RegRec, *I830RegPtr;
-
-typedef struct {
    int            lastInstance;
    int            refCount;
    ScrnInfoPtr    pScrn_1;
@@ -154,6 +150,72 @@ typedef struct {
    int            XvInUse;
 #endif
 } I830EntRec, *I830EntPtr;
+
+typedef struct _I830SaveRec {
+  unsigned int Fence[8];
+  
+  CARD32 vga0_divisor;
+  CARD32 vga1_divisor;
+  CARD32 vga_pd;
+  CARD32 dpll_a;
+  CARD32 dpll_b;
+  CARD32 fpa0;
+  CARD32 fpa1;
+  CARD32 fpb0;
+  CARD32 fpb1;
+  //	CARD32 palette_a[PALETTE_8_ENTRIES];
+  //	CARD32 palette_b[PALETTE_8_ENTRIES];
+  CARD32 htotal_a;
+  CARD32 hblank_a;
+  CARD32 hsync_a;
+  CARD32 vtotal_a;
+  CARD32 vblank_a;
+  CARD32 vsync_a;
+  CARD32 pipe_src_a;
+  CARD32 bclrpat_a;
+  CARD32 htotal_b;
+  CARD32 hblank_b;
+  CARD32 hsync_b;
+  CARD32 vtotal_b;
+  CARD32 vblank_b;
+  CARD32 vsync_b;
+  CARD32 pipe_src_b;
+  CARD32 bclrpat_b;
+  CARD32 adpa;
+  CARD32 dvoa;
+  CARD32 dvob;
+  CARD32 dvoc;
+  CARD32 dvoa_srcdim;
+  CARD32 dvob_srcdim;
+  CARD32 dvoc_srcdim;
+  CARD32 lvds;
+  CARD32 pipe_a_conf;
+  CARD32 pipe_b_conf;
+  CARD32 disp_arb;
+  CARD32 cursor_a_control;
+  CARD32 cursor_b_control;
+  CARD32 cursor_a_base;
+  CARD32 cursor_b_base;
+  CARD32 cursor_size;
+  CARD32 disp_a_ctrl;
+  CARD32 disp_b_ctrl;
+  CARD32 disp_a_base;
+  CARD32 disp_b_base;
+  CARD32 cursor_a_palette[4];
+  CARD32 cursor_b_palette[4];
+  CARD32 disp_a_stride;
+  CARD32 disp_b_stride;
+  CARD32 vgacntrl;
+  CARD32 add_id;
+  CARD32 swf0x[7];
+  CARD32 swf1x[7];
+  CARD32 swf3x[3];
+  CARD32 fence[8];
+  CARD32 instpm;
+  CARD32 mem_mode;
+  CARD32 fw_blc_0;
+  CARD32 fw_blc_1;
+} I830RegRec, *I830RegPtr;
 
 typedef struct _I830Rec {
    unsigned char *MMIOBase;
@@ -276,8 +338,8 @@ typedef struct _I830Rec {
    int NumScanlineColorExpandBuffers;
    int nextColorExpandBuf;
 
-   I830RegRec SavedReg;
-   I830RegRec ModeReg;
+   I830RegRec SavedReg; /* original (text) mode */
+   I830RegRec ModeReg;  /* current mode */
 
    Bool noAccel;
    Bool SWCursor;
@@ -377,6 +439,8 @@ typedef struct _I830Rec {
    Bool devicePresence;
 
    OsTimerPtr devicesTimer;
+   Bool rawmode;
+   int MaxClock;
 } I830Rec;
 
 #define I830PTR(p) ((I830Ptr)((p)->driverPrivate))
@@ -454,9 +518,6 @@ extern unsigned long I830AllocVidMem(ScrnInfoPtr pScrn, I830MemRange *result,
 				     I830MemPool *pool, long size,
 				     unsigned long alignment, int flags);
 extern void I830FreeVidMem(ScrnInfoPtr pScrn, I830MemRange *range);
-
-extern void I830PrintAllRegisters(I830RegPtr i830Reg);
-extern void I830ReadAllRegisters(I830Ptr pI830, I830RegPtr i830Reg);
 
 extern void I830ChangeFrontbuffer(ScrnInfoPtr pScrn,int buffer);
 extern Bool I830IsPrimary(ScrnInfoPtr pScrn);
