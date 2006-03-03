@@ -112,5 +112,6 @@ AC_OUTPUT([
 	Makefile
 	src/Makefile
 	src/xvmc/Makefile
+	src/sil164/Makefile
 	man/Makefile
 ])
