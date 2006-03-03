@@ -49,6 +49,20 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "shadow.h"
 #include "i830.h"
 
+#include "sil164/sil164.h"
+
+static const char *SIL164Symbols[] = {
+  SIL164_SYMBOL_LIST
+};
+
+/* driver list */
+struct _I830RegI2CDriver i830_i2c_drivers[] =
+  { I830_I2C_TMDS, "sil164", "SIL164VidOutput", (SIL164_ADDR_1<<1), SIL164Symbols, NULL , NULL, NULL};
+
+
+
+#define I830_NUM_I2C_DRIVERS (sizeof(i830_i2c_drivers)/sizeof(struct _I830RegI2CDriver))
+
 /* bit locations in the registers */
 #define SCL_DIR_MASK		0x0001
 #define SCL_DIR			0x0002
@@ -61,7 +75,6 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define SDA_VAL_OUT		0x0800
 #define SDA_VAL_IN		0x1000
 
-
 #define I2C_TIMEOUT(x)	/*(x)*/  /* Report timeouts */
 #define I2C_TRACE(x)    /*(x)*/  /* Report progress */
 
@@ -71,8 +84,8 @@ static void i830_setscl(I2CBusPtr b, int state)
   I830Ptr pI830 = I830PTR(pScrn);
   CARD32 val;
 
-  OUTREG(pI830->DDCReg, (state ? SCL_VAL_OUT : 0) | SCL_DIR | SCL_DIR_MASK | SCL_VAL_MASK);
-  val=INREG(pI830->DDCReg);
+  OUTREG(b->DriverPrivate.uval, (state ? SCL_VAL_OUT : 0) | SCL_DIR | SCL_DIR_MASK | SCL_VAL_MASK);
+  val=INREG(b->DriverPrivate.uval);
 }
 
 static void i830_setsda(I2CBusPtr b, int state)
@@ -81,8 +94,8 @@ static void i830_setsda(I2CBusPtr b, int state)
   I830Ptr pI830 = I830PTR(pScrn);
   CARD32 val;
 
-  OUTREG(pI830->DDCReg, (state ? SDA_VAL_OUT : 0) | SDA_DIR | SDA_DIR_MASK | SDA_VAL_MASK);
-  val=INREG(pI830->DDCReg);
+  OUTREG(b->DriverPrivate.uval, (state ? SDA_VAL_OUT : 0) | SDA_DIR | SDA_DIR_MASK | SDA_VAL_MASK);
+  val=INREG(b->DriverPrivate.uval);
 }
 
 static void i830_getscl(I2CBusPtr b, int *state)
@@ -91,9 +104,9 @@ static void i830_getscl(I2CBusPtr b, int *state)
   I830Ptr pI830 = I830PTR(pScrn);
   CARD32 val;
 
-  OUTREG(pI830->DDCReg, SCL_DIR_MASK);
-  OUTREG(pI830->DDCReg, 0);
-  val=INREG(pI830->DDCReg);
+  OUTREG(b->DriverPrivate.uval, SCL_DIR_MASK);
+  OUTREG(b->DriverPrivate.uval, 0);
+  val=INREG(b->DriverPrivate.uval);
   *state = ((val & SCL_VAL_IN) != 0);
 }
 
@@ -103,9 +116,9 @@ static int i830_getsda(I2CBusPtr b)
   I830Ptr pI830 = I830PTR(pScrn);
   CARD32 val;
 
-  OUTREG(pI830->DDCReg, SDA_DIR_MASK);
-  OUTREG(pI830->DDCReg, 0);
-  val=INREG(pI830->DDCReg);
+  OUTREG(b->DriverPrivate.uval, SDA_DIR_MASK);
+  OUTREG(b->DriverPrivate.uval, 0);
+  val=INREG(b->DriverPrivate.uval);
   return ((val & SDA_VAL_IN) != 0);
 }
 
@@ -269,26 +282,64 @@ I830I2CAddress(I2CDevPtr d, I2CSlaveAddr addr)
 }
 
 
-
+/* the i830 has a number of I2C Buses */
 Bool
-I830I2cInit(ScrnInfoPtr pScrn)
+I830I2CInit(ScrnInfoPtr pScrn, I2CBusPtr *bus_ptr, int i2c_reg, char *name)
 {
   I830Ptr pI830 = I830PTR(pScrn);
-  
-  pI830->pI2CBus = xf86CreateI2CBusRec();
+  I2CBusPtr pI2CBus;
+  char namestr[25];
 
-  if (!pI830->pI2CBus) return FALSE;
+  pI2CBus = xf86CreateI2CBusRec();
 
-  pI830->pI2CBus->BusName = "DDC";
-  pI830->pI2CBus->scrnIndex = pScrn->scrnIndex;
-  pI830->pI2CBus->I2CGetByte = I830I2CGetByte;
-  pI830->pI2CBus->I2CPutByte = I830I2CPutByte;
-  pI830->pI2CBus->I2CStart = I830I2CStart;
-  pI830->pI2CBus->I2CStop = I830I2CStop;
-  pI830->pI2CBus->I2CAddress = I830I2CAddress;
+  if (!pI2CBus) return FALSE;
 
-  if (!xf86I2CBusInit(pI830->pI2CBus)) return FALSE;
+  pI2CBus->BusName = name;
+  pI2CBus->scrnIndex = pScrn->scrnIndex;
+  pI2CBus->I2CGetByte = I830I2CGetByte;
+  pI2CBus->I2CPutByte = I830I2CPutByte;
+  pI2CBus->I2CStart = I830I2CStart;
+  pI2CBus->I2CStop = I830I2CStop;
+  pI2CBus->I2CAddress = I830I2CAddress;
+  pI2CBus->DriverPrivate.uval = i2c_reg;
 
+  if (!xf86I2CBusInit(pI2CBus)) return FALSE;
+
+  *bus_ptr = pI2CBus;
   return TRUE;
 
 }
+
+Bool
+I830I2CDetectControllers(ScrnInfoPtr pScrn, I2CBusPtr pI2CBus, struct _I830RegI2CDriver **retdrv)
+{
+  I830Ptr pI830 = I830PTR(pScrn);  
+  int i;
+  void *ret_ptr;
+  struct _I830RegI2CDriver *drv;
+
+  for (i=0; i<I830_NUM_I2C_DRIVERS; i++)
+  {
+    drv = &i830_i2c_drivers[i];
+    drv->modhandle = xf86LoadSubModule(pScrn, drv->modulename);
+
+    if (!drv->modhandle)
+      continue;
+    
+    xf86LoaderReqSymLists(drv->symbols, NULL);
+    
+    ret_ptr = NULL;
+    drv->vid_rec = LoaderSymbol(drv->fntablename);
+    if (drv->vid_rec)
+       ret_ptr = drv->vid_rec->Detect(pI2CBus, drv->address);
+    
+    if (ret_ptr) {
+      drv->devpriv = ret_ptr;
+      *retdrv = drv;
+      return TRUE;
+    }
+    xf86UnloadModule(drv->modhandle);
+  }
+  return FALSE;
+}
+

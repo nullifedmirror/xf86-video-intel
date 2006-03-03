@@ -1,4 +1,3 @@
-
 /**************************************************************************
 
 Copyright 1998-1999 Precision Insight, Inc., Cedar Park, Texas.
@@ -216,6 +215,35 @@ typedef struct _I830SaveRec {
   CARD32 fw_blc_0;
   CARD32 fw_blc_1;
 } I830RegRec, *I830RegPtr;
+
+/* store information about an Ixxx DVO */
+#define MAX_DVOS 4
+
+#define I830_I2C_NONE 0
+#define I830_I2C_LVDS 1
+#define I830_I2C_TMDS 2
+#define I830_I2C_TVOUT 3
+
+struct _I830RegI2CDriver {
+  int type;
+  char *modulename;
+  char *fntablename;
+  int address;
+  const char **symbols;
+  I2CVidOutputRec *vid_rec;
+  void *devpriv;
+  pointer modhandle;
+
+};
+  
+struct _I830DVORec {
+  int flags;
+  I2CBusPtr pI2CBus;
+  I2CBusPtr pDDCBus;
+  xf86MonPtr MonInfo;
+  struct _I830RegI2CDriver *i2c_drv;
+};
+
 
 typedef struct _I830Rec {
    unsigned char *MMIOBase;
@@ -441,9 +469,11 @@ typedef struct _I830Rec {
    OsTimerPtr devicesTimer;
    Bool rawmode;
    int MaxClock;
-  Bool              ddc2;
-  I2CBusPtr         pI2CBus;
-  CARD32            DDCReg;
+  
+   int ddc2;
+   int num_dvos;
+
+   struct _I830DVORec dvos[MAX_DVOS];
 
 } I830Rec;
 

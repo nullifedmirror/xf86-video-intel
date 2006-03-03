@@ -63,19 +63,28 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define PIPE_A			0
 #define PIPE_B			1
 
+#define PLLS_I8xx 0
+#define PLLS_I9xx 1
+#define PLLS_MAX 2
+
+struct pll_min_max plls[PLLS_MAX] = {
+  { 108, 140, 18, 26, 6, 16, 3, 16, 4, 128, 0, 31 }, //I8xx
+  {  70, 125, 10, 22, 5, 9,  4,  7, 6, 79, 2, 16 }  //I9xx
+};
+
 /* Split the M parameter into M1 and M2. */
 static int
-splitm(unsigned int m, CARD32 *retm1, CARD32 *retm2)
+splitm(int index, unsigned int m, CARD32 *retm1, CARD32 *retm2)
 {
 	int m1, m2;
 
-	m1 = (m - 2 - (MIN_M2 + MAX_M2) / 2) / 5 - 2;
-	if (m1 < MIN_M1)
-		m1 = MIN_M1;
-	if (m1 > MAX_M1)
-		m1 = MAX_M1;
+	m1 = (m - 2 - (plls[index].min_m2 + plls[index].max_m2) / 2) / 5 - 2;
+	if (m1 < plls[index].min_m1)
+		m1 = plls[index].min_m1;
+	if (m1 > plls[index].max_m1)
+		m1 = plls[index].max_m1;
 	m2 = m - 5 * (m1 + 2) - 2;
-	if (m2 < MIN_M2 || m2 > MAX_M2 || m2 >= m1) {
+	if (m2 < plls[index].min_m2 || m2 > plls[index].max_m2 || m2 >= m1) {
 		return 1;
 	} else {
 		*retm1 = (unsigned int)m1;
@@ -86,7 +95,7 @@ splitm(unsigned int m, CARD32 *retm1, CARD32 *retm2)
 
 /* Split the P parameter into P1 and P2. */
 static int
-splitp(unsigned int p, CARD32 *retp1, CARD32 *retp2)
+splitp(int index, unsigned int p, CARD32 *retp1, CARD32 *retp2)
 {
 	int p1, p2;
 
@@ -95,11 +104,11 @@ splitp(unsigned int p, CARD32 *retp1, CARD32 *retp2)
 	else
 		p2 = 0;
 	p1 = (p / (1 << (p2 + 1))) - 2;
-	if (p % 4 == 0 && p1 < MIN_P1) {
+	if (p % 4 == 0 && p1 < plls[index].min_p1) {
 		p2 = 0;
 		p1 = (p / (1 << (p2 + 1))) - 2;
 	}
-	if (p1  < MIN_P1 || p1 > MAX_P1 || (p1 + 2) * (1 << (p2 + 1)) != p) {
+	if (p1  < plls[index].min_p1 || p1 > plls[index].max_p1 || (p1 + 2) * (1 << (p2 + 1)) != p) {
 		return 1;
 	} else {
 		*retp1 = (unsigned int)p1;
@@ -109,7 +118,7 @@ splitp(unsigned int p, CARD32 *retp1, CARD32 *retp2)
 }
 
 static int
-calc_pll_params(int clock, CARD32 *retm1, CARD32 *retm2, CARD32 *retn, CARD32 *retp1,
+calc_pll_params(int index, int clock, CARD32 *retm1, CARD32 *retm2, CARD32 *retn, CARD32 *retp1,
 		CARD32 *retp2, CARD32 *retclock)
 {
 	CARD32 m1, m2, n, p1, p2, n1;
@@ -133,32 +142,32 @@ calc_pll_params(int clock, CARD32 *retm1, CARD32 *retm2, CARD32 *retn, CARD32 *r
 		p_inc = 2;
 	p_min = ROUND_UP_TO(div_min, p_inc);
 	p_max = ROUND_DOWN_TO(div_max, p_inc);
-	if (p_min < MIN_P)
-		p_min = 4;
-	if (p_max > MAX_P)
-		p_max = 128;
+	if (p_min < plls[index].min_p)
+		p_min = plls[index].min_p;
+	if (p_max > plls[index].max_p)
+		p_max = plls[index].max_p;
 
 	DPRINTF(PFX, "p range is %d-%d (%d)\n", p_min, p_max, p_inc);
 
 	p = p_min;
 	do {
-		if (splitp(p, &p1, &p2)) {
-			WRN_MSG("cannot split p = %d\n", p);
+  	        if (splitp(index, p, &p1, &p2)) {
+		  DPRINTF(PFX, "cannot split p = %d\n", p);
 			p += p_inc;
 			continue;
 		}
-		n = MIN_N;
+		n = plls[index].min_n;
 		f_vco = clock * p;
 
 		do {
 			m = ROUND_UP_TO(f_vco * n, PLL_REFCLK) / PLL_REFCLK;
-			if (m < MIN_M)
-				m = MIN_M;
-			if (m > MAX_M)
-				m = MAX_M;
+			if (m < plls[index].min_m)
+				m = plls[index].min_m;
+			if (m > plls[index].max_m)
+				m = plls[index].max_m;
 			f_out = CALC_VCLOCK3(m, n, p);
-			if (splitm(m, &m1, &m2)) {
-				WRN_MSG("cannot split m = %d\n", m);
+			if (splitm(index, m, &m1, &m2)) {
+			  DPRINTF(PFX, "cannot split m = %d\n", m);
 				n++;
 				continue;
 			}
@@ -175,19 +184,19 @@ calc_pll_params(int clock, CARD32 *retm1, CARD32 *retm2, CARD32 *retn, CARD32 *r
 				err_best = f_err;
 			}
 			n++;
-		} while ((n <= MAX_N) && (f_out >= clock));
+		} while ((n <= plls[index].max_n) && (f_out >= clock));
 		p += p_inc;
 	} while ((p <= p_max));
 
 	if (!m_best) {
-		WRN_MSG("cannot find parameters for clock %d\n", clock);
+	  DPRINTF(PFX,"cannot find parameters for clock %d\n", clock);
 		return 1;
 	}
 	m = m_best;
 	n = n_best;
 	p = p_best;
-	splitm(m, &m1, &m2);
-	splitp(p, &p1, &p2);
+	splitm(index, m, &m1, &m2);
+	splitp(index, p, &p1, &p2);
 	n1 = n - 2;
 
 	DPRINTF(PFX, "m, n, p: %d (%d,%d), %d (%d), %d (%d,%d), "
@@ -231,14 +240,15 @@ I830RawSetHw(ScrnInfoPtr pScrn, DisplayModePtr pMode)
   CARD32 vsync_start, vsync_end, vblank_start, vblank_end, vtotal, vactive;
   CARD32 vsync_pol, hsync_pol;
   CARD32 *vs, *vb, *vt, *hs, *hb, *ht, *ss, *pipe_conf;
+  int index;
+  int displays = pI830->operatingDevices;
+
+  index = IS_I9XX(pI830) ? PLLS_I9xx : PLLS_I8xx;
 
   /* Disable VGA */
   hw->vgacntrl |= VGA_CNTRL_DISABLE;
-  
-  /* Check whether pipe A or pipe B is enabled. */
-  if (hw->pipe_a_conf & PIPEACONF_ENABLE)
-    pipe = PIPE_A;
-  else if (hw->pipe_b_conf & PIPEBCONF_ENABLE)
+
+  if (pI830->pipeEnabled[1])
     pipe = PIPE_B;
   
   /* Set which pipe's registers will be set. */
@@ -297,7 +307,7 @@ I830RawSetHw(ScrnInfoPtr pScrn, DisplayModePtr pMode)
   //  clock_target = 1000000000 / var->pixclock;
   clock_target = pMode->Clock;
   
-  if (calc_pll_params(clock_target, &m1, &m2, &n, &p1, &p2, &clock)) {
+  if (calc_pll_params(index, clock_target, &m1, &m2, &n, &p1, &p2, &clock)) {
     WRN_MSG("calc_pll_params failed\n");
     return FALSE;
   }
@@ -318,13 +328,19 @@ I830RawSetHw(ScrnInfoPtr pScrn, DisplayModePtr pMode)
   *dpll &= ~((DPLL_P2_MASK << DPLL_P2_SHIFT) |
 	     (DPLL_P1_MASK << DPLL_P1_SHIFT));
   *dpll |= (p2 << DPLL_P2_SHIFT) | (p1 << DPLL_P1_SHIFT);
+
+  if (IS_I9XX(pI830))
+    *dpll |= 0x3 | 0x4000000;
+
   *fp0 = (n << FP_N_DIVISOR_SHIFT) |
     (m1 << FP_M1_DIVISOR_SHIFT) |
     (m2 << FP_M2_DIVISOR_SHIFT);
   *fp1 = *fp0;
-  
-  hw->dvob &= ~DVO_ENABLE;
-  hw->dvoc &= ~DVO_ENABLE;
+
+  /* leave these alone for now */
+  //  hw->dvob &= ~DVO_ENABLE;
+  //hw->dvoc &= ~DVO_ENABLE;
+  //  hw->dvoc |= 0x4084 | DVO_ENABLE;
   
   /* Use display plane A. */
   hw->disp_a_ctrl |= DISPLAY_PLANE_ENABLE;
@@ -341,14 +357,14 @@ I830RawSetHw(ScrnInfoPtr pScrn, DisplayModePtr pMode)
     hw->disp_a_ctrl |= DISPPLANE_16BPP;
     break;
   case 24:
-    hw->disp_a_ctrl |= DISPPLANE_32BPP_NO_ALPHA;
+    hw->disp_a_ctrl |= DISPPLANE_32BPP_NO_ALPHA | DISPPLANE_GAMMA_ENABLE;
     break;
   }
   hw->disp_a_ctrl &= ~(DISPPLANE_SEL_PIPE_MASK);
   hw->disp_a_ctrl |= (pipe == PIPE_B ? DISPPLANE_SEL_PIPE_B : DISPPLANE_SEL_PIPE_A);
   
   /* Set CRTC registers. */
-  hactive = pMode->CrtcHBlankStart;
+  hactive = pMode->CrtcHDisplay;
   hsync_start = pMode->CrtcHSyncStart;
   hsync_end = pMode->CrtcHSyncEnd;
   htotal = pMode->CrtcHTotal;
@@ -359,7 +375,7 @@ I830RawSetHw(ScrnInfoPtr pScrn, DisplayModePtr pMode)
 	  hactive, hsync_start, hsync_end, htotal, hblank_start,
 	  hblank_end);
   
-  vactive = pMode->CrtcVBlankStart;
+  vactive = pMode->CrtcVDisplay;
   vsync_start = pMode->CrtcVSyncStart;
   vsync_end = pMode->CrtcVSyncEnd;
   vtotal = pMode->CrtcVTotal;
@@ -422,7 +438,7 @@ I830RawSetHw(ScrnInfoPtr pScrn, DisplayModePtr pMode)
     (vactive << SRC_SIZE_VERT_SHIFT);
 
   /* Set the palette to 8-bit mode. */
-  *pipe_conf &= ~PIPEACONF_GAMMA;
+  //  *pipe_conf &= ~PIPEACONF_GAMMA;
   return TRUE;
 }
 
@@ -563,24 +579,6 @@ I830ProgramModeReg(ScrnInfoPtr pScrn, DisplayModePtr pMode)
 	tmp &= ~(ADPA_VSYNC_CNTL_DISABLE|ADPA_HSYNC_CNTL_DISABLE);
 	//	tmp |= ADPA_DPMS_D0;
 	OUTREG(ADPA, tmp);
-#if 0
-	/* setup display plane */
-	if (dinfo->pdev->device == PCI_DEVICE_ID_INTEL_830M) {
-		/*
-		 *      i830M errata: the display plane must be enabled
-		 *      to allow writes to the other bits in the plane
-		 *      control register.
-		 */
-		tmp = INREG(DSPACNTR);
-		if ((tmp & DISPLAY_PLANE_ENABLE) != DISPLAY_PLANE_ENABLE) {
-			tmp |= DISPLAY_PLANE_ENABLE;
-			OUTREG(DSPACNTR, tmp);
-			OUTREG(DSPACNTR,
-			       hw->disp_a_ctrl|DISPLAY_PLANE_ENABLE);
-			usleep(1000);
-              }
-	}
-#endif
 
 	I830SetupDSPRegisters(pScrn, pMode);
 
@@ -644,6 +642,7 @@ I830RawSaveState(ScrnInfoPtr pScrn, I830RegPtr hw)
   hw->add_id = INREG(ADD_ID);
   
   hw->vgacntrl = INREG(VGACNTRL);  
+
 }
 
 

@@ -318,10 +318,56 @@ I830DumpModeDebugInfo(ScrnInfoPtr pScrn)
 {
   I830Ptr pI830 = I830PTR(pScrn);
   CARD32 temp, planeA, planeB;
-
+  int p1, p2, m1, m2, n, p, m, clock;
   planeA = INREG(DSPACNTR);
   planeB = INREG(DSPBCNTR);
 #if 1
+
+  /* read in the DVO registers */
+  temp = INREG(DVOA);
+  ErrorF("DVOA is %08X\n", temp);
+  temp = INREG(DVOB);
+  ErrorF("DVOB is %08X\n", temp);
+  temp = INREG(DVOC);
+  ErrorF("DVOC is %08X\n", temp);
+  temp = INREG(DVOA_SRCDIM);
+  ErrorF("DVOA is %08X\n", temp);
+  temp = INREG(DVOB_SRCDIM);
+  ErrorF("DVOB is %08X\n", temp);
+  temp = INREG(DVOC_SRCDIM);
+  ErrorF("DVOC is %08X\n", temp);
+
+  temp = INREG(0x61200);
+  ErrorF("0x61200 is %08X\n", temp);
+  temp = INREG(0x61204);
+  ErrorF("0x61204 is %08X\n", temp);
+
+  temp = INREG(DPLL_A);
+  p2 = (temp >> DPLL_P2_SHIFT) & DPLL_P2_MASK;
+  p1 = (temp >> DPLL_P1_SHIFT) & DPLL_P1_MASK;
+  p = (p1+2) * ( 1<< (p2 + 1));
+  ErrorF("DPLL A is %08X: p1 is %d p2 is %d\n", temp, p1, p2);
+  temp = INREG(FPA0);
+  n = (temp >> FP_N_DIVISOR_SHIFT) & FP_DIVISOR_MASK;
+  m1 = (temp >> FP_M1_DIVISOR_SHIFT) & FP_DIVISOR_MASK;
+  m2 = (temp >> FP_M2_DIVISOR_SHIFT) & FP_DIVISOR_MASK;
+  m = (5 * ((m1) + 2) + ((m2) + 2));
+  n += 2;
+  clock = ((PLL_REFCLK * m / n) / p);
+
+  ErrorF("FPA0 is %08X N is %d m1 is %d m2 is %d\n", temp, n, m1, m2);
+  ErrorF("m %d n %d p %d clock %d\n", m, n, p, clock);
+
+  temp = INREG(FPA1);
+  n = (temp >> FP_N_DIVISOR_SHIFT) & FP_DIVISOR_MASK;
+  m1 = (temp >> FP_M1_DIVISOR_SHIFT) & FP_DIVISOR_MASK;
+  m2 = (temp >> FP_M2_DIVISOR_SHIFT) & FP_DIVISOR_MASK;
+  m = (5 * ((m1) + 2) + ((m2) + 2));
+  n += 2;
+  clock = ((PLL_REFCLK * m / n) / p);
+
+  ErrorF("FPA1 is %08X N is %d m1 is %d m2 is %d\n", temp, n, m1, m2);
+  ErrorF("m %d n %d p %d clock %d\n", m, n, p, clock);
   /* Print out some CRTC/display information. */
   temp = INREG(HTOTAL_A);
   ErrorF("Horiz active: %d, Horiz total: %d\n", temp & 0x7ff,
@@ -900,8 +946,42 @@ GetDisplayDevices(ScrnInfoPtr pScrn)
 {
    I830Ptr pI830 = I830PTR(pScrn);
    vbeInfoPtr pVbe = pI830->pVbe;
+   int i;
+   int ret=0;
 
    DPRINTF(PFX, "GetDisplayDevices\n");
+
+   if (pI830->rawmode)
+   {
+     if (pI830->PciInfo->chipType == PCI_CHIP_E7221_G) /* FIXED CONFIG */
+	return PIPE_CRT;
+
+     if (pI830->dvos[0].MonInfo)
+       ret |= PIPE_CRT;
+     for (i=1; i<MAX_DVOS; i++)
+     {
+       if (pI830->dvos[i].MonInfo)
+       {
+	 switch(pI830->dvos[i].i2c_drv->type)
+	 {
+	 case I830_I2C_LVDS:
+	   ret |= PIPE_LFP;
+	   break;
+	 case I830_I2C_TMDS:
+	   ret |= PIPE_DFP;
+	   break;
+	 case I830_I2C_TVOUT:
+	   ret |= PIPE_TV;
+	   break;
+	 case I830_I2C_NONE:
+	 default:
+	   break;
+	 }
+       }
+
+     }
+     return ret;
+   }
 
 #if 0
    {
@@ -2089,6 +2169,7 @@ void
 I830PreInitDDC(ScrnInfoPtr pScrn)
 {
     I830Ptr pI830 = I830PTR(pScrn);
+    int i;
 
     if (!xf86LoadSubModule(pScrn, "ddc")) {
 	pI830->ddc2 = FALSE;
@@ -2102,7 +2183,25 @@ I830PreInitDDC(ScrnInfoPtr pScrn)
     if (pI830->ddc2) {
 	if (xf86LoadSubModule(pScrn, "i2c")) {
 	    xf86LoaderReqSymLists(I810i2cSymbols,NULL);
-	    pI830->ddc2 = I830I2cInit(pScrn);
+
+	    /* Set up 2 DVOS - should be up to 4 */
+	    pI830->num_dvos = 2;
+	    /* setup the common analog DVO */
+	    pI830->ddc2 = I830I2CInit(pScrn, &pI830->dvos[0].pDDCBus, GPIOA, "DDCGPIOA");
+	    if (pI830->ddc2 == FALSE)
+	      return;
+	    pI830->ddc2 = I830I2CInit(pScrn, &pI830->dvos[0].pI2CBus, GPIOB, "I2CGPIOB");
+	    if (pI830->ddc2 == FALSE)
+	      return;
+
+	    pI830->ddc2 = I830I2CInit(pScrn, &pI830->dvos[1].pDDCBus, GPIOD, "DDCGPIOD");
+	    if (pI830->ddc2 == FALSE)
+	      return;
+	    pI830->ddc2 = I830I2CInit(pScrn, &pI830->dvos[1].pI2CBus, GPIOE, "I2CGPIOE");
+	    if (pI830->ddc2 == FALSE)
+	      return;
+
+   	    pI830->ddc2 = TRUE;
 	}
 	else pI830->ddc2 = FALSE;
     }
@@ -2111,20 +2210,31 @@ I830PreInitDDC(ScrnInfoPtr pScrn)
 
 void I830DetectMonitors(ScrnInfoPtr pScrn)
 {
-  volatile xf86MonPtr MonInfo[3];
   I830Ptr pI830 = I830PTR(pScrn);
-  int i;
-  int DDCReg[] = {GPIOA, GPIOB, GPIOC};
+  int i, ret;
 
-  for (i=0; i<3; i++)
+  if (!pI830->ddc2)
+    return;
+
+  for (i=0; i<pI830->num_dvos; i++)
   {
-    pI830->DDCReg = DDCReg[i];
 
-    MonInfo[i] = xf86DoEDID_DDC2(pScrn->scrnIndex, pI830->pI2CBus);
+    pI830->dvos[i].MonInfo = xf86DoEDID_DDC2(pScrn->scrnIndex, pI830->dvos[i].pDDCBus);
     
-    xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "doing monitor %d\n", i);
-    xf86PrintEDID(MonInfo[i]);
+    xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "checking DVO %d, %08X\n", i, pI830->dvos[i].pDDCBus->DriverPrivate.uval);
+    xf86PrintEDID(pI830->dvos[i].MonInfo);
     
+    /* if we are on an i2C bus > 0 and we see a monitor - try to
+       find a controller chip */
+    if (i > 0 && pI830->dvos[i].MonInfo)
+    {
+      
+      ret = I830I2CDetectControllers(pScrn, pI830->dvos[i].pI2CBus, &pI830->dvos[i].i2c_drv);
+      if (ret==TRUE)
+      {
+	xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Found i2c %s on %08X\n", pI830->dvos[i].i2c_drv->modulename, pI830->dvos[i].pI2CBus->DriverPrivate.uval);
+      }
+    }
   }
 
   return;
@@ -2619,6 +2729,14 @@ I830BIOSPreInit(ScrnInfoPtr pScrn, int flags)
    I830PreInitDDC(pScrn);
 
    I830DetectMonitors(pScrn);
+
+   for (i=0; i<MAX_DVOS; i++) {
+     if (pI830->dvos[i].MonInfo) {
+       pScrn->monitor->DDC = pI830->dvos[i].MonInfo;
+       break;
+     }
+   }
+
    pI830->MonType1 = PIPE_NONE;
    pI830->MonType2 = PIPE_NONE;
    pI830->specifiedMonitor = FALSE;
@@ -3215,16 +3333,17 @@ I830BIOSPreInit(ScrnInfoPtr pScrn, int flags)
         (pI830->pipe == 0 && pI830->operatingDevices & PIPE_LFP) )
    	vbeDoPanelID(pI830->pVbe);
 
-   pDDCModule = xf86LoadSubModule(pScrn, "ddc");
-
-   pI830->vesa->monitor = vbeDoEDID(pI830->pVbe, pDDCModule);
-
-   if ((pScrn->monitor->DDC = pI830->vesa->monitor) != NULL) {
-      xf86PrintEDID(pI830->vesa->monitor);
-      xf86SetDDCproperties(pScrn, pI830->vesa->monitor);
+   if (!pI830->rawmode) {
+     pDDCModule = xf86LoadSubModule(pScrn, "ddc");
+     
+     pI830->vesa->monitor = vbeDoEDID(pI830->pVbe, pDDCModule);
+     
+     if ((pScrn->monitor->DDC = pI830->vesa->monitor) != NULL) {
+       xf86PrintEDID(pI830->vesa->monitor);
+       xf86SetDDCproperties(pScrn, pI830->vesa->monitor);
+     }
+     xf86UnloadSubModule(pDDCModule);
    }
-   xf86UnloadSubModule(pDDCModule);
-
    /* XXX Move this to a header. */
 #define VIDEO_BIOS_SCRATCH 0x18
 
@@ -3343,20 +3462,8 @@ I830BIOSPreInit(ScrnInfoPtr pScrn, int flags)
    {
      ClockRangePtr clockRanges;
      
-     switch (pScrn->bitsPerPixel) {
-     case 8:
-       pI830->MaxClock = 203000;
-       break;
-     case 16:
-       pI830->MaxClock = 163000;
-       break;
-     case 24:
-       pI830->MaxClock = 136000;
-       break;
-     case 32:				/* not supported */
-       pI830->MaxClock = 150000;
-     }
-     
+     pI830->MaxClock = 300000;
+
      clockRanges = xnfcalloc(sizeof(ClockRange), 1);
      clockRanges->next = NULL;
      /* 9.4MHz appears to be the smallest that works. */
@@ -3365,7 +3472,8 @@ I830BIOSPreInit(ScrnInfoPtr pScrn, int flags)
      clockRanges->clockIndex = -1;
      clockRanges->interlaceAllowed = TRUE;
      clockRanges->doubleScanAllowed = FALSE;
-     
+
+     xf86ValidateDDCModes(pScrn, pScrn->display->modes);
      i = xf86ValidateModes(pScrn, pScrn->monitor->Modes,
 			   pScrn->display->modes, clockRanges,
 			   0, 320, MAX_DISPLAY_PITCH, 64 * pScrn->bitsPerPixel,
@@ -3613,6 +3721,7 @@ I830BIOSPreInit(ScrnInfoPtr pScrn, int flags)
    SetPipeAccess(pScrn);
    I830PrintModes(pScrn);
 
+   if (!pI830->rawmode) {
    if (!pI830->vesa->useDefaultRefresh) {
       /*
        * This sets the parameters for the VBE modes according to the best
@@ -3624,7 +3733,7 @@ I830BIOSPreInit(ScrnInfoPtr pScrn, int flags)
       SetPipeAccess(pScrn);
       I830SetModeParameters(pScrn, pI830->pVbe);
    }
-
+   }
    /* PreInit shouldn't leave any state changes, so restore this. */
    RestoreBIOSMemSize(pScrn);
 
@@ -3912,6 +4021,7 @@ SaveHWState(ScrnInfoPtr pScrn)
    if (pI830->rawmode)
    {
      I830RawSaveState(pScrn, &pI830->SavedReg);
+     pI830->ModeReg = pI830->SavedReg;
      return TRUE;
    }
 
@@ -4580,7 +4690,7 @@ dump_DSPACNTR(ScrnInfoPtr pScrn)
    unsigned int tmp;
 
    /* Display A Control */
-   tmp = INREG(0x70180);
+   tmp = INREG(DSPACNTR);
    ErrorF("Display A Plane Control Register (0x%.8x)\n", tmp);
 
    if (tmp & BIT(31))
@@ -4659,7 +4769,7 @@ dump_DSPBCNTR(ScrnInfoPtr pScrn)
    unsigned int tmp;
 
    /* Display B/Sprite Control */
-   tmp = INREG(0x71180);
+   tmp = INREG(DSPBCNTR);
    ErrorF("Display B/Sprite Plane Control Register (0x%.8x)\n", tmp);
 
    if (tmp & BIT(31))

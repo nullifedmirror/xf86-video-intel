@@ -265,7 +265,10 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #define GPIOA             0x5010
 #define GPIOB             0x5014
-#define GPIOC             0x501C
+#define GPIOC             0x5018 // this may be external DDC on i830
+#define GPIOD             0x501C // this is DVO DDC
+#define GPIOE             0x5020 // this is DVO i2C 
+#define GPIOF             0x5024
 
 /* p317, 319
  */
@@ -693,6 +696,15 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define FP_M2_DIVISOR_SHIFT		0
 
 
+struct pll_min_max {
+  int min_m, max_m;
+  int min_m1, max_m1;
+  int min_m2, max_m2;
+  int min_n, max_n;
+  int min_p, max_p;
+  int min_p1, max_p1;
+};
+
 /* PLL parameters (these are for 852GM/855GM/865G, check earlier chips). */
 /* Clock values are in units of kHz */
 #define PLL_REFCLK		48000
@@ -701,18 +713,6 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define MIN_CLOCK		25000
 #define MAX_CLOCK		350000
 #define P_TRANSITION_CLOCK	165000
-#define MIN_M			108
-#define MAX_M			140
-#define MIN_M1			18
-#define MAX_M1			26
-#define MIN_M2			6
-#define MAX_M2			16
-#define MIN_P			4
-#define MAX_P			128
-#define MIN_P1			0
-#define MAX_P1			31
-#define MIN_N			3
-#define MAX_N			16
 
 #define CALC_VCLOCK(m1, m2, n, p1, p2) \
         ((PLL_REFCLK * (5 * ((m1) + 2) + ((m2) + 2)) / ((n) + 2)) / \
