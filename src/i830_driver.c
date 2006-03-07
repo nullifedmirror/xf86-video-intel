@@ -960,22 +960,25 @@ GetDisplayDevices(ScrnInfoPtr pScrn)
        ret |= PIPE_CRT;
      for (i=1; i<MAX_DVOS; i++)
      {
-       if (pI830->dvos[i].MonInfo)
+       if (pI830->dvos[i].bus_type == I830_I2C_BUS_DVO)
        {
-	 switch(pI830->dvos[i].i2c_drv->type)
+	 if (pI830->dvos[i].MonInfo)
 	 {
-	 case I830_I2C_LVDS:
-	   ret |= PIPE_LFP;
-	   break;
-	 case I830_I2C_TMDS:
-	   ret |= PIPE_DFP;
-	   break;
-	 case I830_I2C_TVOUT:
-	   ret |= PIPE_TV;
-	   break;
-	 case I830_I2C_NONE:
-	 default:
-	   break;
+	   switch(pI830->dvos[i].i2c_drv->type)
+	   {
+	   case I830_I2C_CHIP_LVDS:
+	     ret |= PIPE_LFP;
+	     break;
+	   case I830_I2C_CHIP_TMDS:
+	     ret |= PIPE_DFP;
+	     break;
+	   case I830_I2C_CHIP_TVOUT:
+	     ret |= PIPE_TV;
+	     break;
+	   case I830_I2C_CHIP_NONE:
+	   default:
+	     break;
+	   }
 	 }
        }
 
@@ -2184,22 +2187,35 @@ I830PreInitDDC(ScrnInfoPtr pScrn)
 	if (xf86LoadSubModule(pScrn, "i2c")) {
 	    xf86LoaderReqSymLists(I810i2cSymbols,NULL);
 
-	    /* Set up 2 DVOS - should be up to 4 */
-	    pI830->num_dvos = 2;
-	    /* setup the common analog DVO */
+	    pI830->num_dvos = 1;
+	    pI830->dvos[0].bus_type = I830_I2C_BUS_DVO;
+	    /* setup the common CRT DVO */
 	    pI830->ddc2 = I830I2CInit(pScrn, &pI830->dvos[0].pDDCBus, GPIOA, "DDCGPIOA");
 	    if (pI830->ddc2 == FALSE)
 	      return;
 	    pI830->ddc2 = I830I2CInit(pScrn, &pI830->dvos[0].pI2CBus, GPIOB, "I2CGPIOB");
 	    if (pI830->ddc2 == FALSE)
 	      return;
-
-	    pI830->ddc2 = I830I2CInit(pScrn, &pI830->dvos[1].pDDCBus, GPIOD, "DDCGPIOD");
-	    if (pI830->ddc2 == FALSE)
+	    
+	    if (!(IS_I9XX(pI830))) {
+	      pI830->dvos[1].bus_type = I830_I2C_BUS_DVO;
+	      pI830->num_dvos = 2;
+	      
+	      pI830->ddc2 = I830I2CInit(pScrn, &pI830->dvos[1].pDDCBus, GPIOD, "DDCGPIOD");
+	      if (pI830->ddc2 == FALSE)
+		return;
+	      pI830->ddc2 = I830I2CInit(pScrn, &pI830->dvos[1].pI2CBus, GPIOE, "I2CGPIOE");
+	      if (pI830->ddc2 == FALSE)
 	      return;
-	    pI830->ddc2 = I830I2CInit(pScrn, &pI830->dvos[1].pI2CBus, GPIOE, "I2CGPIOE");
-	    if (pI830->ddc2 == FALSE)
-	      return;
+	    }
+	    else {
+	      pI830->num_dvos = 2;
+	      pI830->dvos[1].bus_type = I830_I2C_BUS_SDVO;
+	      /* i915 has sDVO */
+	      pI830->ddc2 = I830I2CInit(pScrn, &pI830->dvos[1].pI2CBus, GPIOE, "SDVOCTRL");
+	      if (pI830->ddc2 = FALSE)
+		return;
+	    }
 
    	    pI830->ddc2 = TRUE;
 	}
@@ -2219,20 +2235,31 @@ void I830DetectMonitors(ScrnInfoPtr pScrn)
   for (i=0; i<pI830->num_dvos; i++)
   {
 
-    pI830->dvos[i].MonInfo = xf86DoEDID_DDC2(pScrn->scrnIndex, pI830->dvos[i].pDDCBus);
-    
-    xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "checking DVO %d, %08X\n", i, pI830->dvos[i].pDDCBus->DriverPrivate.uval);
-    xf86PrintEDID(pI830->dvos[i].MonInfo);
-    
-    /* if we are on an i2C bus > 0 and we see a monitor - try to
-       find a controller chip */
-    if (i > 0 && pI830->dvos[i].MonInfo)
+    /* we can't do EDID on sDVO yet */
+    if (pI830->dvos[i].bus_type == I830_I2C_BUS_DVO)
     {
+      pI830->dvos[i].MonInfo = xf86DoEDID_DDC2(pScrn->scrnIndex, pI830->dvos[i].pDDCBus);
       
-      ret = I830I2CDetectControllers(pScrn, pI830->dvos[i].pI2CBus, &pI830->dvos[i].i2c_drv);
+      xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "checking DVO %d, %08X\n", i, pI830->dvos[i].pDDCBus->DriverPrivate.uval);
+      xf86PrintEDID(pI830->dvos[i].MonInfo);
+      
+      /* if we are on an i2C bus > 0 and we see a monitor - try to
+	 find a controller chip */
+      if (i > 0 && pI830->dvos[i].MonInfo)
+      {
+	
+	ret = I830I2CDetectControllers(pScrn, pI830->dvos[i].pI2CBus, &pI830->dvos[i].i2c_drv);
+	if (ret==TRUE)
+	{
+	  xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Found i2c %s on %08X\n", pI830->dvos[i].i2c_drv->modulename, pI830->dvos[i].pI2CBus->DriverPrivate.uval);
+	}
+      }
+    }
+    else {
+      ret = I830I2CDetectSDVOController(pScrn, pI830->dvos[i].pI2CBus);
       if (ret==TRUE)
       {
-	xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Found i2c %s on %08X\n", pI830->dvos[i].i2c_drv->modulename, pI830->dvos[i].pI2CBus->DriverPrivate.uval);
+	xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Found sDVO\n");
       }
     }
   }

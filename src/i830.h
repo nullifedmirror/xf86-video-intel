@@ -217,12 +217,17 @@ typedef struct _I830SaveRec {
 } I830RegRec, *I830RegPtr;
 
 /* store information about an Ixxx DVO */
+/* The i830->i865 use multiple DVOs with multiple i2cs */
+/* the i915, i945 have a single sDVO i2c bus - which is different */
 #define MAX_DVOS 4
 
-#define I830_I2C_NONE 0
-#define I830_I2C_LVDS 1
-#define I830_I2C_TMDS 2
-#define I830_I2C_TVOUT 3
+#define I830_I2C_BUS_DVO 1
+#define I830_I2C_BUS_SDVO 2
+
+#define I830_I2C_CHIP_NONE 0
+#define I830_I2C_CHIP_LVDS 1
+#define I830_I2C_CHIP_TMDS 2
+#define I830_I2C_CHIP_TVOUT 4
 
 struct _I830RegI2CDriver {
   int type;
@@ -237,6 +242,7 @@ struct _I830RegI2CDriver {
 };
   
 struct _I830DVORec {
+  int bus_type;
   int flags;
   I2CBusPtr pI2CBus;
   I2CBusPtr pDDCBus;

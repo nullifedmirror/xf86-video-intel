@@ -57,7 +57,7 @@ static const char *SIL164Symbols[] = {
 
 /* driver list */
 struct _I830RegI2CDriver i830_i2c_drivers[] =
-  { I830_I2C_TMDS, "sil164", "SIL164VidOutput", (SIL164_ADDR_1<<1), SIL164Symbols, NULL , NULL, NULL};
+  { I830_I2C_CHIP_TMDS, "sil164", "SIL164VidOutput", (SIL164_ADDR_1<<1), SIL164Symbols, NULL , NULL, NULL};
 
 
 
@@ -343,3 +343,42 @@ I830I2CDetectControllers(ScrnInfoPtr pScrn, I2CBusPtr pI2CBus, struct _I830RegI2
   return FALSE;
 }
 
+
+Bool
+I830I2CDetectSDVOController(ScrnInfoPtr pScrn, I2CBusPtr b)
+{
+  I830Ptr pI830 = I830PTR(pScrn);
+  I2CDevRec d;
+  unsigned char ch[64];
+  int i;
+  int addr = 0x39 << 1;
+  
+  /* attempt to talk to an SDVO controller */
+  d.DevName = "SDVO";
+  d.SlaveAddr = addr;
+  d.pI2CBus = b;
+  d.StartTimeout = b->StartTimeout;
+  d.BitTimeout = b->BitTimeout;
+  d.AcknTimeout = b->AcknTimeout;
+  d.ByteTimeout = b->ByteTimeout;
+  
+  for (i=0; i<0x40; i++)
+  {
+    if (!xf86I2CReadByte(&d, i, &ch[i]))
+    {
+      xf86DrvMsg(b->scrnIndex, X_ERROR, "unable to read from %d on %s\n", addr, b->BusName);
+      return FALSE;
+    }
+  }
+  
+  for (i=0; i<0x40; i++)
+  {
+    if ((i%8)==0)
+      ErrorF("\n");
+
+    ErrorF("%02X ", ch[i]);
+  }
+  ErrorF("\n");
+
+  return TRUE;
+}
