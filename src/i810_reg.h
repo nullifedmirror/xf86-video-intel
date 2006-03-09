@@ -270,6 +270,10 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define GPIOE             0x5020 // this is DVO i2C 
 #define GPIOF             0x5024
 
+#define GMBUS_CLK_PORT_SEL 0x5100
+#define GMBUS_CMD_STATUS   0x5104
+#define GMBUS_DATA         0x510C
+
 /* p317, 319
  */
 #define VCLK2_VCO_M        0x6008 /* treat as 16 bit? (includes msbs) */
