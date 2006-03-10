@@ -678,6 +678,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define DPLL_2X_CLOCK_ENABLE		(1 << 30)
 #define DPLL_SYNCLOCK_ENABLE		(1 << 29)
 #define DPLL_VGA_MODE_DISABLE		(1 << 28)
+#define DPLL_DIVISOR_SELECT             (1 << 24)
 #define DPLL_P2_MASK			1
 #define DPLL_P2_SHIFT			23
 #define DPLL_P1_FORCE_DIV2		(1 << 21)
@@ -712,15 +713,25 @@ struct pll_min_max {
 /* PLL parameters (these are for 852GM/855GM/865G, check earlier chips). */
 /* Clock values are in units of kHz */
 #define PLL_REFCLK		48000
+
 #define MIN_VCO_FREQ		930000
 #define MAX_VCO_FREQ		1400000
 #define MIN_CLOCK		25000
 #define MAX_CLOCK		350000
 #define P_TRANSITION_CLOCK	165000
 
-#define CALC_VCLOCK(m1, m2, n, p1, p2) \
+
+#define I9XX_MIN_VCO_FREQ		1400000
+#define I9XX_MAX_VCO_FREQ		2800000
+#define I9XX_P_TRANSITION_CLOCK	200000
+
+#define CALC_VCLOCK_i8xx(m1, m2, n, p1, p2) \
         ((PLL_REFCLK * (5 * ((m1) + 2) + ((m2) + 2)) / ((n) + 2)) / \
         (((p1) + 2) * (1 << (p2 + 1))))
+
+#define CALC_VCLOCK_i9xx(m1, m2, n, p1, p2) \
+        ((PLL_REFCLK * (5 * ((m1) + 2) + ((m2) + 2)) / ((n) + 2)) / \
+	 (((1<<p1)) * (p2 ? 10 : 5)))
 
 #define CALC_VCLOCK3(m, n, p)	((PLL_REFCLK * (m) / (n)) / (p))
 

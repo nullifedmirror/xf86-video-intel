@@ -250,6 +250,10 @@ struct _I830DVORec {
   struct _I830RegI2CDriver *i2c_drv;
 };
 
+typedef struct _I830SDVORec {
+  I2CDevRec d;
+  unsigned char sdvo_regs[20];
+} I830SDVORec, *I830SDVOPtr;
 
 typedef struct _I830Rec {
    unsigned char *MMIOBase;

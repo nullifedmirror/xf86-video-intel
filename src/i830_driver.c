@@ -345,7 +345,9 @@ I830DumpModeDebugInfo(ScrnInfoPtr pScrn)
   temp = INREG(DPLL_A);
   p2 = (temp >> DPLL_P2_SHIFT) & DPLL_P2_MASK;
   p1 = (temp >> DPLL_P1_SHIFT) & DPLL_P1_MASK;
-  p = (p1+2) * ( 1<< (p2 + 1));
+
+  p = ((1 << p1) * (p2 ? 10 : 5));
+  //  p = (p1+2) * ( 1<< (p2 + 1));
   ErrorF("DPLL A is %08X: p1 is %d p2 is %d\n", temp, p1, p2);
   temp = INREG(FPA0);
   n = (temp >> FP_N_DIVISOR_SHIFT) & FP_DIVISOR_MASK;
@@ -353,7 +355,7 @@ I830DumpModeDebugInfo(ScrnInfoPtr pScrn)
   m2 = (temp >> FP_M2_DIVISOR_SHIFT) & FP_DIVISOR_MASK;
   m = (5 * ((m1) + 2) + ((m2) + 2));
   n += 2;
-  clock = ((PLL_REFCLK * m / n) / p);
+  clock = (((PLL_REFCLK * m) / n) / p);
 
   ErrorF("FPA0 is %08X N is %d m1 is %d m2 is %d\n", temp, n, m1, m2);
   ErrorF("m %d n %d p %d clock %d\n", m, n, p, clock);
@@ -2209,12 +2211,19 @@ I830PreInitDDC(ScrnInfoPtr pScrn)
 	      return;
 	    }
 	    else {
+	      pointer ret_p;
 	      pI830->num_dvos = 2;
 	      pI830->dvos[1].bus_type = I830_I2C_BUS_SDVO;
 	      /* i915 has sDVO */
 	      pI830->ddc2 = I830I2CInit(pScrn, &pI830->dvos[1].pI2CBus, GPIOE, "SDVOCTRL");
 	      if (pI830->ddc2 = FALSE)
 		return;
+
+	      ret_p=I830SDVOInit(pI830->dvos[1].pI2CBus);
+				 
+	      
+	      I830SDVOGetStatus(ret_p);
+	      
 	    }
 
    	    pI830->ddc2 = TRUE;

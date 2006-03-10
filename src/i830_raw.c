@@ -69,7 +69,7 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 struct pll_min_max plls[PLLS_MAX] = {
   { 108, 140, 18, 26, 6, 16, 3, 16, 4, 128, 0, 31 }, //I8xx
-  {  70, 125, 10, 22, 5, 9,  4,  7, 6, 79, 2, 16 }  //I9xx
+  {  70, 120, 10, 20, 4, 12, 3,  8, 6, 79, 0, 31 }  //I9xx
 };
 
 /* Split the M parameter into M1 and M2. */
@@ -91,6 +91,26 @@ splitm(int index, unsigned int m, CARD32 *retm1, CARD32 *retm2)
 		*retm2 = (unsigned int)m2;
 		return 0;
 	}
+}
+
+/* Split the P parameter into P1 and P2. */
+static int
+splitp_i9xx(int index, unsigned int p, CARD32 *retp1, CARD32 *retp2)
+{
+	int p1_bit, p2, p1;
+	int p2_vals[4] = { 5 , 10, 7, 14 };
+
+//	if ((p % 10) == 0)
+	p2 = 0;
+//	else
+//		p2 = 0;
+		
+	p1_bit = (p / (p2_vals[p2]));
+	p1 = ffs(p1_bit) - 1;
+
+	*retp1 = (unsigned int)p1;
+	*retp2 = (unsigned int)p2;
+	return 0;
 }
 
 /* Split the P parameter into P1 and P2. */
@@ -117,6 +137,107 @@ splitp(int index, unsigned int p, CARD32 *retp1, CARD32 *retp2)
 	}
 }
 
+int
+i9xx_calc_pll_params(int index, int clock, 
+		     CARD32 *retm1, CARD32 *retm2, 
+		     CARD32 *retn, CARD32 *retp1, CARD32 *retp2, 
+		     CARD32 *retclock, CARD32 *use_x2)
+{
+	volatile CARD32 m1, m2, n, p1, p2, n1;
+	CARD32 f_vco, p, p_best = 0, m, f_out;
+	CARD32 err_max, err_target, err_best = 10000000;
+	volatile CARD32 n_best = 0, m_best = 0, f_best, f_err;
+	volatile CARD32 p_min, p_max, p_inc, div_min, div_max;
+	int ret;
+
+	/* Accept 0.5% difference, but aim for 0.1% */
+	err_max = 5 * clock / 1000;
+	err_target = clock / 1000;
+
+	DPRINTF(PFX, "Clock is %d\n", clock);
+
+ 	div_max = I9XX_MAX_VCO_FREQ / clock;
+	div_min = ROUND_UP_TO(I9XX_MIN_VCO_FREQ, clock) / clock;
+
+	if (clock <= I9XX_P_TRANSITION_CLOCK)
+		p_inc = 10;
+	else
+		p_inc = 5;
+	p_min = ROUND_UP_TO(div_min, p_inc);
+	p_max = ROUND_DOWN_TO(div_max, p_inc);
+	if (p_min < plls[index].min_p)
+		p_min = plls[index].min_p;
+	if (p_max > plls[index].max_p)
+		p_max = plls[index].max_p;
+	
+	DPRINTF(PFX, "p range is %d-%d (%d)\n", p_min, p_max, p_inc);
+	clock /= 2;
+	p = p_min;
+	do {
+		ret = splitp_i9xx(index, p, &p1, &p2);
+		fprintf(stderr,"trying p %d p1 %d  p2 %d\n", p , p1, p2);
+		if (ret) {
+		  DPRINTF(PFX, "cannot split p = %d\n", p);
+			p += p_inc;
+			continue;
+		}
+		n = plls[index].min_n;
+		f_vco = clock * p;
+		do {
+			m = ROUND_UP_TO(f_vco * n, PLL_REFCLK) / PLL_REFCLK;
+			if (m < plls[index].min_m)
+				m = plls[index].min_m;
+			if (m > plls[index].max_m)
+				m = plls[index].max_m;
+			f_out = CALC_VCLOCK3(m, n, p);
+			if (splitm(index, m, &m1, &m2)) {
+				DPRINTF(PFX, "cannot split m = %d\n", m);
+				n++;
+				continue;
+			}
+			if (clock > f_out)
+				f_err = clock - f_out;
+			else
+				f_err = f_out - clock;
+
+			if (f_err < err_best) {
+				m_best = m;
+				n_best = n;
+				p_best = p;
+				f_best = f_out;
+				err_best = f_err;
+			}
+			n++;
+		} while ((n <= plls[index].max_n) && (f_out >= clock));
+		p += p_inc;
+	} while ((p <= p_max));
+
+	if (!m_best) {
+	  DPRINTF(PFX,"cannot find parameters for clock %d\n", clock);
+		return 1;
+	}
+	m = m_best;
+	n = n_best;
+	p = p_best;
+	splitm(index, m, &m1, &m2);
+	splitp_i9xx(index, p, &p1, &p2);
+	n1 = n - 2;
+
+	DPRINTF(PFX, "m, n, p: %d (%d,%d), %d (%d), %d (%d,%d), "
+		"f: %d (%d), VCO: %d\n",
+		m, m1, m2, n, n1, p, p1, p2,
+		CALC_VCLOCK3(m, n, p), CALC_VCLOCK_i9xx(m1, m2, n1, p1, p2),
+		CALC_VCLOCK3(m, n, p) * p);
+	*retm1 = m1;
+	*retm2 = m2;
+	*retn = n1;
+	*retp1 = p1;
+	*retp2 = p2;
+	*retclock = CALC_VCLOCK_i9xx(m1, m2, n1, p1, p2);
+
+	return 0;
+}
+
 static int
 calc_pll_params(int index, int clock, CARD32 *retm1, CARD32 *retm2, CARD32 *retn, CARD32 *retp1,
 		CARD32 *retp2, CARD32 *retclock)
@@ -126,6 +247,7 @@ calc_pll_params(int index, int clock, CARD32 *retm1, CARD32 *retm2, CARD32 *retn
 	CARD32 err_max, err_target, err_best = 10000000;
 	CARD32 n_best = 0, m_best = 0, f_best, f_err;
 	CARD32 p_min, p_max, p_inc, div_min, div_max;
+	int ret;
 
 	/* Accept 0.5% difference, but aim for 0.1% */
 	err_max = 5 * clock / 1000;
@@ -151,7 +273,8 @@ calc_pll_params(int index, int clock, CARD32 *retm1, CARD32 *retm2, CARD32 *retn
 
 	p = p_min;
 	do {
-  	        if (splitp(index, p, &p1, &p2)) {
+		ret = splitp(index, p, &p1, &p2);
+		if (ret) {
 		  DPRINTF(PFX, "cannot split p = %d\n", p);
 			p += p_inc;
 			continue;
@@ -202,14 +325,14 @@ calc_pll_params(int index, int clock, CARD32 *retm1, CARD32 *retm2, CARD32 *retn
 	DPRINTF(PFX, "m, n, p: %d (%d,%d), %d (%d), %d (%d,%d), "
 		"f: %d (%d), VCO: %d\n",
 		m, m1, m2, n, n1, p, p1, p2,
-		CALC_VCLOCK3(m, n, p), CALC_VCLOCK(m1, m2, n1, p1, p2),
+		CALC_VCLOCK3(m, n, p), CALC_VCLOCK_i8xx(m1, m2, n1, p1, p2),
 		CALC_VCLOCK3(m, n, p) * p);
 	*retm1 = m1;
 	*retm2 = m2;
 	*retn = n1;
 	*retp1 = p1;
 	*retp2 = p2;
-	*retclock = CALC_VCLOCK(m1, m2, n1, p1, p2);
+	*retclock = CALC_VCLOCK_i8xx(m1, m2, n1, p1, p2);
 
 	return 0;
 }
@@ -242,9 +365,11 @@ I830RawSetHw(ScrnInfoPtr pScrn, DisplayModePtr pMode)
   CARD32 *vs, *vb, *vt, *hs, *hb, *ht, *ss, *pipe_conf;
   int index;
   int displays = pI830->operatingDevices;
-
+  int use_x2=0;
+  int ret;
+  
   index = IS_I9XX(pI830) ? PLLS_I9xx : PLLS_I8xx;
-
+  
   /* Disable VGA */
   hw->vgacntrl |= VGA_CNTRL_DISABLE;
 
@@ -306,11 +431,32 @@ I830RawSetHw(ScrnInfoPtr pScrn, DisplayModePtr pMode)
   /* Desired clock in kHz */
   //  clock_target = 1000000000 / var->pixclock;
   clock_target = pMode->Clock;
-  
-  if (calc_pll_params(index, clock_target, &m1, &m2, &n, &p1, &p2, &clock)) {
-    WRN_MSG("calc_pll_params failed\n");
-    return FALSE;
+
+  if (IS_I9XX(pI830))
+	  ret=i9xx_calc_pll_params(index, clock_target, &m1, &m2, &n, &p1, &p2, &clock, &use_x2);
+  else
+	  ret=calc_pll_params(index, clock_target, &m1, &m2, &n, &p1, &p2, &clock);
+  if (ret) {
+	  ErrorF("calc_pll_params failed\n");
+	  return FALSE;
   }
+#if 0
+//  use_x2 = 0;
+  if (0) //clock != clock_target && IS_I9XX(pI830))
+  {
+    /* try again with a divisor */
+	  clock_target /= 2;
+	  if (IS_I9XX(pI830))
+		  ret=i9xx_calc_pll_params(index, clock_target, &m1, &m2, &n, &p1, &p2, &clock);
+	  else
+		  ret=calc_pll_params(index, clock_target, &m1, &m2, &n, &p1, &p2, &clock);
+	  if (ret) {
+		  ErrorF("calc_pll_params failed\n");
+		  return FALSE;
+	  }
+	  use_x2 = 1;
+  }
+#endif
   
   /* Check for overflow. */
   if (check_overflow(pScrn, p1, DPLL_P1_MASK, "PLL P1 parameter"))
@@ -330,7 +476,14 @@ I830RawSetHw(ScrnInfoPtr pScrn, DisplayModePtr pMode)
   *dpll |= (p2 << DPLL_P2_SHIFT) | (p1 << DPLL_P1_SHIFT);
 
   if (IS_I9XX(pI830))
-    *dpll |= 0x3 | 0x4000000;
+  {
+    *dpll |= 0x4000000;
+    
+    if (use_x2)
+      *dpll |= DPLL_2X_CLOCK_ENABLE;
+    else
+      *dpll &= ~DPLL_2X_CLOCK_ENABLE;
+  }
 
   *fp0 = (n << FP_N_DIVISOR_SHIFT) |
     (m1 << FP_M1_DIVISOR_SHIFT) |
