@@ -69,7 +69,7 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 struct pll_min_max plls[PLLS_MAX] = {
   { 108, 140, 18, 26, 6, 16, 3, 16, 4, 128, 0, 31 }, //I8xx
-  {  70, 120, 10, 20, 4, 12, 3,  8, 6, 79, 0, 31 }  //I9xx
+  {  70, 120, 10, 20, 5, 9, 4,  8, 5, 80, 1, 8 }  //I9xx
 };
 
 /* Split the M parameter into M1 and M2. */
@@ -77,40 +77,22 @@ static int
 splitm(int index, unsigned int m, CARD32 *retm1, CARD32 *retm2)
 {
 	int m1, m2;
-
-	m1 = (m - 2 - (plls[index].min_m2 + plls[index].max_m2) / 2) / 5 - 2;
-	if (m1 < plls[index].min_m1)
-		m1 = plls[index].min_m1;
-	if (m1 > plls[index].max_m1)
-		m1 = plls[index].max_m1;
-	m2 = m - 5 * (m1 + 2) - 2;
-	if (m2 < plls[index].min_m2 || m2 > plls[index].max_m2 || m2 >= m1) {
-		return 1;
-	} else {
+	int testm;
+	/* no point optimising too much - brute force m */
+	for (m1 = plls[index].min_m1; m1 < plls[index].max_m1+1; m1++)
+	{
+	  for (m2 = plls[index].min_m2; m2 < plls[index].max_m2+1; m2++)
+	  {
+	    testm  = ( 5 * ( m1 + 2 )) + (m2 + 2);
+	    if (testm == m)
+	    {
 		*retm1 = (unsigned int)m1;
-		*retm2 = (unsigned int)m2;
+		*retm2 = (unsigned int)m2;	      
 		return 0;
+	    }
+	  }
 	}
-}
-
-/* Split the P parameter into P1 and P2. */
-static int
-splitp_i9xx(int index, unsigned int p, CARD32 *retp1, CARD32 *retp2)
-{
-	int p1_bit, p2, p1;
-	int p2_vals[4] = { 5 , 10, 7, 14 };
-
-//	if ((p % 10) == 0)
-	p2 = 0;
-//	else
-//		p2 = 0;
-		
-	p1_bit = (p / (p2_vals[p2]));
-	p1 = ffs(p1_bit) - 1;
-
-	*retp1 = (unsigned int)p1;
-	*retp2 = (unsigned int)p2;
-	return 0;
+	return 1;
 }
 
 /* Split the P parameter into P1 and P2. */
@@ -143,11 +125,11 @@ i9xx_calc_pll_params(int index, int clock,
 		     CARD32 *retn, CARD32 *retp1, CARD32 *retp2, 
 		     CARD32 *retclock, CARD32 *use_x2)
 {
-	volatile CARD32 m1, m2, n, p1, p2, n1;
+	CARD32 m1, m2, n, p1, p2, n1;
 	CARD32 f_vco, p, p_best = 0, m, f_out;
 	CARD32 err_max, err_target, err_best = 10000000;
-	volatile CARD32 n_best = 0, m_best = 0, f_best, f_err;
-	volatile CARD32 p_min, p_max, p_inc, div_min, div_max;
+	CARD32 n_best = 0, m_best = 0, f_best, f_err;
+	CARD32 p_min, p_max, p_inc, div_min, div_max;
 	int ret;
 
 	/* Accept 0.5% difference, but aim for 0.1% */
@@ -160,9 +142,9 @@ i9xx_calc_pll_params(int index, int clock,
 	div_min = ROUND_UP_TO(I9XX_MIN_VCO_FREQ, clock) / clock;
 
 	if (clock <= I9XX_P_TRANSITION_CLOCK)
-		p_inc = 10;
+		p_inc = 4;
 	else
-		p_inc = 5;
+		p_inc = 2;
 	p_min = ROUND_UP_TO(div_min, p_inc);
 	p_max = ROUND_DOWN_TO(div_max, p_inc);
 	if (p_min < plls[index].min_p)
@@ -171,10 +153,10 @@ i9xx_calc_pll_params(int index, int clock,
 		p_max = plls[index].max_p;
 	
 	DPRINTF(PFX, "p range is %d-%d (%d)\n", p_min, p_max, p_inc);
-	clock /= 2;
+
 	p = p_min;
 	do {
-		ret = splitp_i9xx(index, p, &p1, &p2);
+		ret = splitp(index, p, &p1, &p2);
 		fprintf(stderr,"trying p %d p1 %d  p2 %d\n", p , p1, p2);
 		if (ret) {
 		  DPRINTF(PFX, "cannot split p = %d\n", p);
@@ -210,7 +192,7 @@ i9xx_calc_pll_params(int index, int clock,
 			n++;
 		} while ((n <= plls[index].max_n) && (f_out >= clock));
 		p += p_inc;
-	} while ((p <= p_max));
+	} while (p <= p_max);
 
 	if (!m_best) {
 	  DPRINTF(PFX,"cannot find parameters for clock %d\n", clock);
@@ -220,7 +202,7 @@ i9xx_calc_pll_params(int index, int clock,
 	n = n_best;
 	p = p_best;
 	splitm(index, m, &m1, &m2);
-	splitp_i9xx(index, p, &p1, &p2);
+	splitp(index, p, &p1, &p2);
 	n1 = n - 2;
 
 	DPRINTF(PFX, "m, n, p: %d (%d,%d), %d (%d), %d (%d,%d), "
@@ -427,7 +409,7 @@ I830RawSetHw(ScrnInfoPtr pScrn, DisplayModePtr pMode)
   *dpll |= (DPLL_VCO_ENABLE | DPLL_VGA_MODE_DISABLE);
   *dpll &= ~(DPLL_RATE_SELECT_MASK | DPLL_REFERENCE_SELECT_MASK);
   *dpll |= (DPLL_REFERENCE_DEFAULT | DPLL_RATE_SELECT_FP0);
-  
+
   /* Desired clock in kHz */
   //  clock_target = 1000000000 / var->pixclock;
   clock_target = pMode->Clock;
@@ -477,7 +459,7 @@ I830RawSetHw(ScrnInfoPtr pScrn, DisplayModePtr pMode)
 
   if (IS_I9XX(pI830))
   {
-    *dpll |= 0x4000000;
+    *dpll |= 0x4000000 | 0x3;
     
     if (use_x2)
       *dpll |= DPLL_2X_CLOCK_ENABLE;
@@ -494,7 +476,9 @@ I830RawSetHw(ScrnInfoPtr pScrn, DisplayModePtr pMode)
   //  hw->dvob &= ~DVO_ENABLE;
   //hw->dvoc &= ~DVO_ENABLE;
   //  hw->dvoc |= 0x4084 | DVO_ENABLE;
-  
+  hw->dvoc = 0x80480080;
+  //  hw->dvoc |= ~DVO_ENABLE;
+
   /* Use display plane A. */
   hw->disp_a_ctrl |= DISPLAY_PLANE_ENABLE;
   hw->disp_a_ctrl &= ~DISPPLANE_GAMMA_ENABLE;
@@ -510,7 +494,7 @@ I830RawSetHw(ScrnInfoPtr pScrn, DisplayModePtr pMode)
     hw->disp_a_ctrl |= DISPPLANE_16BPP;
     break;
   case 24:
-    hw->disp_a_ctrl |= DISPPLANE_32BPP_NO_ALPHA | DISPPLANE_GAMMA_ENABLE;
+    hw->disp_a_ctrl |= DISPPLANE_32BPP_NO_ALPHA;
     break;
   }
   hw->disp_a_ctrl &= ~(DISPPLANE_SEL_PIPE_MASK);
@@ -590,6 +574,7 @@ I830RawSetHw(ScrnInfoPtr pScrn, DisplayModePtr pMode)
   *ss = (hactive << SRC_SIZE_HORIZ_SHIFT) |
     (vactive << SRC_SIZE_VERT_SHIFT);
 
+  hw->swf1x[3] = 0x58580000;
   /* Set the palette to 8-bit mode. */
   //  *pipe_conf &= ~PIPEACONF_GAMMA;
   return TRUE;
@@ -609,13 +594,12 @@ I830ProgramModeReg(ScrnInfoPtr pScrn, DisplayModePtr pMode)
 	CARD32 hsync_reg, htotal_reg, hblank_reg;
 	CARD32 vsync_reg, vtotal_reg, vblank_reg;
 	CARD32 pipe_src_reg;
+	int count, i;
 
 	/* Assume single pipe, display plane A, analog CRT. */
 
 	/* Disable VGA */
-	tmp = INREG(VGACNTRL);
-	tmp |= VGA_CNTRL_DISABLE;
-	OUTREG(VGACNTRL, tmp);
+	OUTREG(VGACNTRL, hw->vgacntrl);
 
 	/* Check whether pipe A or pipe B is enabled. */
 	if (hw->pipe_a_conf & PIPEACONF_ENABLE)
@@ -693,6 +677,12 @@ I830ProgramModeReg(ScrnInfoPtr pScrn, DisplayModePtr pMode)
 	tmp &= ~PIPEACONF_ENABLE;
 	OUTREG(pipe_conf_reg, tmp);
 
+	/* wiat for vblank again */
+	usleep(20000);
+
+	/* do some funky magic - xyzzy */
+	OUTREG(0x61204, 0xabcd0000);
+
 	/* turn off PLL */
 	tmp = INREG(dpll_reg);
 	dpll_reg &= ~DPLL_VCO_ENABLE;
@@ -703,6 +693,9 @@ I830ProgramModeReg(ScrnInfoPtr pScrn, DisplayModePtr pMode)
 	OUTREG(fp0_reg, *fp0);
 	OUTREG(fp1_reg, *fp1);
 
+	/* undo funky magic */
+	OUTREG(0x61204, 0x00000000);
+
 	/* Set pipe parameters */
 	OUTREG(hsync_reg, *hs);
 	OUTREG(hblank_reg, *hb);
@@ -711,6 +704,10 @@ I830ProgramModeReg(ScrnInfoPtr pScrn, DisplayModePtr pMode)
 	OUTREG(vblank_reg, *vb);
 	OUTREG(vtotal_reg, *vt);
 	OUTREG(pipe_src_reg, *ss);
+
+	OUTREG(DSPASIZE, (pMode->HDisplay - 1) | ((pMode->VDisplay - 1) << 16));
+	for (count = 0, i = SWF10; i<SWF16; i+=4)
+	  OUTREG(i, hw->swf1x[count++]);
 
 	/* Set DVOs B/C */
 	OUTREG(DVOB, hw->dvob);
@@ -742,7 +739,7 @@ Bool
 I830RawSaveState(ScrnInfoPtr pScrn, I830RegPtr hw)
 {
   I830Ptr pI830 = I830PTR(pScrn);
-
+  int i, count;
   hw->vga0_divisor = INREG(VCLK_DIVISOR_VGA0);
   hw->vga1_divisor = INREG(VCLK_DIVISOR_VGA1);
   hw->vga_pd = INREG(VCLK_POST_DIV);
@@ -795,17 +792,66 @@ I830RawSaveState(ScrnInfoPtr pScrn, I830RegPtr hw)
   hw->add_id = INREG(ADD_ID);
   
   hw->vgacntrl = INREG(VGACNTRL);  
+  
+  hw->fw_blc_0 = INREG(FWATER_BLC);
+  hw->fw_blc_1 = INREG(FWATER_BLC2);
 
+  for (count = 0, i = SWF10; i<SWF16; i+=4)
+    hw->swf1x[count++] = INREG(i);
+
+  return TRUE;
 }
 
+Bool
+I830RawRestoreState(ScrnInfoPtr pScrn, I830RegPtr hw)
+{
+  I830Ptr pI830 = I830PTR(pScrn);
+
+  OUTREG(VCLK_DIVISOR_VGA0, hw->vga0_divisor);
+  OUTREG(VCLK_DIVISOR_VGA1, hw->vga1_divisor);
+  OUTREG(VCLK_POST_DIV, hw->vga_pd);
+
+  OUTREG(HTOTAL_A, hw->htotal_a);
+  OUTREG(HBLANK_A, hw->hblank_a);
+  OUTREG(HSYNC_A, hw->hsync_a);
+
+  OUTREG(VTOTAL_A, hw->vtotal_a);
+  OUTREG(VBLANK_A, hw->vblank_a);
+  OUTREG(VSYNC_A, hw->vsync_a);
+
+  OUTREG(PIPEASRC, hw->pipe_src_a);
+	 
+  OUTREG(DPLL_A, hw->dpll_a);
+  OUTREG(DPLL_B, hw->dpll_b);
+  OUTREG(FPA0, hw->fpa0);
+  OUTREG(FPA1, hw->fpa1);
+  OUTREG(FPB0, hw->fpa0);
+  OUTREG(FPB1, hw->fpa1);
+
+  OUTREG(PIPEACONF, hw->pipe_a_conf);
+  OUTREG(PIPEBCONF, hw->pipe_b_conf);
+  OUTREG(DISPLAY_ARB, hw->disp_arb);
+
+  OUTREG(DSPACNTR, hw->disp_a_ctrl);
+  OUTREG(DSPBCNTR, hw->disp_b_ctrl);
+  OUTREG(DSPABASE, hw->disp_a_base);
+  OUTREG(DSPBBASE, hw->disp_b_base);
+  OUTREG(DSPASTRIDE, hw->disp_a_stride);
+  OUTREG(DSPBSTRIDE, hw->disp_b_stride);
+
+  OUTREG(VGACNTRL, hw->vgacntrl);
+  
+  return TRUE;
+}
 
 Bool
 I830RawSwitchMode(int scrnIndex, DisplayModePtr mode, int flags)
 {
+  ScrnInfoPtr pScrn = xf86Screens[scrnIndex];
 
   xf86DrvMsg(scrnIndex, X_ERROR,
 	     "called raw switch mode\n");
-  ScrnInfoPtr pScrn = xf86Screens[scrnIndex];
+
   if (I830RawSetHw(pScrn, mode))
     I830ProgramModeReg(pScrn, mode);
 
@@ -818,12 +864,29 @@ Bool
 I830RawSetMode(ScrnInfoPtr pScrn, DisplayModePtr mode)
 {
   int ret;
+  I830Ptr pI830 = I830PTR(pScrn);
+  Bool didLock = FALSE;
+   
   DPRINTF(PFX, "RawSetMode");
 
+  didLock = I830DRILock(pScrn);
+  
+  if (pI830->Clone) {
+    pI830->CloneHDisplay = mode->HDisplay;
+    pI830->CloneVDisplay = mode->VDisplay;
+  }
+
   I830RawSetHw(pScrn, mode);
+  
   ret=I830ProgramModeReg(pScrn, mode);
+
+  if (didLock)
+    I830DRIUnlock(pScrn);
+
+  pScrn->vtSema = TRUE;
 
   return ret;
 
 }
+
 
