@@ -313,6 +313,7 @@ I830DPRINTF_stub(const char *filename, int line, const char *function,
 }
 #endif /* #ifdef I830DEBUG */
 
+#define DR(REGNAME) do { ErrorF(#REGNAME " is 0x%08X\n", INREG(REGNAME)); } while(0)
 void
 I830DumpModeDebugInfo(ScrnInfoPtr pScrn)
 {
@@ -323,25 +324,55 @@ I830DumpModeDebugInfo(ScrnInfoPtr pScrn)
   planeB = INREG(DSPBCNTR);
 #if 1
 
-  /* read in the DVO registers */
-  temp = INREG(DVOA);
-  ErrorF("DVOA is %08X\n", temp);
-  temp = INREG(DVOB);
-  ErrorF("DVOB is %08X\n", temp);
-  temp = INREG(DVOC);
-  ErrorF("DVOC is %08X\n", temp);
-  temp = INREG(DVOA_SRCDIM);
-  ErrorF("DVOA is %08X\n", temp);
-  temp = INREG(DVOB_SRCDIM);
-  ErrorF("DVOB is %08X\n", temp);
-  temp = INREG(DVOC_SRCDIM);
-  ErrorF("DVOC is %08X\n", temp);
+  DR(ADPA);
 
-  temp = INREG(0x61200);
-  ErrorF("0x61200 is %08X\n", temp);
-  temp = INREG(0x61204);
-  ErrorF("0x61204 is %08X\n", temp);
+  DR(0x6000);
+  DR(0x6004);
+  DR(0x6010);
 
+  DR(0x604C);
+  DR(0x6104);
+  DR(0x6200);
+  DR(0x6204);
+  DR(DVOA);
+  DR(DVOB);
+  DR(DVOC);
+  DR(DVOA_SRCDIM);
+  DR(DVOB_SRCDIM);
+  DR(DVOC_SRCDIM);
+  
+  DR(0x61180);
+  DR(0x61200);
+  DR(0x61204);
+  DR(0x61208);
+  DR(0x6120c);
+  DR(0x61210);
+  DR(0x61230);
+  DR(0x61234);
+  DR(0x61254);
+  DR(0x61260);
+  DR(0x61270);
+  DR(0x612A8);
+
+  DR(0x68000);
+  DR(0x68004);
+
+  DR(DPLL_A);
+  DR(FPA0);
+  DR(FPA1);
+  DR(HTOTAL_A);
+  DR(HBLANK_A);
+  DR(HSYNC_A);
+  DR(VTOTAL_A);
+  DR(VBLANK_A);
+  DR(VSYNC_A);
+  DR(PIPEASRC);
+  DR(DSPABASE);
+  DR(DSPASTRIDE);
+  DR(DSPAPOS);
+  DR(DSPASIZE);
+
+#if 0
   temp = INREG(DPLL_A);
   p2 = (temp >> DPLL_P2_SHIFT) & DPLL_P2_MASK;
   p1 = (temp >> DPLL_P1_SHIFT) & DPLL_P1_MASK;
@@ -435,6 +466,38 @@ I830DumpModeDebugInfo(ScrnInfoPtr pScrn)
   ErrorF("Plane B position %d %d\n", temp & 0xffff, (temp & 0xffff0000) >> 16);
   temp = INREG(DSPBSIZE);
   ErrorF("Plane B size %d %d\n", temp & 0xffff, (temp & 0xffff0000) >> 16);
+
+#endif
+  
+  DR(DPLL_B);
+  DR(FPB0);
+  DR(FPB1);
+  DR(0x70008);
+  DR(0x70024);
+  DR(0x70030);
+  DR(0x70180);
+  DR(0x70190);
+  DR(0x70414);
+  DR(0x71400);
+  DR(0x71408);
+  DR(0x71410);
+  DR(0x71414);
+  DR(0x71418);
+  DR(0x7141C);
+  DR(0x71420);
+  DR(0x71424);
+
+  DR(0x2080);
+  DR(0x20d8);
+  DR(0x20dc);
+  DR(0x20e4);
+
+  DR(0x21a0);
+  DR(0x21a4);
+  DR(0x21d0);
+
+  DR(0x240c);
+
 #endif
 }
 
@@ -2218,7 +2281,6 @@ I830PreInitDDC(ScrnInfoPtr pScrn)
 	      pI830->ddc2 = I830I2CInit(pScrn, &pI830->dvos[1].pI2CBus, GPIOE, "SDVOCTRL");
 	      if (pI830->ddc2 = FALSE)
 		return;
-
 	      ret_p=I830SDVOInit(pI830->dvos[1].pI2CBus);
 				 
 	      
@@ -4056,6 +4118,10 @@ SaveHWState(ScrnInfoPtr pScrn)
 
    if (pI830->rawmode)
    {
+
+     vgaHWUnlock(hwp);
+     vgaHWSave(pScrn, vgaReg, VGA_SR_FONTS);
+
      I830RawSaveState(pScrn, &pI830->SavedReg);
      pI830->ModeReg = pI830->SavedReg;
      return TRUE;
@@ -4135,6 +4201,14 @@ RestoreHWState(ScrnInfoPtr pScrn)
    Bool restored = FALSE;
 
    DPRINTF(PFX, "RestoreHWState\n");
+
+   if (pI830->rawmode)
+   {
+     I830RawRestoreState(pScrn, &pI830->SavedReg);
+     vgaHWRestore(pScrn, vgaReg, VGA_SR_FONTS);
+     vgaHWLock(hwp);
+     return TRUE;
+   }
 
    if (I830IsPrimary(pScrn) && pI830->pipe != pI830->origPipe)
       SetBIOSPipe(pScrn, pI830->origPipe);
@@ -6029,6 +6103,8 @@ I830BIOSSaveScreen(ScreenPtr pScreen, int mode)
 	 pI830->cursorOn = TRUE;
       }
    }
+
+   I830DumpModeDebugInfo(pScrn);
    return TRUE;
 }
 
