@@ -123,7 +123,7 @@ int
 i9xx_calc_pll_params(int index, int clock, 
 		     CARD32 *retm1, CARD32 *retm2, 
 		     CARD32 *retn, CARD32 *retp1, CARD32 *retp2, 
-		     CARD32 *retclock, CARD32 *use_x2)
+		     CARD32 *retclock)
 {
 	CARD32 m1, m2, n, p1, p2, n1;
 	CARD32 f_vco, p, p_best = 0, m, f_out;
@@ -347,7 +347,6 @@ I830RawSetHw(ScrnInfoPtr pScrn, DisplayModePtr pMode)
   CARD32 *vs, *vb, *vt, *hs, *hb, *ht, *ss, *pipe_conf;
   int index;
   int displays = pI830->operatingDevices;
-  int use_x2=0;
   int ret;
   
   index = IS_I9XX(pI830) ? PLLS_I9xx : PLLS_I8xx;
@@ -415,30 +414,13 @@ I830RawSetHw(ScrnInfoPtr pScrn, DisplayModePtr pMode)
   clock_target = pMode->Clock;
 
   if (IS_I9XX(pI830))
-	  ret=i9xx_calc_pll_params(index, clock_target, &m1, &m2, &n, &p1, &p2, &clock, &use_x2);
+	  ret=i9xx_calc_pll_params(index, clock_target, &m1, &m2, &n, &p1, &p2, &clock);
   else
 	  ret=calc_pll_params(index, clock_target, &m1, &m2, &n, &p1, &p2, &clock);
   if (ret) {
 	  ErrorF("calc_pll_params failed\n");
 	  return FALSE;
   }
-#if 0
-//  use_x2 = 0;
-  if (0) //clock != clock_target && IS_I9XX(pI830))
-  {
-    /* try again with a divisor */
-	  clock_target /= 2;
-	  if (IS_I9XX(pI830))
-		  ret=i9xx_calc_pll_params(index, clock_target, &m1, &m2, &n, &p1, &p2, &clock);
-	  else
-		  ret=calc_pll_params(index, clock_target, &m1, &m2, &n, &p1, &p2, &clock);
-	  if (ret) {
-		  ErrorF("calc_pll_params failed\n");
-		  return FALSE;
-	  }
-	  use_x2 = 1;
-  }
-#endif
   
   /* Check for overflow. */
   if (check_overflow(pScrn, p1, DPLL_P1_MASK, "PLL P1 parameter"))
@@ -459,12 +441,7 @@ I830RawSetHw(ScrnInfoPtr pScrn, DisplayModePtr pMode)
 
   if (IS_I9XX(pI830))
   {
-    *dpll |= 0x4000000 | 0x3;
-    
-    if (use_x2)
-      *dpll |= DPLL_2X_CLOCK_ENABLE;
-    else
-      *dpll &= ~DPLL_2X_CLOCK_ENABLE;
+    *dpll |= 0x4000000;
   }
 
   *fp0 = (n << FP_N_DIVISOR_SHIFT) |
@@ -472,7 +449,12 @@ I830RawSetHw(ScrnInfoPtr pScrn, DisplayModePtr pMode)
     (m2 << FP_M2_DIVISOR_SHIFT);
   *fp1 = *fp0;
 
+  if (pI830->sdvo && pI830->sdvo->found)
+    *dpll |= DPLL_2X_CLOCK_ENABLE;
+  else
+    *dpll &= ~DPLL_2X_CLOCK_ENABLE;
   /* leave these alone for now */
+
   //  hw->dvob &= ~DVO_ENABLE;
   //hw->dvoc &= ~DVO_ENABLE;
   //  hw->dvoc |= 0x4084 | DVO_ENABLE;
@@ -876,10 +858,23 @@ I830RawSetMode(ScrnInfoPtr pScrn, DisplayModePtr mode)
     pI830->CloneVDisplay = mode->VDisplay;
   }
 
+  if (pI830->sdvo->found == 1)
+  {
+    I830SDVOPreSetMode(pI830->sdvo, mode);
+  }
   I830RawSetHw(pScrn, mode);
   
-  ret=I830ProgramModeReg(pScrn, mode);
+  if (0)
+  {
+ //   I830Replay1280x1024_DVI(pScrn, mode);
+  }
+  else
+    ret=I830ProgramModeReg(pScrn, mode);
 
+  if (pI830->sdvo->found == 1)
+  {
+    I830SDVOPostSetMode(pI830->sdvo, mode);
+  }
   if (didLock)
     I830DRIUnlock(pScrn);
 

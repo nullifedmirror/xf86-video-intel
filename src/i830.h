@@ -251,6 +251,7 @@ struct _I830DVORec {
 };
 
 typedef struct _I830SDVORec {
+  int found;
   I2CDevRec d;
   unsigned char sdvo_regs[20];
 } I830SDVORec, *I830SDVOPtr;
@@ -484,7 +485,7 @@ typedef struct _I830Rec {
    int num_dvos;
 
    struct _I830DVORec dvos[MAX_DVOS];
-
+   I830SDVOPtr sdvo;
 } I830Rec;
 
 #define I830PTR(p) ((I830Ptr)((p)->driverPrivate))

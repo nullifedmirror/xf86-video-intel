@@ -372,7 +372,7 @@ I830DumpModeDebugInfo(ScrnInfoPtr pScrn)
   DR(DSPAPOS);
   DR(DSPASIZE);
 
-#if 0
+#if 1
   temp = INREG(DPLL_A);
   p2 = (temp >> DPLL_P2_SHIFT) & DPLL_P2_MASK;
   p1 = (temp >> DPLL_P1_SHIFT) & DPLL_P1_MASK;
@@ -2281,10 +2281,10 @@ I830PreInitDDC(ScrnInfoPtr pScrn)
 	      pI830->ddc2 = I830I2CInit(pScrn, &pI830->dvos[1].pI2CBus, GPIOE, "SDVOCTRL");
 	      if (pI830->ddc2 = FALSE)
 		return;
-	      ret_p=I830SDVOInit(pI830->dvos[1].pI2CBus);
+	      pI830->sdvo=I830SDVOInit(pI830->dvos[1].pI2CBus);
 				 
 	      
-	      I830SDVOGetStatus(ret_p);
+	      I830SDVOGetStatus(pI830->sdvo);
 	      
 	    }
 
@@ -2331,6 +2331,7 @@ void I830DetectMonitors(ScrnInfoPtr pScrn)
       if (ret==TRUE)
       {
 	xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Found sDVO\n");
+	
       }
     }
   }
