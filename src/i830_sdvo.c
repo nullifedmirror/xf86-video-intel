@@ -152,7 +152,7 @@ I830SDVOReadInputRegs(I830SDVOPtr s)
 }
 
 Bool
-I830SDVOGetStatus(I830SDVOPtr s)
+I830SDVOWriteCommand10(I830SDVOPtr s)
 {
   /* write out 0x10 */
   memset(s->sdvo_regs, 0, 9);
@@ -162,8 +162,6 @@ I830SDVOGetStatus(I830SDVOPtr s)
   I830SDVOWriteOutputs(s);
   
   I830SDVOReadInputRegs(s);
-
-  ErrorF("status is %d\n", s->sdvo_regs[0x09]);
 
   return TRUE;
 }
@@ -401,7 +399,7 @@ I830SDVOParseResponse1C(I830SDVOPtr s)
   curr_table[3] = (s->sdvo_regs[0x0a] | (s->sdvo_regs[0x0b] << 8));
   curr_table[4] = (s->sdvo_regs[0x0c] | (s->sdvo_regs[0x0d] << 8));
 
-  curr_table[5] = 0x1e;
+  curr_table[5] = 0x0e;
 
 }
 Bool
@@ -421,9 +419,9 @@ I830SDVOWriteCommand21(I830SDVOPtr s, unsigned char val)
 Bool
 I830SDVOPreSetMode(I830SDVOPtr s, DisplayModePtr mode)
 {
-  unsigned short clock = mode->Clock/10, width=mode->CrtcHDisplay, height=mode->CrtcVDisplay;
+  unsigned short clock = 6000/*mode->Clock/10*/, width=mode->CrtcHDisplay, height=mode->CrtcVDisplay;
   unsigned short *m_p;
-  unsigned short h_blank_len, h_sync_len, v_blank_len, v_sync_len;
+  unsigned short h_blank_len, h_sync_len, v_blank_len, v_sync_len, h_sync_offset, v_sync_offset;
 
   /* do some mode translations */
   h_blank_len = mode->CrtcHBlankEnd - mode->CrtcHBlankStart;
@@ -431,6 +429,9 @@ I830SDVOPreSetMode(I830SDVOPtr s, DisplayModePtr mode)
   
   v_blank_len = mode->CrtcVBlankEnd - mode->CrtcVBlankStart;
   v_sync_len = mode->CrtcVSyncEnd - mode->CrtcVSyncStart;
+  
+  h_sync_offset = mode->CrtcHSyncStart - mode->CrtcHBlankStart;
+  v_sync_offset = mode->CrtcVSyncStart - mode->CrtcVBlankStart;
 
   /* high bits of 0 */
   c16a[7] = clock & 0xff;
@@ -442,17 +443,20 @@ I830SDVOPreSetMode(I830SDVOPtr s, DisplayModePtr mode)
   c16a[1] = (v_blank_len & 0xff);
   c16a[0] = (((height >> 8) & 0xf) << 4) | ((v_blank_len >> 8) & 0xf);
 
-  c17a[7] = 0;
+  c17a[7] = h_sync_offset;
   c17a[6] = h_sync_len & 0xff;
-
+  c17a[5] = (v_sync_offset & 0xf) << 4 | (v_sync_len & 0xf);
+  c17a[4] = 0;
+  c17a[3] = 0x0e;
+  c17a[2] = 0;
   out_timings[0] = c16a[1] | ((short)c16a[0] << 8);
   out_timings[1] = c16a[3] | ((short)c16a[2] << 8);
   out_timings[2] = c16a[5] | ((short)c16a[4] << 8);
-  out_timings[3] = 0x3070;
-  out_timings[4] = 0x0013;
-  out_timings[5] = 0x001e;
+  out_timings[3] = c17a[7] | ((short)c17a[6] << 8);
+  out_timings[4] = c17a[5] | ((short)c17a[4] << 8);
+  out_timings[5] = c17a[3] | ((short)c17a[2] << 8);
   
-  I830SDVOGetStatus(s);
+  I830SDVOWriteCommand10(s);
   I830SDVOWriteCommand1D(s, clock, height);
 
   I830SDVOWriteCommand04(s, 0);
@@ -462,29 +466,29 @@ I830SDVOPreSetMode(I830SDVOPtr s, DisplayModePtr mode)
   I830SDVOWriteCommand16(s, clock, out_timings[0], out_timings[1], out_timings[2]);
 
   I830SDVOWriteCommand11(s);
-  I830SDVOWriteCommand17(s, m_p[3], m_p[4], m_p[5]);
+  I830SDVOWriteCommand17(s, out_timings[3], out_timings[4],out_timings[5]);
 
-  I830SDVOGetStatus(s);
+  I830SDVOWriteCommand10(s);
 
   I830SDVOWriteCommand1A(s, clock, width, height);
-  I830SDVOGetStatus(s);
+  I830SDVOWriteCommand10(s);
 
   I830SDVOWriteCommand1B(s);
   I830SDVOParseResponse1B(s);
-  I830SDVOGetStatus(s);
+  I830SDVOWriteCommand10(s);
 
 
-  I830SDVOWriteCommand1C(s, clock, m_p[0], m_p[1], m_p[2]);
+  I830SDVOWriteCommand1C(s, clock, out_timings[0], out_timings[1], out_timings[2]);
   I830SDVOParseResponse1C(s);
-  I830SDVOGetStatus(s);
+  I830SDVOWriteCommand10(s);
 
 
   I830SDVOWriteCommand14(s, clock, curr_table[0], curr_table[1], curr_table[2]);
 
-  I830SDVOGetStatus(s);
+  I830SDVOWriteCommand10(s);
   I830SDVOWriteCommand15(s, curr_table[3], curr_table[4], curr_table[5]);
 
-  I830SDVOGetStatus(s);
+  I830SDVOWriteCommand10(s);
   I830SDVOWriteCommand21(s, 0x01);
   
 }
@@ -504,7 +508,7 @@ I830SDVOPostSetMode(I830SDVOPtr s, DisplayModePtr mode)
   I830SDVOWriteCommand04(s, 1);
   I830SDVOWriteCommand05(s, 1);
 
-  I830SDVOGetStatus(s);
+  I830SDVOWriteCommand10(s);
   I830SDVOWriteCommand1D(s, clock, height);
 
 }
