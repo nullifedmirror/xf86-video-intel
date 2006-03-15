@@ -1356,7 +1356,7 @@ SetDisplayDevices(ScrnInfoPtr pScrn, int devices)
    temp = INREG(SWF0);
    OUTREG(SWF0, (temp & ~(0xffff)) | (devices & 0xffff));
 
-   if (GetDisplayDevices(pScrn) != devices) {
+   if (GetDisplayDevices(pScrn) != devices && !pI830->rawmode) {
       xf86DrvMsg(pScrn->scrnIndex, X_WARNING,
 		 "SetDisplayDevices failed with devices 0x%x instead of 0x%x\n",
 	         GetDisplayDevices(pScrn), devices);
@@ -2283,9 +2283,6 @@ I830PreInitDDC(ScrnInfoPtr pScrn)
 		return;
 	      pI830->sdvo=I830SDVOInit(pI830->dvos[1].pI2CBus);
 				 
-	      
-	      I830SDVOGetStatus(pI830->sdvo);
-	      
 	    }
 
    	    pI830->ddc2 = TRUE;
@@ -5969,8 +5966,8 @@ I830BIOSEnterVT(int scrnIndex, int flags)
    }
 #endif
 
-   if (pI830->checkDevices)
-      pI830->devicesTimer = TimerSet(NULL, 0, 1000, I830CheckDevicesTimer, pScrn);
+   //   if (pI830->checkDevices)
+   //      pI830->devicesTimer = TimerSet(NULL, 0, 1000, I830CheckDevicesTimer, pScrn);
 
    pI830->currentMode = pScrn->currentMode;
 
