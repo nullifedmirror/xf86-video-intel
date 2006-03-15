@@ -69,7 +69,7 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 struct pll_min_max plls[PLLS_MAX] = {
   { 108, 140, 18, 26, 6, 16, 3, 16, 4, 128, 0, 31 }, //I8xx
-  {  70, 120, 10, 20, 5, 9, 4,  8, 5, 80, 1, 8 }  //I9xx
+  {  75, 120, 10, 20, 5, 9, 4,  8, 5, 80, 1, 8 }  //I9xx
 };
 
 /* Split the M parameter into M1 and M2. */
@@ -93,6 +93,52 @@ splitm(int index, unsigned int m, CARD32 *retm1, CARD32 *retm2)
 	  }
 	}
 	return 1;
+}
+
+
+/* Split the P parameter into P1 and P2. */
+static int
+splitp_i9xx(int index, unsigned int p, CARD32 *retp1, CARD32 *retp2)
+{
+	int p1, p2;
+
+	switch(p)
+	{
+	case 8:
+	  p1 = 2;
+	  p2 = 0;
+	  break;
+	case 12:
+	  p1 = 3;
+	  p2 = 0;
+	  break;
+	case 16:
+	  p1 = 4;
+	  p2 = 0;
+	  break;
+	}
+
+	*retp1 = (unsigned int)p1;
+	*retp2 = (unsigned int)p2;
+	return 0;
+	
+
+	if (p % 4 == 0)
+		p2 = 1;
+	else
+		p2 = 0;
+	p1 = (p / (1 << (p2 + 1))) - 2;
+	if (p % 4 == 0 && p1 < plls[index].min_p1) {
+		p2 = 0;
+		p1 = (p / (1 << (p2 + 1))) - 2;
+	}
+	if (p1  < plls[index].min_p1 || p1 > plls[index].max_p1 || (p1 + 2) * (1 << (p2 + 1)) != p) {
+		return 1;
+	} else {
+		*retp1 = (unsigned int)p1;
+		*retp2 = (unsigned int)p2;
+		return 0;
+	}
 }
 
 /* Split the P parameter into P1 and P2. */
@@ -153,10 +199,11 @@ i9xx_calc_pll_params(int index, int clock,
 		p_max = plls[index].max_p;
 	
 	DPRINTF(PFX, "p range is %d-%d (%d)\n", p_min, p_max, p_inc);
-
+	p_min = 16;
+	p_max = 16;
 	p = p_min;
 	do {
-		ret = splitp(index, p, &p1, &p2);
+		ret = splitp_i9xx(index, p, &p1, &p2);
 		fprintf(stderr,"trying p %d p1 %d  p2 %d\n", p , p1, p2);
 		if (ret) {
 		  DPRINTF(PFX, "cannot split p = %d\n", p);
@@ -202,7 +249,7 @@ i9xx_calc_pll_params(int index, int clock,
 	n = n_best;
 	p = p_best;
 	splitm(index, m, &m1, &m2);
-	splitp(index, p, &p1, &p2);
+	splitp_i9xx(index, p, &p1, &p2);
 	n1 = n - 2;
 
 	DPRINTF(PFX, "m, n, p: %d (%d,%d), %d (%d), %d (%d,%d), "
@@ -458,6 +505,7 @@ I830RawSetHw(ScrnInfoPtr pScrn, DisplayModePtr pMode)
   //  hw->dvob &= ~DVO_ENABLE;
   //hw->dvoc &= ~DVO_ENABLE;
   //  hw->dvoc |= 0x4084 | DVO_ENABLE;
+  //hw->dvob |= DVO_ENABLE;
   hw->dvoc = 0x80480080;
   //  hw->dvoc |= ~DVO_ENABLE;
 
@@ -858,11 +906,12 @@ I830RawSetMode(ScrnInfoPtr pScrn, DisplayModePtr mode)
     pI830->CloneVDisplay = mode->VDisplay;
   }
 
+  I830RawSetHw(pScrn, mode);
+
   if (pI830->sdvo->found == 1)
   {
     I830SDVOPreSetMode(pI830->sdvo, mode);
   }
-  I830RawSetHw(pScrn, mode);
   
   if (0)
   {
