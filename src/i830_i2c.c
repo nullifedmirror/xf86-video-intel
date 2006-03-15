@@ -370,16 +370,6 @@ I830I2CDetectSDVOController(ScrnInfoPtr pScrn, I2CBusPtr b)
       return FALSE;
     }
   }
-  
-  for (i=0; i<0x40; i++)
-  {
-    if ((i%8)==0)
-      ErrorF("\n");
-
-    ErrorF("%02X ", ch[i]);
-  }
-  ErrorF("\n");
-
   pI830->sdvo->found = 1;
   return TRUE;
 }
