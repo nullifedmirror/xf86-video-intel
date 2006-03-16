@@ -377,7 +377,7 @@ I830DumpModeDebugInfo(ScrnInfoPtr pScrn)
   p2 = (temp >> DPLL_P2_SHIFT) & DPLL_P2_MASK;
   p1 = (temp >> DPLL_P1_SHIFT) & DPLL_P1_MASK;
 
-  p = ((1 << p1) * (p2 ? 10 : 5));
+  p = ((p1) * (p2 ? 10 : 5));
   //  p = (p1+2) * ( 1<< (p2 + 1));
   ErrorF("DPLL A is %08X: p1 is %d p2 is %d\n", temp, p1, p2);
   temp = INREG(FPA0);
@@ -498,6 +498,11 @@ I830DumpModeDebugInfo(ScrnInfoPtr pScrn)
 
   DR(0x240c);
 
+  I830SDVOWriteCommand10(pI830->sdvo);
+  I830SDVOWriteCommand18(pI830->sdvo);
+  I830SDVOWriteCommand10(pI830->sdvo);
+  I830SDVOWriteCommand19(pI830->sdvo);
+  I830SDVOWriteCommand10(pI830->sdvo);
 #endif
 }
 
