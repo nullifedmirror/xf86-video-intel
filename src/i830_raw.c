@@ -69,7 +69,7 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 struct pll_min_max plls[PLLS_MAX] = {
   { 108, 140, 18, 26, 6, 16, 3, 16, 4, 128, 0, 31 }, //I8xx
-  {  75, 120, 10, 20, 5, 9, 4,  8, 5, 80, 1, 8 }  //I9xx
+  {  75, 120, 10, 20, 5, 9, 4,  7, 5, 80, 1, 8 }  //I9xx
 };
 
 /* Split the M parameter into M1 and M2. */
@@ -102,21 +102,8 @@ splitp_i9xx(int index, unsigned int p, CARD32 *retp1, CARD32 *retp2)
 {
 	int p1, p2;
 
-	switch(p)
-	{
-	case 8:
-	  p1 = 2;
-	  p2 = 0;
-	  break;
-	case 12:
-	  p1 = 3;
-	  p2 = 0;
-	  break;
-	case 16:
-	  p1 = 4;
-	  p2 = 0;
-	  break;
-	}
+	p1 = (p / 10) + 1;
+	p2 = 0;
 
 	*retp1 = (unsigned int)p1;
 	*retp2 = (unsigned int)p2;
@@ -171,8 +158,8 @@ i9xx_calc_pll_params(int index, int clock,
 		     CARD32 *retn, CARD32 *retp1, CARD32 *retp2, 
 		     CARD32 *retclock)
 {
-	CARD32 m1, m2, n, p1, p2, n1;
-	CARD32 f_vco, p, p_best = 0, m, f_out;
+  volatile CARD32 m1, m2, n, p1, p2, n1;
+volatile CARD32 f_vco, p, p_best = 0, m, f_out;
 	CARD32 err_max, err_target, err_best = 10000000;
 	CARD32 n_best = 0, m_best = 0, f_best, f_err;
 	CARD32 p_min, p_max, p_inc, div_min, div_max;
@@ -185,12 +172,12 @@ i9xx_calc_pll_params(int index, int clock,
 	DPRINTF(PFX, "Clock is %d\n", clock);
 
  	div_max = I9XX_MAX_VCO_FREQ / clock;
-	div_min = ROUND_UP_TO(I9XX_MIN_VCO_FREQ, clock) / clock;
-
+	//	div_min = ROUND_UP_TO(I9XX_MIN_VCO_FREQ, clock) / clock;
+	div_min = 5;
 	if (clock <= I9XX_P_TRANSITION_CLOCK)
-		p_inc = 4;
+	  p_inc = 10;
 	else
-		p_inc = 2;
+	  p_inc = 5;
 	p_min = ROUND_UP_TO(div_min, p_inc);
 	p_max = ROUND_DOWN_TO(div_max, p_inc);
 	if (p_min < plls[index].min_p)
@@ -199,8 +186,7 @@ i9xx_calc_pll_params(int index, int clock,
 		p_max = plls[index].max_p;
 	
 	DPRINTF(PFX, "p range is %d-%d (%d)\n", p_min, p_max, p_inc);
-	p_min = 16;
-	p_max = 16;
+
 	p = p_min;
 	do {
 		ret = splitp_i9xx(index, p, &p1, &p2);
@@ -214,6 +200,7 @@ i9xx_calc_pll_params(int index, int clock,
 		f_vco = clock * p;
 		do {
 			m = ROUND_UP_TO(f_vco * n, PLL_REFCLK) / PLL_REFCLK;
+			fprintf(stderr,"trying m %d n %d\n", m, n);
 			if (m < plls[index].min_m)
 				m = plls[index].min_m;
 			if (m > plls[index].max_m)
@@ -237,7 +224,7 @@ i9xx_calc_pll_params(int index, int clock,
 				err_best = f_err;
 			}
 			n++;
-		} while ((n <= plls[index].max_n) && (f_out >= clock));
+		} while ((n <= plls[index].max_n));//(f_out >= clock));
 		p += p_inc;
 	} while (p <= p_max);
 
@@ -610,6 +597,21 @@ I830RawSetHw(ScrnInfoPtr pScrn, DisplayModePtr pMode)
   return TRUE;
 }
 
+#if 0
+int oldcode(void)
+{
+
+	/* Disable planes A and B. */
+	tmp = INREG(DSPACNTR);
+	tmp &= ~DISPLAY_PLANE_ENABLE;
+	OUTREG(DSPACNTR, tmp);
+	tmp = INREG(DSPBCNTR);
+	tmp &= ~DISPLAY_PLANE_ENABLE;
+	OUTREG(DSPBCNTR, tmp);
+
+	/* Wait for vblank.  For now, just wait for a 50Hz cycle (20ms)) */
+}
+#endif
 /* Program a (non-VGA) video mode. */
 int
 I830ProgramModeReg(ScrnInfoPtr pScrn, DisplayModePtr pMode)
@@ -617,7 +619,7 @@ I830ProgramModeReg(ScrnInfoPtr pScrn, DisplayModePtr pMode)
   I830Ptr pI830 = I830PTR(pScrn);
   I830RegPtr hw = &pI830->ModeReg;
 	int pipe = PIPE_A;
-	CARD32 tmp;
+	CARD32 tmp, tmp_val[3];
 	const CARD32 *dpll, *fp0, *fp1, *pipe_conf;
 	const CARD32 *hs, *ht, *hb, *vs, *vt, *vb, *ss;
 	CARD32 dpll_reg, fp0_reg, fp1_reg, pipe_conf_reg;
@@ -685,30 +687,30 @@ I830ProgramModeReg(ScrnInfoPtr pScrn, DisplayModePtr pMode)
 		pipe_src_reg = PIPEASRC;
 	}
 
-	/* Disable planes A and B. */
-	tmp = INREG(DSPACNTR);
-	tmp &= ~DISPLAY_PLANE_ENABLE;
-	OUTREG(DSPACNTR, tmp);
-	tmp = INREG(DSPBCNTR);
-	tmp &= ~DISPLAY_PLANE_ENABLE;
-	OUTREG(DSPBCNTR, tmp);
+	/* turn off pipe */
+	tmp = INREG(pipe_conf_reg);
+	tmp &= ~PIPEACONF_ENABLE;
+	OUTREG(pipe_conf_reg, tmp);
+	
+	count = 0;
+	do{
+	  tmp_val[count%3] = INREG(0x70000);
+	  if ((tmp_val[0] == tmp_val[1]) && (tmp_val[1]==tmp_val[2]))
+	    break;
+	  count++;
+	  usleep(1);
+	} while(1);
 
-	/* Wait for vblank.  For now, just wait for a 50Hz cycle (20ms)) */
-	usleep(20000);
+	/* inreg dvoc */
+	OUTREG(DVOC, INREG(DVOC) & ~DVO_ENABLE);
+	
+	OUTREG(ADPA, INREG(ADPA) & ~ADPA_DAC_ENABLE);
 
 	/* Disable Sync */
 	tmp = INREG(ADPA);
 	tmp &= ~(ADPA_VSYNC_CNTL_DISABLE | ADPA_HSYNC_CNTL_DISABLE);
 	tmp |= ADPA_VSYNC_CNTL_DISABLE | ADPA_HSYNC_CNTL_DISABLE;
 	OUTREG(ADPA, tmp);
-
-	/* turn off pipe */
-	tmp = INREG(pipe_conf_reg);
-	tmp &= ~PIPEACONF_ENABLE;
-	OUTREG(pipe_conf_reg, tmp);
-
-	/* wiat for vblank again */
-	usleep(20000);
 
 	/* do some funky magic - xyzzy */
 	OUTREG(0x61204, 0xabcd0000);
@@ -723,8 +725,22 @@ I830ProgramModeReg(ScrnInfoPtr pScrn, DisplayModePtr pMode)
 	OUTREG(fp0_reg, *fp0);
 	OUTREG(fp1_reg, *fp1);
 
+	/* Enable PLL */
+	tmp = INREG(dpll_reg);
+	tmp |= DPLL_VCO_ENABLE;
+	OUTREG(dpll_reg, tmp);
+
+	/* Set DVOs B/C */
+	OUTREG(DVOB, hw->dvob);
+	OUTREG(DVOC, hw->dvoc);
+
 	/* undo funky magic */
 	OUTREG(0x61204, 0x00000000);
+
+	OUTREG(ADPA, INREG(ADPA) | ADPA_DAC_ENABLE);
+
+	/* Set ADPA */
+	OUTREG(ADPA, (hw->adpa & ~(ADPA_VSYNC_CNTL_DISABLE|ADPA_HSYNC_CNTL_DISABLE)) | (ADPA_VSYNC_CNTL_DISABLE|ADPA_HSYNC_CNTL_DISABLE));
 
 	/* Set pipe parameters */
 	OUTREG(hsync_reg, *hs);
@@ -738,18 +754,6 @@ I830ProgramModeReg(ScrnInfoPtr pScrn, DisplayModePtr pMode)
 	OUTREG(DSPASIZE, (pMode->HDisplay - 1) | ((pMode->VDisplay - 1) << 16));
 	for (count = 0, i = SWF10; i<SWF16; i+=4)
 	  OUTREG(i, hw->swf1x[count++]);
-
-	/* Set DVOs B/C */
-	OUTREG(DVOB, hw->dvob);
-	OUTREG(DVOC, hw->dvoc);
-
-	/* Set ADPA */
-	OUTREG(ADPA, (hw->adpa & ~(ADPA_VSYNC_CNTL_DISABLE|ADPA_HSYNC_CNTL_DISABLE)) | (ADPA_VSYNC_CNTL_DISABLE|ADPA_HSYNC_CNTL_DISABLE));
-
-	/* Enable PLL */
-	tmp = INREG(dpll_reg);
-	tmp |= DPLL_VCO_ENABLE;
-	OUTREG(dpll_reg, tmp);
 
 	/* Enable pipe */
 	OUTREG(pipe_conf_reg, *pipe_conf | PIPEACONF_ENABLE);
