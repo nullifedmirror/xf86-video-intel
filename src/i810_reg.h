@@ -731,7 +731,7 @@ struct pll_min_max {
 
 #define CALC_VCLOCK_i9xx(m1, m2, n, p1, p2) \
         ((PLL_REFCLK * (5 * ((m1) + 2) + ((m2) + 2)) / ((n) + 2)) / \
-	 (((1<<p1)) * (p2 ? 10 : 5)))
+	 (((p1)) * (p2 ? 10: 5)))
 
 #define CALC_VCLOCK3(m, n, p)	((PLL_REFCLK * (m) / (n)) / (p))
 
