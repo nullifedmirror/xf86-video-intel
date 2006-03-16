@@ -4116,6 +4116,7 @@ SaveHWState(ScrnInfoPtr pScrn)
    vgaRegPtr vgaReg = &hwp->SavedReg;
    VbeModeInfoBlock *modeInfo;
    VESAPtr pVesa;
+   int i;
 
    DPRINTF(PFX, "SaveHWState\n");
 
@@ -4126,6 +4127,8 @@ SaveHWState(ScrnInfoPtr pScrn)
      vgaHWSave(pScrn, vgaReg, VGA_SR_FONTS);
 
      I830RawSaveState(pScrn, &pI830->SavedReg);
+     for (i=0; i<8; i++)
+       pI830->SavedReg.Fence[i] = pI830->ModeReg.Fence[i];
      pI830->ModeReg = pI830->SavedReg;
      return TRUE;
    }
