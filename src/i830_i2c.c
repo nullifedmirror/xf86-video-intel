@@ -281,6 +281,114 @@ I830I2CAddress(I2CDevPtr d, I2CSlaveAddr addr)
     return FALSE;
 }
 
+#if 0
+static Bool
+I2CWriteRead(I2CDevPtr d,
+		 I2CByte *WriteBuffer, int nWrite,
+		 I2CByte *ReadBuffer,  int nRead) 
+{
+    Bool r = TRUE;
+    I2CBusPtr b = d->pI2CBus;
+    int s = 0;
+
+    if (r && nWrite > 0) {
+	r = b->I2CAddress(d, d->SlaveAddr & ~1);
+	if (r) {
+	    for (; nWrite > 0; WriteBuffer++, nWrite--)
+		if (!(r = b->I2CPutByte(d, *WriteBuffer))) 
+		    break;
+	    s++;
+	}
+    }
+
+    if (r && nRead > 0) {
+	r = b->I2CAddress(d, d->SlaveAddr | 1);
+	if (r) {
+	    for (; nRead > 0; ReadBuffer++, nRead--)
+		if (!(r = b->I2CGetByte(d, ReadBuffer, nRead == 1))) 
+		    break;
+	    s++;
+	}
+    }
+
+    if (s) b->I2CStop(d);
+
+    return r;
+}
+
+Bool I830I2CWriteRead(I2CDevPtr d, I2CByte *WriteBuffer, int nWrite,
+		      I2CByte *ReadBuffer, int nRead)
+{
+  volatile int i;
+  volatile unsigned int gmbus_cmd, status[3];
+  I2CBusPtr b = d->pI2CBus;
+  ScrnInfoPtr    pScrn      = xf86Screens[b->scrnIndex];
+  I830Ptr pI830 = I830PTR(pScrn);
+
+  /* use the GMBUS protocol. */
+  
+  if ((d->pI2CBus->DriverPrivate.uval != 0x5020) || (nWrite > 2))
+    return  I2CWriteRead(d, WriteBuffer, nWrite, ReadBuffer, nRead);
+
+  /* okay use the GMBUS protocol - */
+
+  OUTREG(GMBUS_CLK_PORT_SEL, 0x5);
+
+  if (nWrite==2)
+  {
+    OUTREG(GMBUS_DATA, WriteBuffer[1]);
+    
+    gmbus_cmd = 0x4e << 24;
+    gmbus_cmd |= (d->SlaveAddr & ~1);
+    gmbus_cmd |= (nWrite-1) << GMBUS_DATA_COUNT_SHIFT;
+    gmbus_cmd |= WriteBuffer[0] << GMBUS_SLAVE_REG_SHIFT;
+
+    ErrorF("OUTREG(%08X,%08X)\n", GMBUS_CMD, gmbus_cmd);
+    OUTREG(GMBUS_CMD, gmbus_cmd);
+
+    status[0] = status[1] = status[2] = 0;
+    /* wait for status to settle */
+    i=0;
+    do {
+      status[i%3] = INREG(GMBUS_STATUS);
+      if ((status[0] == status[1]) && (status[1] == status[2]))
+	break;
+      i++;
+    } while(1);
+
+    gmbus_cmd = 0x48 << 24;
+    gmbus_cmd |= (d->SlaveAddr & ~1);
+    ErrorF("OUTREG(%08X,%08X)\n", GMBUS_CMD, gmbus_cmd);
+    OUTREG(GMBUS_CMD, gmbus_cmd);
+
+  }
+
+  if (nRead==1)
+  {
+    gmbus_cmd = 0x4E << 24;
+    gmbus_cmd |= (d->SlaveAddr | 1);
+    gmbus_cmd |= (nRead) << GMBUS_DATA_COUNT_SHIFT;
+    gmbus_cmd |= WriteBuffer[0] << GMBUS_SLAVE_REG_SHIFT;
+    ErrorF("OUTREG(%08X,%08X)\n", GMBUS_CMD, gmbus_cmd);
+    OUTREG(GMBUS_CMD, gmbus_cmd);
+    status[0] = status[1] = status[2] = 0;
+    i=0;
+    do {
+      status[i%3] = INREG(GMBUS_STATUS);
+      if ((status[0] == status[1]) && (status[1] == status[2]))
+	break;
+      i++;
+    } while(1);
+    ReadBuffer[0] = INREG(GMBUS_DATA) & 0xff;
+
+    gmbus_cmd = 0x48 << 24;
+    gmbus_cmd |= (d->SlaveAddr & ~1);
+    ErrorF("OUTREG(%08X,%08X)\n", GMBUS_CMD, gmbus_cmd);
+    OUTREG(GMBUS_CMD, gmbus_cmd);
+  }
+  return TRUE;
+}
+#endif
 
 /* the i830 has a number of I2C Buses */
 Bool
@@ -302,7 +410,7 @@ I830I2CInit(ScrnInfoPtr pScrn, I2CBusPtr *bus_ptr, int i2c_reg, char *name)
   pI2CBus->I2CStop = I830I2CStop;
   pI2CBus->I2CAddress = I830I2CAddress;
   pI2CBus->DriverPrivate.uval = i2c_reg;
-
+  //  pI2CBus->I2CWriteRead = I830I2CWriteRead;
   if (!xf86I2CBusInit(pI2CBus)) return FALSE;
 
   *bus_ptr = pI2CBus;
