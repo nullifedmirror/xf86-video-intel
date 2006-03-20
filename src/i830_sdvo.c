@@ -45,14 +45,6 @@
 */
 
 
-unsigned short magic_table[][6] =
-  { 
-    { 0x402A, 0x0051, 0x9800, 0x7030, 0x0013, 0x001e }, // 1280
-    { 0x3026, 0x0041, 0x4000, 0x8818, 0x0036, 0x0018 }, // 1024
-    { 0x201c, 0x5831, 0x0020, 0x8028, 0x0014, 0x001e }, // 800
-    { 0x102d, 0xe020, 0xa080, 0x6010, 0x00a2, 0x0018 }, //640
-  };
-
 unsigned short curr_table[6];
 unsigned short out_timings[6];
 
@@ -554,18 +546,30 @@ Bool
 I830SDVOPostSetMode(I830SDVOPtr s, DisplayModePtr mode)
 {
   int clock = mode->Clock/10, height=mode->CrtcVDisplay;
-
+  Bool ret = TRUE;
   /* the BIOS writes out 6 commands post mode set */
   /* two 03s, 04 05, 10, 1d */
   /* these contain the height and mode clock / 10 by the looks of it */
 
   I830SDVOWriteCommand03(s, 1);
   I830SDVOWriteCommand03(s, 0);
+
+  /* THIS IS A DIRTY HACK - sometimes for some reason on startup
+     the BIOS doesn't find my DVI monitor -
+     without this hack the driver doesn't work.. this causes the modesetting
+     to be re-run
+  */
+  if (s->sdvo_regs[0x0a] != 0x1)
+  {
+    ret = FALSE;
+  }
+
   I830SDVOWriteCommand04(s, 1);
   I830SDVOWriteCommand05(s, 1);
 
   I830SDVOWriteCommand10(s);
   I830SDVOWriteCommand1D(s, clock, height);
 
+  return ret;
 }
 

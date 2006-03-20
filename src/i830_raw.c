@@ -910,7 +910,8 @@ I830RawSetMode(ScrnInfoPtr pScrn, DisplayModePtr mode)
   int ret;
   I830Ptr pI830 = I830PTR(pScrn);
   Bool didLock = FALSE;
-   
+  int retry_count = 0;
+
   DPRINTF(PFX, "RawSetMode");
 
   didLock = I830DRILock(pScrn);
@@ -922,6 +923,7 @@ I830RawSetMode(ScrnInfoPtr pScrn, DisplayModePtr mode)
 
   I830RawSetHw(pScrn, mode);
 
+ retry:
   if (pI830->sdvo->found == 1)
   {
     I830SDVOPreSetMode(pI830->sdvo, mode);
@@ -936,7 +938,13 @@ I830RawSetMode(ScrnInfoPtr pScrn, DisplayModePtr mode)
 
   if (pI830->sdvo->found == 1)
   {
-    I830SDVOPostSetMode(pI830->sdvo, mode);
+    ret = I830SDVOPostSetMode(pI830->sdvo, mode);
+    /* if it didn't enable the DFP on the output */
+    if (ret==FALSE && (pI830->MonType1 & PIPE_DFP) && retry_count<3)
+    {
+      retry_count++;
+      goto retry;
+    }
   }
   if (didLock)
     I830DRIUnlock(pScrn);
