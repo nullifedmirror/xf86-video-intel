@@ -95,41 +95,20 @@ splitm(int index, unsigned int m, CARD32 *retm1, CARD32 *retm2)
 
 /* Split the P parameter into P1 and P2. */
 static int
-splitp_i9xx(int index, unsigned int p, CARD32 *retp1, CARD32 *retp2)
-{
-	int p1, p2;
-
-	p1 = (p / 10) + 1;
-	p2 = 0;
-
-	*retp1 = (unsigned int)p1;
-	*retp2 = (unsigned int)p2;
-	return 0;
-	
-
-	if (p % 4 == 0)
-		p2 = 1;
-	else
-		p2 = 0;
-	p1 = (p / (1 << (p2 + 1))) - 2;
-	if (p % 4 == 0 && p1 < plls[index].min_p1) {
-		p2 = 0;
-		p1 = (p / (1 << (p2 + 1))) - 2;
-	}
-	if (p1  < plls[index].min_p1 || p1 > plls[index].max_p1 || (p1 + 2) * (1 << (p2 + 1)) != p) {
-		return 1;
-	} else {
-		*retp1 = (unsigned int)p1;
-		*retp2 = (unsigned int)p2;
-		return 0;
-	}
-}
-
-/* Split the P parameter into P1 and P2. */
-static int
 splitp(int index, unsigned int p, CARD32 *retp1, CARD32 *retp2)
 {
 	int p1, p2;
+	
+	/* deal with i9xx plls first - incomplete but mostly working */
+	if (index == PLLS_I9xx)
+	{
+	  p1 = (p / 10) + 1;
+	  p2 = 0;
+	  
+	  *retp1 = (unsigned int)p1;
+	  *retp2 = (unsigned int)p2;
+	  return 0;
+	}
 
 	if (p % 4 == 0)
 		p2 = 1;
@@ -186,7 +165,7 @@ volatile CARD32 f_vco, p, p_best = 0, m, f_out;
 
 	p = p_min;
 	do {
-		ret = splitp_i9xx(index, p, &p1, &p2);
+		ret = splitp(index, p, &p1, &p2);
 		fprintf(stderr,"trying p %d p1 %d  p2 %d\n", p , p1, p2);
 		if (ret) {
 		  DPRINTF(PFX, "cannot split p = %d\n", p);
@@ -233,7 +212,7 @@ volatile CARD32 f_vco, p, p_best = 0, m, f_out;
 	n = n_best;
 	p = p_best;
 	splitm(index, m, &m1, &m2);
-	splitp_i9xx(index, p, &p1, &p2);
+	splitp(index, p, &p1, &p2);
 	n1 = n - 2;
 
 	DPRINTF(PFX, "m, n, p: %d (%d,%d), %d (%d), %d (%d,%d), "
@@ -381,7 +360,7 @@ I830RawSetHw(ScrnInfoPtr pScrn, DisplayModePtr pMode)
   int ret;
   
   index = IS_I9XX(pI830) ? PLLS_I9xx : PLLS_I8xx;
-  
+
   /* Disable VGA */
   hw->vgacntrl |= VGA_CNTRL_DISABLE;
 
@@ -508,6 +487,7 @@ I830RawSetHw(ScrnInfoPtr pScrn, DisplayModePtr pMode)
     hw->disp_a_ctrl |= DISPPLANE_16BPP;
     break;
   case 24:
+  case 32:
     hw->disp_a_ctrl |= DISPPLANE_32BPP_NO_ALPHA;
     break;
   }
@@ -921,7 +901,7 @@ I830RawSetMode(ScrnInfoPtr pScrn, DisplayModePtr mode)
   I830RawSetHw(pScrn, mode);
 
  retry:
-  if (pI830->sdvo->found == 1)
+  if (pI830->sdvo && pI830->sdvo->found == 1)
   {
     I830SDVOPreSetMode(pI830->sdvo, mode);
   }
@@ -933,7 +913,7 @@ I830RawSetMode(ScrnInfoPtr pScrn, DisplayModePtr mode)
   else
     ret=I830ProgramModeReg(pScrn, mode);
 
-  if (pI830->sdvo->found == 1)
+  if (pI830->sdvo && pI830->sdvo->found == 1)
   {
     ret = I830SDVOPostSetMode(pI830->sdvo, mode);
     /* if it didn't enable the DFP on the output */
