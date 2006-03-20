@@ -2243,6 +2243,7 @@ I830PreInitDDC(ScrnInfoPtr pScrn)
 {
     I830Ptr pI830 = I830PTR(pScrn);
     int i;
+    int ret;
 
     if (!xf86LoadSubModule(pScrn, "ddc")) {
 	pI830->ddc2 = FALSE;
@@ -2279,15 +2280,21 @@ I830PreInitDDC(ScrnInfoPtr pScrn)
 	      return;
 	    }
 	    else {
-	      pointer ret_p;
 	      pI830->num_dvos = 2;
 	      pI830->dvos[1].bus_type = I830_I2C_BUS_SDVO;
 	      /* i915 has sDVO */
 	      pI830->ddc2 = I830I2CInit(pScrn, &pI830->dvos[1].pI2CBus, GPIOE, "SDVOCTRL");
-	      if (pI830->ddc2 = FALSE)
+	      if (pI830->ddc2 == FALSE)
 		return;
+
 	      pI830->sdvo=I830SDVOInit(pI830->dvos[1].pI2CBus);
-				 
+	      
+	      ret = I830I2CDetectSDVOController(pScrn, pI830->dvos[1].pI2CBus);
+	      if (ret==TRUE)
+	      {
+		xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Found sDVO\n");
+	      }
+
 	    }
 
    	    pI830->ddc2 = TRUE;
@@ -2328,12 +2335,16 @@ void I830DetectMonitors(ScrnInfoPtr pScrn)
 	}
       }
     }
-    else {
-      ret = I830I2CDetectSDVOController(pScrn, pI830->dvos[i].pI2CBus);
-      if (ret==TRUE)
+    else if (pI830->dvos[i].bus_type == I830_I2C_BUS_SDVO) {
+
+      if (pI830->sdvo->found)
       {
-	xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Found sDVO\n");
+	I830SDVOSetupDDC(pI830->sdvo);
+
+	pI830->dvos[i].MonInfo = xf86DoEDID_DDC2(pScrn->scrnIndex, pI830->dvos[i].pI2CBus);
 	
+	xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "checking DVO %d, %08X\n", i, pI830->dvos[i].pI2CBus->DriverPrivate.uval);
+	xf86PrintEDID(pI830->dvos[i].MonInfo);
       }
     }
   }
@@ -3292,10 +3303,12 @@ I830BIOSPreInit(ScrnInfoPtr pScrn, int flags)
             pI830->operatingDevices = pI830->MonType2 << 8;
       }
 
-      if (pI830->pipe != pI830->origPipe)
+      if (pI830->pipe != pI830->origPipe) {
          xf86DrvMsg(pScrn->scrnIndex, X_WARNING,
 	     "Primary Pipe has been switched from original pipe (%s to %s)\n",
              pI830->origPipe ? "B" : "A", pI830->pipe ? "B" : "A");
+	 pI830->origPipe = pI830->pipe;
+      }
    } else {
       I830Ptr pI8301 = I830PTR(pI830->entityPrivate->pScrn_1);
       pI830->operatingDevices = pI8301->operatingDevices;
@@ -3574,7 +3587,7 @@ I830BIOSPreInit(ScrnInfoPtr pScrn, int flags)
      clockRanges->interlaceAllowed = TRUE;
      clockRanges->doubleScanAllowed = FALSE;
 
-     xf86ValidateDDCModes(pScrn, pScrn->display->modes);
+     I830xf86ValidateDDCModes(pScrn, pScrn->display->modes);
      i = xf86ValidateModes(pScrn, pScrn->monitor->Modes,
 			   pScrn->display->modes, clockRanges,
 			   0, 320, MAX_DISPLAY_PITCH, 64 * pScrn->bitsPerPixel,
@@ -5889,7 +5902,7 @@ I830BIOSEnterVT(int scrnIndex, int flags)
       */
      /* Check Pipe conf registers or possibly HTOTAL/VTOTAL for 0x00000000)*/
       CARD32 temp = pI830->pipe ? INREG(PIPEBCONF) : INREG(PIPEACONF);
-      if (!I830Set640x480(pScrn) || !(temp & 0x80000000)) {
+      if ((!pI830->rawmode) && (!I830Set640x480(pScrn) || !(temp & 0x80000000))) {
          xf86Int10InfoPtr pInt;
 
          xf86DrvMsg(pScrn->scrnIndex, X_INFO, 
