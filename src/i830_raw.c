@@ -592,6 +592,8 @@ I830RawSetHw(ScrnInfoPtr pScrn, DisplayModePtr pMode)
     (vactive << SRC_SIZE_VERT_SHIFT);
 
   hw->swf1x[3] = 0x58580000;
+  *pipe_conf |= PIPEACONF_ENABLE;
+
   /* Set the palette to 8-bit mode. */
   //  *pipe_conf &= ~PIPEACONF_GAMMA;
   return TRUE;
@@ -635,9 +637,9 @@ I830ProgramModeReg(ScrnInfoPtr pScrn, DisplayModePtr pMode)
 
 	/* Check whether pipe A or pipe B is enabled. */
 	if (hw->pipe_a_conf & PIPEACONF_ENABLE)
-		pipe = PIPE_A;
+	  pipe = PIPE_A;
 	else if (hw->pipe_b_conf & PIPEBCONF_ENABLE)
-		pipe = PIPE_B;
+	  pipe = PIPE_B;
 
 	if (pipe == PIPE_B) {
 		dpll = &hw->dpll_b;
@@ -699,7 +701,13 @@ I830ProgramModeReg(ScrnInfoPtr pScrn, DisplayModePtr pMode)
 	    break;
 	  count++;
 	  usleep(1);
-	} while(1);
+	  if (count % 200 == 0)
+	  {
+	    tmp = INREG(pipe_conf_reg);
+	    tmp &= ~PIPEACONF_ENABLE;
+	    OUTREG(pipe_conf_reg, tmp);
+	  }
+	} while(count < 2000);
 
 	/* inreg dvoc */
 	OUTREG(DVOC, INREG(DVOC) & ~DVO_ENABLE);
@@ -764,6 +772,8 @@ I830ProgramModeReg(ScrnInfoPtr pScrn, DisplayModePtr pMode)
 	//	tmp |= ADPA_DPMS_D0;
 	OUTREG(ADPA, tmp);
 
+	OUTREG(DSPACNTR, hw->disp_a_ctrl);
+	OUTREG(DSPBCNTR, hw->disp_b_ctrl);
 	I830SetupDSPRegisters(pScrn, pMode);
 
 	return TRUE;
