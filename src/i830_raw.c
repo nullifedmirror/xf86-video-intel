@@ -5,9 +5,6 @@
  Dervied from intelfhw.c licenesd under MIT/XFree86.
  Copyright © 2002, 2003 David Dawes <dawes@xfree86.org>
  
-
-All Rights Reserved.
-
 Permission is hereby granted, free of charge, to any person obtaining a
 copy of this software and associated documentation files (the "Software"),
 to deal in the Software without restriction, including without limitation
