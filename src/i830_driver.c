@@ -1046,16 +1046,16 @@ GetDisplayDevices(ScrnInfoPtr pScrn)
 	 {
 	   switch(pI830->output[i].i2c_drv->type)
 	   {
-	   case I830_I2C_CHIP_LVDS:
+	   case I830_DVO_CHIP_LVDS:
 	     ret |= PIPE_LFP;
 	     break;
-	   case I830_I2C_CHIP_TMDS:
+	   case I830_DVO_CHIP_TMDS:
 	     ret |= PIPE_DFP;
 	     break;
-	   case I830_I2C_CHIP_TVOUT:
+	   case I830_DVO_CHIP_TVOUT:
 	     ret |= PIPE_TV;
 	     break;
-	   case I830_I2C_CHIP_NONE:
+	   case I830_DVO_CHIP_NONE:
 	   default:
 	     break;
 	   }
@@ -2280,22 +2280,18 @@ I830SetupOutputBusses(ScrnInfoPtr pScrn)
     case PCI_CHIP_845_G:
     case PCI_CHIP_I855_GM:
     case PCI_CHIP_I865_G:
-      /* i865 has a single analog*/
       pI830->num_outputs = 2;
       pI830->output[1].type = I830_OUTPUT_DVO;
       I830I2CInit(pScrn, &pI830->output[1].pDDCBus, GPIOD, "DVODDC_D");
       I830I2CInit(pScrn, &pI830->output[1].pI2CBus, GPIOE, "DVOI2C_E");
       break;
     case PCI_CHIP_I915_G:
-      /* has 2 SDVOs */
     case PCI_CHIP_E7221_G:
     case PCI_CHIP_I915_GM:
       /* has  some LVDS + tv-out */
     case PCI_CHIP_I945_G:
-      /* has 2 SDVOs */
     case PCI_CHIP_I945_GM:
-      /* be careful there is some hardcoding of SDVO to output 1
-	 need to revisit PIPE mappings */
+      /* SDVO ports have a single control bus */
       pI830->num_outputs = 2;
       pI830->output[1].type = I830_OUTPUT_SDVO;
       I830I2CInit(pScrn, &pI830->output[1].pI2CBus, GPIOE, "SDVOCTRL_E");

@@ -57,7 +57,7 @@ static const char *SIL164Symbols[] = {
 
 /* driver list */
 struct _I830DVODriver i830_dvo_drivers[] =
-  { I830_I2C_CHIP_TMDS, "sil164", "SIL164VidOutput", (SIL164_ADDR_1<<1), SIL164Symbols, NULL , NULL, NULL};
+  { I830_DVO_CHIP_TMDS, "sil164", "SIL164VidOutput", (SIL164_ADDR_1<<1), SIL164Symbols, NULL , NULL, NULL};
 
 
 

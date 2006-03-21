@@ -565,7 +565,6 @@ I830SDVOPreSetMode(I830SDVOPtr s, DisplayModePtr mode)
   
 }
 
-
 Bool
 I830SDVOPostSetMode(I830SDVOPtr s, DisplayModePtr mode)
 {
