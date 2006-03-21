@@ -177,11 +177,12 @@ i9xx_calc_pll_params(int index, int clock,
 		do {
 			m = ROUND_UP_TO(f_vco * n, PLL_REFCLK) / PLL_REFCLK;
 			fprintf(stderr,"trying m %d n %d\n", m, n);
+			if (m < plls[index].min_m)
+			  m = plls[index].min_m + 1;
+			if (m > plls[index].max_m)
+			  m = plls[index].max_m - 1;
 			for (testm = m - 1; testm <= m; testm++) {
-				if (testm < plls[index].min_m)
-					testm = plls[index].min_m;
-				if (testm > plls[index].max_m)
-					testm = plls[index].max_m;
+
 				f_out = CALC_VCLOCK3(testm, n, p);
 				if (splitm(index, testm, &m1, &m2)) {
 					DPRINTF(PFX, "cannot split m = %d\n", testm);
