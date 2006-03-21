@@ -420,7 +420,6 @@ I830RawSetHw(ScrnInfoPtr pScrn, DisplayModePtr pMode)
   *dpll |= (DPLL_REFERENCE_DEFAULT | DPLL_RATE_SELECT_FP0);
 
   /* Desired clock in kHz */
-  //  clock_target = 1000000000 / var->pixclock;
   clock_target = pMode->Clock;
 
   if (IS_I9XX(pI830))
@@ -578,21 +577,6 @@ I830RawSetHw(ScrnInfoPtr pScrn, DisplayModePtr pMode)
   return TRUE;
 }
 
-#if 0
-int oldcode(void)
-{
-
-	/* Disable planes A and B. */
-	tmp = INREG(DSPACNTR);
-	tmp &= ~DISPLAY_PLANE_ENABLE;
-	OUTREG(DSPACNTR, tmp);
-	tmp = INREG(DSPBCNTR);
-	tmp &= ~DISPLAY_PLANE_ENABLE;
-	OUTREG(DSPBCNTR, tmp);
-
-	/* Wait for vblank.  For now, just wait for a 50Hz cycle (20ms)) */
-}
-#endif
 /* Program a (non-VGA) video mode. */
 int
 I830ProgramModeReg(ScrnInfoPtr pScrn, DisplayModePtr pMode)
