@@ -1106,7 +1106,8 @@ int I830xf86ValidateDDCModes(ScrnInfoPtr pScrn1, char **ppModeName)
       pScrn->monitor->Modes->prev = last;
 
       first->prev = temp;
-      temp->next = first;
+      if (temp)
+	temp->next = first;
 
       pScrn->monitor->Modes = first;
     }

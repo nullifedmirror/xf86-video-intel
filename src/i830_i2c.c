@@ -56,12 +56,12 @@ static const char *SIL164Symbols[] = {
 };
 
 /* driver list */
-struct _I830RegI2CDriver i830_i2c_drivers[] =
+struct _I830DVODriver i830_dvo_drivers[] =
   { I830_I2C_CHIP_TMDS, "sil164", "SIL164VidOutput", (SIL164_ADDR_1<<1), SIL164Symbols, NULL , NULL, NULL};
 
 
 
-#define I830_NUM_I2C_DRIVERS (sizeof(i830_i2c_drivers)/sizeof(struct _I830RegI2CDriver))
+#define I830_NUM_DVO_DRIVERS (sizeof(i830_dvo_drivers)/sizeof(struct _I830DVODriver))
 
 /* bit locations in the registers */
 #define SCL_DIR_MASK		0x0001
@@ -419,16 +419,16 @@ I830I2CInit(ScrnInfoPtr pScrn, I2CBusPtr *bus_ptr, int i2c_reg, char *name)
 }
 
 Bool
-I830I2CDetectControllers(ScrnInfoPtr pScrn, I2CBusPtr pI2CBus, struct _I830RegI2CDriver **retdrv)
+I830I2CDetectDVOControllers(ScrnInfoPtr pScrn, I2CBusPtr pI2CBus, struct _I830DVODriver **retdrv)
 {
   I830Ptr pI830 = I830PTR(pScrn);  
   int i;
   void *ret_ptr;
-  struct _I830RegI2CDriver *drv;
+  struct _I830DVODriver *drv;
 
-  for (i=0; i<I830_NUM_I2C_DRIVERS; i++)
+  for (i=0; i<I830_NUM_DVO_DRIVERS; i++)
   {
-    drv = &i830_i2c_drivers[i];
+    drv = &i830_dvo_drivers[i];
     drv->modhandle = xf86LoadSubModule(pScrn, drv->modulename);
 
     if (!drv->modhandle)
@@ -453,13 +453,14 @@ I830I2CDetectControllers(ScrnInfoPtr pScrn, I2CBusPtr pI2CBus, struct _I830RegI2
 
 
 Bool
-I830I2CDetectSDVOController(ScrnInfoPtr pScrn, I2CBusPtr b)
+I830I2CDetectSDVOController(ScrnInfoPtr pScrn, int output_index)
 {
   I830Ptr pI830 = I830PTR(pScrn);
   I2CDevRec d;
   unsigned char ch[64];
   int i;
   int addr = 0x39 << 1;
+  I2CBusPtr b = pI830->output[output_index].pI2CBus;
   
   /* attempt to talk to an SDVO controller */
   d.DevName = "SDVO";
@@ -478,6 +479,9 @@ I830I2CDetectSDVOController(ScrnInfoPtr pScrn, I2CBusPtr b)
       return FALSE;
     }
   }
-  pI830->sdvo->found = 1;
+  
+  if (pI830->output[output_index].sdvo_drv)
+    pI830->output[output_index].sdvo_drv->found = 1;
+
   return TRUE;
 }

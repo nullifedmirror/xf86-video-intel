@@ -500,13 +500,15 @@ I830DumpModeDebugInfo(ScrnInfoPtr pScrn)
 
   DR(0x240c);
 
-  if (pI830->sdvo) {
-  I830SDVOWriteCommand10(pI830->sdvo);
-  I830SDVOWriteCommand18(pI830->sdvo);
-  I830SDVOWriteCommand10(pI830->sdvo);
-  I830SDVOWriteCommand19(pI830->sdvo);
-  I830SDVOWriteCommand10(pI830->sdvo);
+#if 0
+  if (pI830->sdvo && pI830->sdvo->found) {
+    I830SDVOWriteCommand10(pI830->sdvo);
+    I830SDVOWriteCommand18(pI830->sdvo);
+    I830SDVOWriteCommand10(pI830->sdvo);
+    I830SDVOWriteCommand19(pI830->sdvo);
+    I830SDVOWriteCommand10(pI830->sdvo);
   }
+#endif
 #endif
 }
 
@@ -1030,15 +1032,19 @@ GetDisplayDevices(ScrnInfoPtr pScrn)
      if (pI830->PciInfo->chipType == PCI_CHIP_E7221_G) /* FIXED CONFIG */
 	return PIPE_CRT;
 
-     if (pI830->dvos[0].MonInfo)
-       ret |= PIPE_CRT;
-     for (i=1; i<MAX_DVOS; i++)
+
+     for (i=0; i<MAX_OUTPUTS; i++)
      {
-       if (pI830->dvos[i].bus_type == I830_I2C_BUS_DVO)
+       switch (pI830->output[i].type)
        {
-	 if (pI830->dvos[i].MonInfo)
+       case I830_OUTPUT_ANALOG:
+	 if (pI830->output[i].MonInfo)
+	   ret |= PIPE_CRT;
+	 break;
+       case I830_OUTPUT_DVO:
+	 if (pI830->output[i].MonInfo)
 	 {
-	   switch(pI830->dvos[i].i2c_drv->type)
+	   switch(pI830->output[i].i2c_drv->type)
 	   {
 	   case I830_I2C_CHIP_LVDS:
 	     ret |= PIPE_LFP;
@@ -1054,6 +1060,15 @@ GetDisplayDevices(ScrnInfoPtr pScrn)
 	     break;
 	   }
 	 }
+       case I830_OUTPUT_SDVO:
+	 /* needs more work */
+	 break;
+       case I830_OUTPUT_LVDS:
+	 ret |= PIPE_LFP;
+	 break;
+       case I830_OUTPUT_TVOUT:
+	 ret |= PIPE_TV;
+	 break;
        }
 
      }
@@ -2242,6 +2257,60 @@ I830UseDDC(ScrnInfoPtr pScrn)
    return mon_range->max_clock;
 }
 
+void
+I830SetupOutputBusses(ScrnInfoPtr pScrn)
+{
+    I830Ptr pI830 = I830PTR(pScrn);
+    int ret;
+
+    /* everyone has at least a single analog output */
+    pI830->num_outputs = 1;
+    pI830->output[0].type = I830_OUTPUT_ANALOG;
+
+    /* setup the DDC bus for the analog output */
+    I830I2CInit(pScrn, &pI830->output[0].pDDCBus, GPIOA, "CRTDDC_A");
+    
+    /* need to add the output busses for each device 
+       - this function is very incomplete
+       - i915GM has LVDS and TVOUT for example
+    */
+    switch(pI830->PciInfo->chipType)
+    {
+    case PCI_CHIP_I830_M:
+    case PCI_CHIP_845_G:
+    case PCI_CHIP_I855_GM:
+    case PCI_CHIP_I865_G:
+      /* i865 has a single analog*/
+      pI830->num_outputs = 2;
+      pI830->output[1].type = I830_OUTPUT_DVO;
+      I830I2CInit(pScrn, &pI830->output[1].pDDCBus, GPIOD, "DVODDC_D");
+      I830I2CInit(pScrn, &pI830->output[1].pI2CBus, GPIOE, "DVOI2C_E");
+      break;
+    case PCI_CHIP_I915_G:
+      /* has 2 SDVOs */
+    case PCI_CHIP_E7221_G:
+    case PCI_CHIP_I915_GM:
+      /* has  some LVDS + tv-out */
+    case PCI_CHIP_I945_G:
+      /* has 2 SDVOs */
+    case PCI_CHIP_I945_GM:
+      /* be careful there is some hardcoding of SDVO to output 1
+	 need to revisit PIPE mappings */
+      pI830->num_outputs = 2;
+      pI830->output[1].type = I830_OUTPUT_SDVO;
+      I830I2CInit(pScrn, &pI830->output[1].pI2CBus, GPIOE, "SDVOCTRL_E");
+      
+      pI830->output[1].sdvo_drv = I830SDVOInit(pI830->output[1].pI2CBus);
+      ret = I830I2CDetectSDVOController(pScrn, 1);
+      if (ret == TRUE)
+      {
+	xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Found sDVO\n");
+      }
+      break;
+    }
+
+}
+
 void 
 I830PreInitDDC(ScrnInfoPtr pScrn)
 {
@@ -2262,44 +2331,7 @@ I830PreInitDDC(ScrnInfoPtr pScrn)
 	if (xf86LoadSubModule(pScrn, "i2c")) {
 	    xf86LoaderReqSymLists(I810i2cSymbols,NULL);
 
-	    pI830->num_dvos = 1;
-	    pI830->dvos[0].bus_type = I830_I2C_BUS_DVO;
-	    /* setup the common CRT DVO */
-	    pI830->ddc2 = I830I2CInit(pScrn, &pI830->dvos[0].pDDCBus, GPIOA, "DDCGPIOA");
-	    if (pI830->ddc2 == FALSE)
-	      return;
-	    pI830->ddc2 = I830I2CInit(pScrn, &pI830->dvos[0].pI2CBus, GPIOB, "I2CGPIOB");
-	    if (pI830->ddc2 == FALSE)
-	      return;
-	    
-	    if (!(IS_I9XX(pI830))) {
-	      pI830->dvos[1].bus_type = I830_I2C_BUS_DVO;
-	      pI830->num_dvos = 2;
-	      
-	      pI830->ddc2 = I830I2CInit(pScrn, &pI830->dvos[1].pDDCBus, GPIOD, "DDCGPIOD");
-	      if (pI830->ddc2 == FALSE)
-		return;
-	      pI830->ddc2 = I830I2CInit(pScrn, &pI830->dvos[1].pI2CBus, GPIOE, "I2CGPIOE");
-	      if (pI830->ddc2 == FALSE)
-	      return;
-	    }
-	    else {
-	      pI830->num_dvos = 2;
-	      pI830->dvos[1].bus_type = I830_I2C_BUS_SDVO;
-	      /* i915 has sDVO */
-	      pI830->ddc2 = I830I2CInit(pScrn, &pI830->dvos[1].pI2CBus, GPIOE, "SDVOCTRL");
-	      if (pI830->ddc2 == FALSE)
-		return;
-
-	      pI830->sdvo=I830SDVOInit(pI830->dvos[1].pI2CBus);
-	      
-	      ret = I830I2CDetectSDVOController(pScrn, pI830->dvos[1].pI2CBus);
-	      if (ret==TRUE)
-	      {
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Found sDVO\n");
-	      }
-
-	    }
+	    I830SetupOutputBusses(pScrn);
 
    	    pI830->ddc2 = TRUE;
 	}
@@ -2315,41 +2347,53 @@ void I830DetectMonitors(ScrnInfoPtr pScrn)
 
   if (!pI830->ddc2)
     return;
-
-  for (i=0; i<pI830->num_dvos; i++)
-  {
-
     /* we can't do EDID on sDVO yet */
-    if (pI830->dvos[i].bus_type == I830_I2C_BUS_DVO)
+  for (i=0; i<pI830->num_outputs; i++)
+  {
+    switch(pI830->output[i].type)
     {
-      pI830->dvos[i].MonInfo = xf86DoEDID_DDC2(pScrn->scrnIndex, pI830->dvos[i].pDDCBus);
+    case I830_OUTPUT_ANALOG:
+      /* for an analog output just to DDC */
+      pI830->output[i].MonInfo = xf86DoEDID_DDC2(pScrn->scrnIndex, pI830->output[i].pDDCBus);
       
-      xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "checking DVO %d, %08X\n", i, pI830->dvos[i].pDDCBus->DriverPrivate.uval);
-      xf86PrintEDID(pI830->dvos[i].MonInfo);
+      xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "DDC Analog %d, %08X\n", i, pI830->output[i].pDDCBus->DriverPrivate.uval);
+      xf86PrintEDID(pI830->output[i].MonInfo);
+      break;
+    case I830_OUTPUT_DVO:
+      /* check for DDC */
+      pI830->output[i].MonInfo = xf86DoEDID_DDC2(pScrn->scrnIndex, pI830->output[i].pDDCBus);
+      
+      xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "DDC DVO %d, %08X\n", i, pI830->output[i].pDDCBus->DriverPrivate.uval);
+      xf86PrintEDID(pI830->output[i].MonInfo);
       
       /* if we are on an i2C bus > 0 and we see a monitor - try to
 	 find a controller chip */
-      if (i > 0 && pI830->dvos[i].MonInfo)
+      if (pI830->output[i].MonInfo)
       {
 	
-	ret = I830I2CDetectControllers(pScrn, pI830->dvos[i].pI2CBus, &pI830->dvos[i].i2c_drv);
+	ret = I830I2CDetectDVOControllers(pScrn, pI830->output[i].pI2CBus, &pI830->output[i].i2c_drv);
 	if (ret==TRUE)
 	{
-	  xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Found i2c %s on %08X\n", pI830->dvos[i].i2c_drv->modulename, pI830->dvos[i].pI2CBus->DriverPrivate.uval);
+	  xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Found i2c %s on %08X\n", pI830->output[i].i2c_drv->modulename, pI830->output[i].pI2CBus->DriverPrivate.uval);
 	}
       }
-    }
-    else if (pI830->dvos[i].bus_type == I830_I2C_BUS_SDVO) {
-
-      if (pI830->sdvo->found)
+      break;
+    case I830_OUTPUT_SDVO:
+      if (pI830->output[i].sdvo_drv->found)
       {
-	I830SDVOSetupDDC(pI830->sdvo);
+	I830SDVOSetupDDC(pI830->output[i].sdvo_drv);
 
-	pI830->dvos[i].MonInfo = xf86DoEDID_DDC2(pScrn->scrnIndex, pI830->dvos[i].pI2CBus);
+	pI830->output[i].MonInfo = xf86DoEDID_DDC2(pScrn->scrnIndex, pI830->output[i].pI2CBus);
 	
-	xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "checking DVO %d, %08X\n", i, pI830->dvos[i].pI2CBus->DriverPrivate.uval);
-	xf86PrintEDID(pI830->dvos[i].MonInfo);
+	xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "DDC SDVO %d, %08X\n", i, pI830->output[i].pI2CBus->DriverPrivate.uval);
+	xf86PrintEDID(pI830->output[i].MonInfo);
       }
+      break;
+    case I830_OUTPUT_UNUSED:
+      break;
+    default:
+      xf86DrvMsg(pScrn->scrnIndex, X_WARNING, "Unknown or unhandled output device at %d\n", i);
+      break;
     }
   }
 
@@ -2846,9 +2890,9 @@ I830BIOSPreInit(ScrnInfoPtr pScrn, int flags)
 
    I830DetectMonitors(pScrn);
 
-   for (i=0; i<MAX_DVOS; i++) {
-     if (pI830->dvos[i].MonInfo) {
-       pScrn->monitor->DDC = pI830->dvos[i].MonInfo;
+   for (i=0; i<MAX_OUTPUTS; i++) {
+     if (pI830->output[i].MonInfo) {
+       pScrn->monitor->DDC = pI830->output[i].MonInfo;
        break;
      }
    }

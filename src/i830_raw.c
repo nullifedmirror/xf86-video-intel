@@ -134,8 +134,8 @@ i9xx_calc_pll_params(int index, int clock,
 		     CARD32 *retn, CARD32 *retp1, CARD32 *retp2, 
 		     CARD32 *retclock)
 {
-  volatile CARD32 m1, m2, n, p1, p2, n1;
-volatile CARD32 f_vco, p, p_best = 0, m, f_out;
+        CARD32 m1, m2, n, p1, p2, n1;
+        CARD32 f_vco, p, p_best = 0, m, f_out;
 	CARD32 err_max, err_target, err_best = 10000000;
 	CARD32 n_best = 0, m_best = 0, f_best, f_err;
 	CARD32 p_min, p_max, p_inc, div_min, div_max;
@@ -357,7 +357,7 @@ I830RawSetHw(ScrnInfoPtr pScrn, DisplayModePtr pMode)
   CARD32 *vs, *vb, *vt, *hs, *hb, *ht, *ss, *pipe_conf;
   int index;
   int displays = pI830->operatingDevices;
-  int ret;
+  int ret, i;
   
   index = IS_I9XX(pI830) ? PLLS_I9xx : PLLS_I8xx;
 
@@ -459,10 +459,12 @@ I830RawSetHw(ScrnInfoPtr pScrn, DisplayModePtr pMode)
     (m2 << FP_M2_DIVISOR_SHIFT);
   *fp1 = *fp0;
 
-  if (pI830->sdvo && pI830->sdvo->found)
-    *dpll |= DPLL_2X_CLOCK_ENABLE;
-  else
-    *dpll &= ~DPLL_2X_CLOCK_ENABLE;
+  *dpll &= ~DPLL_2X_CLOCK_ENABLE;
+  for (i=0; i<pI830->num_outputs; i++)
+  {
+    if (pI830->output[i].sdvo_drv && pI830->output[i].sdvo_drv->found)
+      *dpll |= DPLL_2X_CLOCK_ENABLE;
+  }
   /* leave these alone for now */
 
   //  hw->dvob &= ~DVO_ENABLE;
@@ -888,6 +890,7 @@ I830RawSetMode(ScrnInfoPtr pScrn, DisplayModePtr mode)
   I830Ptr pI830 = I830PTR(pScrn);
   Bool didLock = FALSE;
   int retry_count = 0;
+  int i;
 
   DPRINTF(PFX, "RawSetMode");
 
@@ -901,26 +904,28 @@ I830RawSetMode(ScrnInfoPtr pScrn, DisplayModePtr mode)
   I830RawSetHw(pScrn, mode);
 
  retry:
-  if (pI830->sdvo && pI830->sdvo->found == 1)
+  /* do SDVO setup */
+  for (i = 0; i < pI830->num_outputs; i++)
   {
-    I830SDVOPreSetMode(pI830->sdvo, mode);
+    if (pI830->output[i].sdvo_drv && pI830->output[i].sdvo_drv->found)
+    {
+      I830SDVOPreSetMode(pI830->output[i].sdvo_drv, mode);
+    }
   }
   
-  if (0)
-  {
- //   I830Replay1280x1024_DVI(pScrn, mode);
-  }
-  else
-    ret=I830ProgramModeReg(pScrn, mode);
+  ret=I830ProgramModeReg(pScrn, mode);
 
-  if (pI830->sdvo && pI830->sdvo->found == 1)
+  for (i = 0; i < pI830->num_outputs; i++)
   {
-    ret = I830SDVOPostSetMode(pI830->sdvo, mode);
-    /* if it didn't enable the DFP on the output */
-    if (ret==FALSE && (pI830->MonType1 & PIPE_DFP) && retry_count<3)
+    if (pI830->output[i].sdvo_drv && pI830->output[i].sdvo_drv->found)
     {
-      retry_count++;
-      goto retry;
+      ret = I830SDVOPostSetMode(pI830->output[i].sdvo_drv, mode);
+      /* if it didn't enable the DFP on the output */
+      if (ret==FALSE && (pI830->MonType1 & PIPE_DFP) && retry_count<3)
+      {
+	retry_count++;
+	goto retry;
+      }
     }
   }
   if (didLock)
