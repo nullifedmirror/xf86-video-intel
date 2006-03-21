@@ -5951,7 +5951,7 @@ I830BIOSEnterVT(int scrnIndex, int flags)
    SetHWOperatingState(pScrn);
 
    /* Detect monitor change and switch to suitable mode */
-   if (!pI830->starting)
+   if (!pI830->starting && !pI830->rawmode)
       I830DetectMonitorChange(pScrn);
 
    if (pI830->rawmode==TRUE) {
