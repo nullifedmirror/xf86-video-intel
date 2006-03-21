@@ -134,7 +134,7 @@ i9xx_calc_pll_params(int index, int clock,
 		     CARD32 *retn, CARD32 *retp1, CARD32 *retp2, 
 		     CARD32 *retclock)
 {
-        CARD32 m1, m2, n, p1, p2, n1;
+        CARD32 m1, m2, n, p1, p2, n1, testm;
         CARD32 f_vco, p, p_best = 0, m, f_out;
 	CARD32 err_max, err_target, err_best = 10000000;
 	CARD32 n_best = 0, m_best = 0, f_best, f_err;
@@ -177,27 +177,29 @@ i9xx_calc_pll_params(int index, int clock,
 		do {
 			m = ROUND_UP_TO(f_vco * n, PLL_REFCLK) / PLL_REFCLK;
 			fprintf(stderr,"trying m %d n %d\n", m, n);
-			if (m < plls[index].min_m)
-				m = plls[index].min_m;
-			if (m > plls[index].max_m)
-				m = plls[index].max_m;
-			f_out = CALC_VCLOCK3(m, n, p);
-			if (splitm(index, m, &m1, &m2)) {
-				DPRINTF(PFX, "cannot split m = %d\n", m);
-				n++;
-				continue;
-			}
-			if (clock > f_out)
-				f_err = clock - f_out;
-			else
-				f_err = f_out - clock;
+			for (testm = m - 1; testm <= m; testm++) {
+				if (testm < plls[index].min_m)
+					testm = plls[index].min_m;
+				if (testm > plls[index].max_m)
+					testm = plls[index].max_m;
+				f_out = CALC_VCLOCK3(testm, n, p);
+				if (splitm(index, testm, &m1, &m2)) {
+					DPRINTF(PFX, "cannot split m = %d\n", testm);
+					n++;
+					continue;
+				}
+				if (clock > f_out)
+					f_err = clock - f_out;
+				else /* slightly bias the error for bigger clocks */
+					f_err = f_out - clock + 1;
 
-			if (f_err < err_best) {
-				m_best = m;
-				n_best = n;
-				p_best = p;
-				f_best = f_out;
-				err_best = f_err;
+				if (f_err < err_best) {
+					m_best = testm;
+					n_best = n;
+					p_best = p;
+					f_best = f_out;
+					err_best = f_err;
+				}
 			}
 			n++;
 		} while ((n <= plls[index].max_n));//(f_out >= clock));
