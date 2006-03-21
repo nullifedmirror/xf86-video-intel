@@ -588,6 +588,17 @@ extern Bool I830CheckModeSupport(ScrnInfoPtr pScrn, int x, int y, int mode);
 extern Bool I830Rotate(ScrnInfoPtr pScrn, DisplayModePtr mode);
 extern Bool I830FixOffset(ScrnInfoPtr pScrn, I830MemRange *mem);
 
+extern Bool I830I2CDetectSDVOController(ScrnInfoPtr pScrn, int output_index);
+extern Bool I830I2CDetectDVOControllers(ScrnInfoPtr pScrn, I2CBusPtr pI2CBus, struct _I830DVODriver **retdrv);
+extern Bool I830I2CInit(ScrnInfoPtr pScrn, I2CBusPtr *bus_ptr, int i2c_reg, char *name);
+extern Bool I830SDVOPreSetMode(I830SDVOPtr s, DisplayModePtr mode);
+extern Bool I830SDVOPostSetMode(I830SDVOPtr s, DisplayModePtr mode);
+
+extern Bool I830RawSetMode(ScrnInfoPtr pScrn, DisplayModePtr mode);
+extern Bool I830RawSwitchMode(int scrnIndex, DisplayModePtr mode, int flags);
+extern Bool I830RawSaveState(ScrnInfoPtr pScrn, I830RegPtr hw);
+extern Bool I830RawRestoreState(ScrnInfoPtr pScrn, I830RegPtr hw);
+
 /*
  * 12288 is set as the maximum, chosen because it is enough for
  * 1920x1440@32bpp with a 2048 pixel line pitch with some to spare.
