@@ -631,4 +631,7 @@ extern Bool I830RawRestoreState(ScrnInfoPtr pScrn, I830RegPtr hw);
 #define _845_DRAM_RW_CONTROL 0x90
 #define DRAM_WRITE    0x33330000
 
+/* mode private flags */
+#define I830_MFLAG_DOUBLE 0x1
+
 #endif /* _I830_H_ */

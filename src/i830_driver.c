@@ -3624,8 +3624,8 @@ I830BIOSPreInit(ScrnInfoPtr pScrn, int flags)
 
      clockRanges = xnfcalloc(sizeof(ClockRange), 1);
      clockRanges->next = NULL;
-     /* 9.4MHz appears to be the smallest that works. */
-     clockRanges->minClock = 9500;
+     /* 25MHz appears to be the smallest that works. */
+     clockRanges->minClock = 25000;
      clockRanges->maxClock = pI830->MaxClock;
      clockRanges->clockIndex = -1;
      clockRanges->interlaceAllowed = TRUE;

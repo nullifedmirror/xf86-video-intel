@@ -102,8 +102,20 @@ splitp(int index, unsigned int p, CARD32 *retp1, CARD32 *retp2)
 	/* deal with i9xx plls first - incomplete but mostly working */
 	if (index == PLLS_I9xx)
 	{
-	  p1 = (p / 10) + 1;
-	  p2 = 0;
+	  switch (p) {
+	  case 10:
+	    p1 = 2;
+	    p2 = 0;
+	    break;
+	  case 20:
+	    p1 = 1;
+	    p2 = 0;
+	    break;
+	  default:
+	    p1 = (p / 10) + 1;
+	    p2 = 0;
+	    break;
+	  }
 	  
 	  *retp1 = (unsigned int)p1;
 	  *retp2 = (unsigned int)p2;
@@ -132,7 +144,7 @@ int
 i9xx_calc_pll_params(int index, int clock, 
 		     CARD32 *retm1, CARD32 *retm2, 
 		     CARD32 *retn, CARD32 *retp1, CARD32 *retp2, 
-		     CARD32 *retclock)
+		     CARD32 *retclock, int *flags)
 {
         CARD32 m1, m2, n, p1, p2, n1, testm;
         CARD32 f_vco, p, p_best = 0, m, f_out;
@@ -160,7 +172,18 @@ i9xx_calc_pll_params(int index, int clock,
 		p_min = plls[index].min_p;
 	if (p_max > plls[index].max_p)
 		p_max = plls[index].max_p;
-	
+
+	if (clock < PLL_REFCLK)
+	{
+	  p_min = 10;
+	  p_max = 20;
+	  *flags |= I830_MFLAG_DOUBLE;
+	  /* this makes 640x480 work it really shouldn't 
+	     - SOMEONE WITHOUT DOCS WOZ HERE */
+	  if (clock < 30000)
+	    clock *= 4;
+	}
+
 	DPRINTF(PFX, "p range is %d-%d (%d)\n", p_min, p_max, p_inc);
 
 	p = p_min;
@@ -426,7 +449,7 @@ I830RawSetHw(ScrnInfoPtr pScrn, DisplayModePtr pMode)
   clock_target = pMode->Clock;
 
   if (IS_I9XX(pI830))
-	  ret=i9xx_calc_pll_params(index, clock_target, &m1, &m2, &n, &p1, &p2, &clock);
+    ret=i9xx_calc_pll_params(index, clock_target, &m1, &m2, &n, &p1, &p2, &clock, &pMode->PrivFlags);
   else
 	  ret=calc_pll_params(index, clock_target, &m1, &m2, &n, &p1, &p2, &clock);
   if (ret) {
@@ -459,8 +482,8 @@ I830RawSetHw(ScrnInfoPtr pScrn, DisplayModePtr pMode)
   *fp0 = (n << FP_N_DIVISOR_SHIFT) |
     (m1 << FP_M1_DIVISOR_SHIFT) |
     (m2 << FP_M2_DIVISOR_SHIFT);
-  *fp1 = *fp0;
-
+  //  *fp1 = *fp0;
+  
   *dpll &= ~DPLL_2X_CLOCK_ENABLE;
   for (i=0; i<pI830->num_outputs; i++)
   {
@@ -473,8 +496,10 @@ I830RawSetHw(ScrnInfoPtr pScrn, DisplayModePtr pMode)
   //hw->dvoc &= ~DVO_ENABLE;
   //  hw->dvoc |= 0x4084 | DVO_ENABLE;
   //hw->dvob |= DVO_ENABLE;
-  hw->dvoc = 0x80480080;
-  //  hw->dvoc |= ~DVO_ENABLE;
+  if (pMode->PrivFlags & I830_MFLAG_DOUBLE)
+    hw->dvoc = 0x81c80080;
+  else
+    hw->dvoc = 0x80480080;
 
   /* Use display plane A. */
   hw->disp_a_ctrl |= DISPLAY_PLANE_ENABLE;

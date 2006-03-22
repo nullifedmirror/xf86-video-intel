@@ -561,8 +561,10 @@ I830SDVOPreSetMode(I830SDVOPtr s, DisplayModePtr mode)
   I830SDVOWriteCommand15(s, curr_table[3], curr_table[4], out_timings[5]);
 
   I830SDVOWriteCommand10(s);
-  I830SDVOWriteCommand21(s, 0x01);
-  
+  if (mode->PrivFlags & I830_MFLAG_DOUBLE)
+    I830SDVOWriteCommand21(s, 0x02);
+  else
+    I830SDVOWriteCommand21(s, 0x01);
 }
 
 Bool
