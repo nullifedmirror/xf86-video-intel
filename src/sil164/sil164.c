@@ -177,7 +177,8 @@ static void sil164SaveRegs(I2CDevPtr d)
   return;
 
 }
-I2CVidOutputRec SIL164VidOutput = {
+
+I830I2CVidOutputRec SIL164VidOutput = {
   sil164Detect,
   sil164Init,
   sil164ModeValid,

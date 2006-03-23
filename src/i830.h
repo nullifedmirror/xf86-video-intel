@@ -69,6 +69,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "common.h"
 
+#include "i2c_vid.h"
 /* I830 Video BIOS support */
 
 /*
@@ -245,7 +246,7 @@ struct _I830DVODriver {
   char *fntablename;
   int address;
   const char **symbols;
-  I2CVidOutputRec *vid_rec;
+  I830I2CVidOutputRec *vid_rec;
   void *devpriv;
   pointer modhandle;
 };

@@ -26,6 +26,8 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 #ifndef SIL164_H
 #define SIL164_H
 
+#include "../i2c_vid.h"
+
 #define SIL164_VID 0x0001
 #define SIL164_DID 0x0006
 
