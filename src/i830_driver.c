@@ -319,7 +319,6 @@ I830DumpModeDebugInfo(ScrnInfoPtr pScrn)
 {
   I830Ptr pI830 = I830PTR(pScrn);
   CARD32 temp, planeA, planeB;
-  int p1, p2, m1, m2, n, p, m, clock;
   planeA = INREG(DSPACNTR);
   planeB = INREG(DSPBCNTR);
 #if 1
@@ -373,36 +372,8 @@ I830DumpModeDebugInfo(ScrnInfoPtr pScrn)
   DR(DSPASIZE);
 
 #if 1
-  temp = INREG(DPLL_A);
-  p2 = (temp >> DPLL_P2_SHIFT) & DPLL_P2_MASK;
-  p1 = (temp >> DPLL_P1_SHIFT) & DPLL_P1_MASK;
-
-  if (IS_I9XX(pI830))
-  	p = ((p1) * (p2 ? 10 : 5));
-  else
-  	p = (p1+2) * ( 1<< (p2 + 1));
-  ErrorF("DPLL A is %08X: p1 is %d p2 is %d\n", temp, p1, p2);
-  temp = INREG(FPA0);
-  n = (temp >> FP_N_DIVISOR_SHIFT) & FP_DIVISOR_MASK;
-  m1 = (temp >> FP_M1_DIVISOR_SHIFT) & FP_DIVISOR_MASK;
-  m2 = (temp >> FP_M2_DIVISOR_SHIFT) & FP_DIVISOR_MASK;
-  m = (5 * ((m1) + 2) + ((m2) + 2));
-  n += 2;
-  clock = (((PLL_REFCLK * m) / n) / p);
-
-  ErrorF("FPA0 is %08X N is %d m1 is %d m2 is %d\n", temp, n, m1, m2);
-  ErrorF("m %d n %d p %d clock %d\n", m, n, p, clock);
-
-  temp = INREG(FPA1);
-  n = (temp >> FP_N_DIVISOR_SHIFT) & FP_DIVISOR_MASK;
-  m1 = (temp >> FP_M1_DIVISOR_SHIFT) & FP_DIVISOR_MASK;
-  m2 = (temp >> FP_M2_DIVISOR_SHIFT) & FP_DIVISOR_MASK;
-  m = (5 * ((m1) + 2) + ((m2) + 2));
-  n += 2;
-  clock = ((PLL_REFCLK * m / n) / p);
-
-  ErrorF("FPA1 is %08X N is %d m1 is %d m2 is %d\n", temp, n, m1, m2);
-  ErrorF("m %d n %d p %d clock %d\n", m, n, p, clock);
+  I830DumpPLLRegisters(pScrn);
+#endif
   /* Print out some CRTC/display information. */
   temp = INREG(HTOTAL_A);
   ErrorF("Horiz active: %d, Horiz total: %d\n", temp & 0x7ff,
@@ -468,8 +439,6 @@ I830DumpModeDebugInfo(ScrnInfoPtr pScrn)
   ErrorF("Plane B position %d %d\n", temp & 0xffff, (temp & 0xffff0000) >> 16);
   temp = INREG(DSPBSIZE);
   ErrorF("Plane B size %d %d\n", temp & 0xffff, (temp & 0xffff0000) >> 16);
-
-#endif
   
   DR(DPLL_B);
   DR(FPB0);

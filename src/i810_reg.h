@@ -270,12 +270,18 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define GPIOE             0x5020 // this is DVO i2C 
 #define GPIOF             0x5024
 
-#define GMBUS_CLK_PORT_SEL 0x5100
-#define GMBUS_CMD   0x5104
-#define GMBUS_SLAVE_REG_SHIFT 8
-#define GMBUS_DATA_COUNT_SHIFT 16
-#define GMBUS_STATUS 0x5108
-#define GMBUS_DATA         0x510C
+#define GMBUS_CLK_PORT_SEL            0x5100
+#define GMBUS_CMD                     0x5104
+#define GMBUS_SLAVE_REG_SHIFT      8
+#define GMBUS_DATA_COUNT_SHIFT    16
+#define GMBUS_CYCLE_END_WAIT       1 // 0x42
+#define GMBUS_CYCLE_INDEX_END_WAIT 3 // 0x46
+#define GMBUS_CYCLE_STOP_IF_WAIT   4 // 0x48
+#define GMBUS_CYCLE_STOP           5 // 0x4a
+#define GMBUS_CYCLE_INDEX_STOP     7 // 0x4e
+#define GMBUS_CYCLE_SEL_SHIFT  25
+#define GMBUS_STATUS                  0x5108
+#define GMBUS_DATA                    0x510C
 
 /* p317, 319
  */
@@ -684,6 +690,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define DPLL_DIVISOR_SELECT             (1 << 24)
 #define DPLL_P2_MASK			1
 #define DPLL_P2_SHIFT			23
+#define DPLL_I9XX_P2_SHIFT		24
 #define DPLL_P1_FORCE_DIV2		(1 << 21)
 #define DPLL_P1_MASK			0x1f
 #define DPLL_P1_SHIFT			16
@@ -702,42 +709,6 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define FP_N_DIVISOR_SHIFT		16
 #define FP_M1_DIVISOR_SHIFT		8
 #define FP_M2_DIVISOR_SHIFT		0
-
-
-struct pll_min_max {
-  int min_m, max_m;
-  int min_m1, max_m1;
-  int min_m2, max_m2;
-  int min_n, max_n;
-  int min_p, max_p;
-  int min_p1, max_p1;
-};
-
-/* PLL parameters (these are for 852GM/855GM/865G, check earlier chips). */
-/* Clock values are in units of kHz */
-#define PLL_REFCLK		48000
-
-#define MIN_VCO_FREQ		930000
-#define MAX_VCO_FREQ		1400000
-#define MIN_CLOCK		25000
-#define MAX_CLOCK		350000
-#define P_TRANSITION_CLOCK	165000
-
-
-#define I9XX_MIN_VCO_FREQ		930000
-#define I9XX_MAX_VCO_FREQ		2800000
-#define I9XX_P_TRANSITION_CLOCK	200000
-
-#define CALC_VCLOCK_i8xx(m1, m2, n, p1, p2) \
-        ((PLL_REFCLK * (5 * ((m1) + 2) + ((m2) + 2)) / ((n) + 2)) / \
-        (((p1) + 2) * (1 << (p2 + 1))))
-
-#define CALC_VCLOCK_i9xx(m1, m2, n, p1, p2) \
-        ((PLL_REFCLK * (5 * ((m1) + 2) + ((m2) + 2)) / ((n) + 2)) / \
-	 (((p1)) * (p2 ? 10: 5)))
-
-#define CALC_VCLOCK3(m, n, p)	((PLL_REFCLK * (m) / (n)) / (p))
-
 
 #define I830_HTOTAL_MASK 	0xfff0000
 #define I830_HACTIVE_MASK	0x7ff
