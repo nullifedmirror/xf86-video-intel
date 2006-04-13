@@ -1,6 +1,5 @@
-#define DEBUG_VERB 2
 /*
- * Copyright © 2002 David Dawes
+ * Copyright © 2006 Intel Corporation
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -9,29 +8,21 @@
  * and/or sell copies of the Software, and to permit persons to whom the
  * Software is furnished to do so, subject to the following conditions:
  *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
+ * The above copyright notice and this permission notice (including the next
+ * paragraph) shall be included in all copies or substantial portions of the
+ * Software.
  *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
- * THE AUTHOR(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
- * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF
- * OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *
- * Except as contained in this notice, the name of the author(s) shall
- * not be used in advertising or otherwise to promote the sale, use or other
- * dealings in this Software without prior written authorization from
- * the author(s).
+ * Authors:
+ *    Eric Anholt <eric@anholt.net>
  *
- * Authors: David Dawes <dawes@xfree86.org>
- *
- * $XFree86: xc/programs/Xserver/hw/xfree86/os-support/vbe/vbeModes.c,v 1.6 2002/11/02 01:38:25 dawes Exp $
- */
-/*
- * Modified by Alan Hourihane <alanh@tungstengraphics.com>
- * to support extended BIOS modes for the Intel chipsets
  */
 
 #ifdef HAVE_CONFIG_H
@@ -43,68 +34,176 @@
 
 #include "xf86.h"
 #include "i830.h"
+#include "i830_modes.h"
 
-extern const int i830refreshes[];
+/**
+ * i830SetModeToPanelParameters() fills a mode pointer with timing information
+ * from the panel.
+ *
+ * Note that the blanking periods will be very strange for lower resolution
+ * modes, but it is assumed that the driver will force the panel's fixed mode
+ * anyway.
+ */
+static void
+i830SetModeToPanelParameters(ScrnInfoPtr pScrn, DisplayModePtr pMode)
+{
+    I830Ptr pI830 = I830PTR(pScrn);
+
+    pMode->HTotal     = pI830->panel_fixed_hactive;
+    pMode->HSyncStart = pI830->panel_fixed_hactive +
+			pI830->panel_fixed_hsyncoff;
+    pMode->HSyncEnd   = pMode->HSyncStart + pI830->panel_fixed_hsyncwidth;
+    pMode->VTotal     = pI830->panel_fixed_vactive;
+    pMode->VSyncStart = pI830->panel_fixed_vactive +
+			pI830->panel_fixed_vsyncoff;
+    pMode->VSyncEnd   = pMode->VSyncStart + pI830->panel_fixed_vsyncwidth;
+    pMode->Clock      = pI830->panel_fixed_clock;
+}
+
+#define ADD_NEW_TO_TAIL() do {			\
+    new->next = NULL;				\
+    new->prev = last;				\
+						\
+    if (last)					\
+	last->next = new;			\
+    last = new;					\
+    if (!first)					\
+	first = new;				\
+} while (0)
+
+/**
+ * Returns true if the singly-linked list/circleq beginning at first contains
+ * a mode displaying a resolution of x by y.
+ */
+static Bool
+i830ModeListContainsSize(DisplayModePtr first, int x, int y)
+{
+    DisplayModePtr mode;
+
+    for (mode = first; mode != NULL && mode != first; mode = mode->next) {
+	if (mode->HDisplay == x && mode->VDisplay == y)
+	    return TRUE;
+    }
+
+    return FALSE;
+}
+
+/**
+ * FP mode validation routine for using panel fitting.
+ *
+ * Modes in the list will be in the order of user-selected modes, followed by
+ * the panel's native mode
+ * Returns a newly-allocated doubly-linked circular list of modes if any were
+ * found, or NULL otherwise.
+ */
+DisplayModePtr
+i830ValidateFPModes(ScrnInfoPtr pScrn, char **ppModeName)
+{
+    I830Ptr pI830 = I830PTR(pScrn);
+    DisplayModePtr last = NULL;
+    DisplayModePtr new = NULL;
+    DisplayModePtr first = NULL;
+    DisplayModePtr p;
+    int count = 0;
+    int i, width, height;
+
+    /* We have a flat panel connected to the primary display, and we
+     * don't have any DDC info.
+     */
+    for (i = 0; ppModeName[i] != NULL; i++) {
+	if (sscanf(ppModeName[i], "%dx%d", &width, &height) != 2)
+	    continue;
+
+	/* Allow all non-standard modes as long as they do not exceed the
+	 * native resolution of the panel.
+	 */
+	if (width < 320 || width > pI830->PanelXRes ||
+	    height < 200 || height > pI830->PanelYRes) {
+	    xf86DrvMsg(pScrn->scrnIndex, X_WARNING, "Mode %s is out of range.\n",
+		       ppModeName[i]);
+	    xf86DrvMsg(pScrn->scrnIndex, X_WARNING,
+		       "Valid modes must be between 320x200-%dx%d\n",
+		       pI830->PanelXRes, pI830->PanelYRes);
+	    continue;
+	}
+
+	new = xnfcalloc(1, sizeof(DisplayModeRec));
+	new->name = xnfalloc(strlen(ppModeName[i]) + 1);
+	strcpy(new->name, ppModeName[i]);
+	new->HDisplay = width;
+	new->VDisplay = height;
+	new->type |= M_T_USERDEF;
+
+	i830SetModeToPanelParameters(pScrn, new);
+
+	ADD_NEW_TO_TAIL();
+
+	count++;
+	xf86DrvMsg(pScrn->scrnIndex, X_INFO,
+		   "Valid mode using panel fitting: %s\n", new->name);
+    }
+
+    /* Always add in the panel's native mode, for randr purposes. */
+    if (pI830->PanelXRes != 0 && pI830->PanelYRes != 0 &&
+	!i830ModeListContainsSize(first, pI830->PanelXRes, pI830->PanelYRes))
+    {
+	char stmp[32];
+
+	new = xnfcalloc(1, sizeof (DisplayModeRec));
+	snprintf(stmp, 32, "%dx%d", pI830->PanelXRes, pI830->PanelYRes);
+	new->name = xnfalloc(strlen(stmp) + 1);
+	strcpy(new->name, stmp);
+	new->HDisplay = pI830->PanelXRes;
+	new->VDisplay = pI830->PanelYRes;
+	i830SetModeToPanelParameters(pScrn, new);
+	new->type = M_T_DEFAULT;
+
+	ADD_NEW_TO_TAIL();
+    }
+
+    /* Add in all unique default vesa mode sizes smaller than panel size.
+     * Used for randr */
+    for (p = pScrn->monitor->Modes; p && p->next; p = p->next->next) {
+	if (p->HDisplay > pI830->PanelXRes || p->VDisplay > pI830->PanelYRes)
+	    continue;
+
+	if (i830ModeListContainsSize(first, p->HDisplay, p->VDisplay))
+	    continue;
+
+	new = xnfcalloc(1, sizeof(DisplayModeRec));
+	new->name = xnfalloc(strlen(p->name) + 1);
+	strcpy(new->name, p->name);
+	new->HDisplay = p->HDisplay;
+	new->VDisplay = p->VDisplay;
+	i830SetModeToPanelParameters(pScrn, new);
+	new->type |= M_T_DEFAULT;
+
+	ADD_NEW_TO_TAIL();
+    }
+
+    /* Close the doubly-linked mode list */
+    if (last) {
+	last->next = first;
+	first->prev = last;
+    }
+
+    xf86DrvMsg(pScrn->scrnIndex, X_INFO,
+	       "Total number of valid FP mode(s) found: %d\n", count);
+
+    return first;
+}
+
+#define MAX(a,b) ((a) > (b) ? (a) : (b))
 
 void
-I830PrintModes(ScrnInfoPtr scrp)
+i830FitScreenVirtualForModes(ScrnInfoPtr pScrn, DisplayModePtr first)
 {
-    DisplayModePtr p;
-    float hsync, refresh = 0;
-    char *desc, *desc2, *prefix, *uprefix;
+    DisplayModePtr mode;
 
-    if (scrp == NULL)
-	return;
-
-    xf86DrvMsg(scrp->scrnIndex, scrp->virtualFrom, "Virtual size is %dx%d "
-	       "(pitch %d)\n", scrp->virtualX, scrp->virtualY,
-	       scrp->displayWidth);
-    
-    p = scrp->modes;
-    if (p == NULL)
-	return;
-
-    do {
-	desc = desc2 = "";
-	if (p->HSync > 0.0)
-	    hsync = p->HSync;
-	else if (p->HTotal > 0)
-	    hsync = (float)p->Clock / (float)p->HTotal;
-	else
-	    hsync = 0.0;
-	if (p->VTotal > 0)
-	    refresh = hsync * 1000.0 / p->VTotal;
-	if (p->Flags & V_INTERLACE) {
-	    refresh *= 2.0;
-	    desc = " (I)";
-	}
-	if (p->Flags & V_DBLSCAN) {
-	    refresh /= 2.0;
-	    desc = " (D)";
-	}
-	if (p->VScan > 1) {
-	    refresh /= p->VScan;
-	    desc2 = " (VScan)";
-	}
-	if (p->VRefresh > 0.0)
-	    refresh = p->VRefresh;
-	if (p->type & M_T_BUILTIN)
-	    prefix = "Built-in mode";
-	else if (p->type & M_T_DEFAULT)
-	    prefix = "Default mode";
-	else
-	    prefix = "Mode";
-	if (p->type & M_T_USERDEF)
-	    uprefix = "*";
-	else
-	    uprefix = " ";
-	if (p->name)
-	    xf86DrvMsg(scrp->scrnIndex, X_CONFIG,
-			   "%s%s \"%s\"\n", uprefix, prefix, p->name);
-	else
-	    xf86DrvMsg(scrp->scrnIndex, X_PROBED,
-			   "%s%s %dx%d (unnamed)\n",
-			   uprefix, prefix, p->HDisplay, p->VDisplay);
-	p = p->next;
-    } while (p != NULL && p != scrp->modes);
+    for (mode = first; mode != NULL && mode != first; mode = mode->next) {
+	pScrn->virtualX = MAX(pScrn->virtualX, mode->HDisplay);
+	pScrn->virtualY = MAX(pScrn->virtualY, mode->VDisplay);
+	pScrn->display->virtualX = pScrn->virtualX;
+	pScrn->display->virtualY = pScrn->virtualY;
+    }
 }
