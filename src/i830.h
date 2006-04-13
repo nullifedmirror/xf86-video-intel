@@ -203,6 +203,12 @@ struct _I830OutputRec {
    I2CBusPtr pDDCBus;
    struct _I830DVODriver *i2c_drv;
    struct _I830SDVODriver *sdvo_drv;
+   /**
+    * This is the list of modes which can be set for the output, combined from
+    * the user-requested modes plus whatever could be probed either through DDC
+    * or hardcoded in the BIOS.
+    */
+   DisplayModePtr modes;
 };
 
 typedef struct _I830Rec {

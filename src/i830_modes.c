@@ -69,6 +69,7 @@ i830SetModeToPanelParameters(ScrnInfoPtr pScrn, DisplayModePtr pMode)
     last = new;					\
     if (!first)					\
 	first = new;				\
+    count++;					\
 } while (0)
 
 /**
@@ -92,7 +93,9 @@ i830ModeListContainsSize(DisplayModePtr first, int x, int y)
  * FP mode validation routine for using panel fitting.
  *
  * Modes in the list will be in the order of user-selected modes, followed by
- * the panel's native mode
+ * the panel's native mode and then defaut VESA mode sizes less than the panel
+ * size.
+ *
  * Returns a newly-allocated doubly-linked circular list of modes if any were
  * found, or NULL otherwise.
  */
@@ -138,7 +141,6 @@ i830ValidateFPModes(ScrnInfoPtr pScrn, char **ppModeName)
 
 	ADD_NEW_TO_TAIL();
 
-	count++;
 	xf86DrvMsg(pScrn->scrnIndex, X_INFO,
 		   "Valid mode using panel fitting: %s\n", new->name);
     }
@@ -193,14 +195,110 @@ i830ValidateFPModes(ScrnInfoPtr pScrn, char **ppModeName)
     return first;
 }
 
+/**
+ *EDID mode validation routine for using panel fitting.
+ *
+ * Modes in the list will be in the order of user-selected modes, followed by
+ * EDID modes from the given monitor.  For now, it's only pulling out one set
+ * of EDID modes.
+ *
+ * Returns a newly-allocated doubly-linked circular list of modes if any were
+ * found, or NULL otherwise.
+ */
+DisplayModePtr
+i830ValidateEDIDModes(ScrnInfoPtr pScrn, xf86MonPtr MonInfo)
+{
+    DisplayModePtr last = NULL;
+    DisplayModePtr new = NULL;
+    DisplayModePtr first = NULL;
+    int i, count = 0;
+    char stmp[32];
+    struct detailed_timings *dt;
+
+    for (i = 0; i < DET_TIMINGS; i++) {
+	switch (MonInfo->det_mon[i].type) {
+	case DT:
+	    dt = &MonInfo->det_mon[i].section.d_timings;
+
+	    new = xnfcalloc(1, sizeof(DisplayModeRec));
+	    snprintf(stmp, 32, "%dx%d", dt->h_active, dt->v_active);
+	    new->name = xnfalloc(strlen(stmp) + 1);
+	    new->HDisplay   = dt->h_active;
+	    new->VDisplay   = dt->v_active;
+	    new->HTotal     = dt->h_active + dt->h_blanking;
+	    new->HSyncStart = dt->h_active + dt->h_sync_off;
+	    new->HSyncEnd   = new->HSyncStart + dt->h_sync_width;
+	    new->VTotal     = dt->v_active + dt->v_blanking;
+	    new->VSyncStart = dt->v_active + dt->v_sync_off;
+	    new->VSyncEnd   = new->VSyncStart + dt->v_sync_width;
+	    new->Clock      = dt->clock;
+	
+	    new->type |= M_T_DEFAULT;
+
+	    ADD_NEW_TO_TAIL();
+
+	    break;
+	}
+    }
+
+    /* Close the doubly-linked mode list */
+    if (last) {
+	last->next = first;
+	first->prev = last;
+    }
+
+    xf86DrvMsg(pScrn->scrnIndex, X_INFO,
+	       "Total number of valid EDID mode(s) found: %d\n", count);
+
+    return first;
+}
+
+/**
+ * Takes the current known information about the output device, and sets up
+ * output[i].modes containing the list of modes that can be programmed for it.
+ */
+void
+i830UpdateOutputModeList(ScrnInfoPtr pScrn, int i)
+{
+    I830Ptr pI830 = I830PTR(pScrn);
+    DisplayModePtr modes = NULL;
+
+    switch (pI830->output[i].type) {
+    case I830_OUTPUT_LVDS:
+	modes = i830ValidateFPModes(pScrn, pScrn->display->modes);
+	break;
+    default:
+	if (pI830->output[i].MonInfo != NULL) {
+	    modes = i830ValidateEDIDModes(pScrn, pI830->output[i].MonInfo);
+	}
+	break;
+    }
+
+    while (pI830->output[i].modes != NULL)
+	xf86DeleteMode(&pI830->output[i].modes, pI830->output[i].modes);
+
+    pI830->output[i].modes = modes;
+}
+
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
 
+/**
+ * Sets the size of the root window by simply expanding to cover at least the
+ * modes given.
+ *
+ * Note that this means we won't allocate enough for doing mergedfb.
+ */
 void
-i830FitScreenVirtualForModes(ScrnInfoPtr pScrn, DisplayModePtr first)
+i830SetDefaultRootWindowSize(ScrnInfoPtr pScrn, DisplayModePtr first)
 {
     DisplayModePtr mode;
 
     for (mode = first; mode != NULL && mode != first; mode = mode->next) {
+	int displayWidth;
+
+	/* XXX: Need to check if we've got enough memory to do this. */
+
+	pScrn->displayWidth = MAX(pScrn->displayWidth, displayWidth);
 	pScrn->virtualX = MAX(pScrn->virtualX, mode->HDisplay);
 	pScrn->virtualY = MAX(pScrn->virtualY, mode->VDisplay);
 	pScrn->display->virtualX = pScrn->virtualX;

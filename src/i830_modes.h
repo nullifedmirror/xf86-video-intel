@@ -30,3 +30,9 @@ i830ValidateFPModes(ScrnInfoPtr pScrn, char **ppModeName);
 
 void
 i830FitScreenVirtualForModes(ScrnInfoPtr pScrn, DisplayModePtr first);
+
+void
+i830SetDefaultRootWindowSize(ScrnInfoPtr pScrn, DisplayModePtr first);
+
+void
+i830UpdateOutputModeList(ScrnInfoPtr pScrn, int i);

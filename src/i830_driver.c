@@ -1547,7 +1547,7 @@ I830BIOSPreInit(ScrnInfoPtr pScrn, int flags)
    I830EntPtr pI830Ent = NULL;					
    int mem, memsize;
    int flags24;
-   int i, n;
+   int i;
    char *s;
    ClockRangePtr clockRanges;
    pointer pVBEModule = NULL;
@@ -2578,46 +2578,25 @@ I830BIOSPreInit(ScrnInfoPtr pScrn, int flags)
     clockRanges->interlaceAllowed = TRUE;	/* XXX check this */
     clockRanges->doubleScanAllowed = FALSE;	/* XXX check this */
 
-   if ( (pI830->pipe == 1 && pI830->operatingDevices & (PIPE_LFP << 8)) ||
-        (pI830->pipe == 0 && pI830->operatingDevices & PIPE_LFP) ) {
-      DisplayModePtr modes;
+   /* Pull fixed panel information out of the BIOS. */
+   i830GetLVDSInfoFromBIOS(pScrn);
 
-      /* If we're outputting to an LFP, use the LFP mode validation that will
-       * rely on the scaler so that we can display any mode smaller than or the
-       * same size as the panel.
-       */
-      if (!i830GetLVDSInfoFromBIOS(pScrn)) {
-	 xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
-		    "Unable to locate panel information in BIOS VBT tables\n");
-         PreInitCleanup(pScrn);
-	 return FALSE;
-      }
-      modes = i830ValidateFPModes(pScrn, pScrn->display->modes);
-      pScrn->modes = modes;
-      if (modes != NULL) {
-	 i830FitScreenVirtualForModes(pScrn, modes);
-	 n = 1;
-      } else {
-	 n = 0;
-      }
-   } else {
-      /* XXX minPitch, minHeight are random numbers. */
-      n = xf86ValidateModes(pScrn,
-			    pScrn->monitor->Modes, /* availModes */
-			    pScrn->display->modes, /* modeNames */
-			    clockRanges, /* clockRanges */
-			    NULL, /* linePitches */
-			    256, /* minPitch */
-			    MAX_DISPLAY_PITCH, /* maxPitch */
-			    64, /* pitchInc */
-			    pScrn->bitsPerPixel, /* minHeight */
-			    MAX_DISPLAY_HEIGHT, /* maxHeight */
-			    pScrn->display->virtualX, /* virtualX */
-			    pScrn->display->virtualY, /* virtualY */
-			    pI830->FbMapSize, /* apertureSize */
-			    LOOKUP_BEST_REFRESH /* strategy */);
+   /* Set up the per-output list of modes. */
+   for (i = 0; i < pI830->num_outputs; i++) {
+      i830UpdateOutputModeList(pScrn, i);
    }
-   if (n <= 0) {
+
+   /* Now, grab the first output with a mode list we can find, and stuff its
+    * mode list into pScrn for traditional mode setting.
+    */
+   for (i = 0; i < pI830->num_outputs; i++) {
+      if (pI830->output[i].modes != NULL) {
+	 pScrn->modes = pI830->output[i].modes;
+	 i830SetDefaultRootWindowSize(pScrn, pScrn->modes);
+	 break;
+      }
+   }
+   if (i == pI830->num_outputs) {
       xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "No valid modes.\n");
       PreInitCleanup(pScrn);
       return FALSE;
