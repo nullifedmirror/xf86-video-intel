@@ -31,10 +31,30 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 
 #include "xf86.h"
 #include "i830.h"
 #include "i830_modes.h"
+
+/** @file
+ * This file deals with creating lists of valid modes for an output device.
+ *
+ * It attempts to always have valid modes for the output in the list.  This is
+ * unlike xf86Mode.c, which dumps all the modes it can find into the list and
+ * then validates them and then prunes them out later.
+ */
+
+static int
+i830GetModeListLen(DisplayModePtr first)
+{
+    DisplayModePtr mode;
+    int i = 0;
+
+    for (mode = first; mode != NULL && mode != first; mode = mode->next)
+	i++;
+    return i;
+}
 
 /**
  * i830SetModeToPanelParameters() fills a mode pointer with timing information
@@ -69,7 +89,6 @@ i830SetModeToPanelParameters(ScrnInfoPtr pScrn, DisplayModePtr pMode)
     last = new;					\
     if (!first)					\
 	first = new;				\
-    count++;					\
 } while (0)
 
 /**
@@ -107,7 +126,6 @@ i830ValidateFPModes(ScrnInfoPtr pScrn, char **ppModeName)
     DisplayModePtr new = NULL;
     DisplayModePtr first = NULL;
     DisplayModePtr p;
-    int count = 0;
     int i, width, height;
 
     /* We have a flat panel connected to the primary display, and we
@@ -190,13 +208,73 @@ i830ValidateFPModes(ScrnInfoPtr pScrn, char **ppModeName)
     }
 
     xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-	       "Total number of valid FP mode(s) found: %d\n", count);
+	       "Total number of valid FP mode(s) found: %d\n",
+	       i830GetModeListLen(first));
 
     return first;
 }
 
+/* Pulled from xf86Mode.c since it was static there.  Used for finding
+ * the established modes from the mode list.
+ */
+static double
+ModeVRefresh(DisplayModePtr mode)
+{
+    double refresh = 0.0;
+
+    if (mode->VRefresh > 0.0)
+	refresh = mode->VRefresh;
+    else if (mode->HTotal > 0 && mode->VTotal > 0) {
+	refresh = mode->Clock * 1000.0 / mode->HTotal / mode->VTotal;
+	if (mode->Flags & V_INTERLACE)
+	    refresh *= 2.0;
+	if (mode->Flags & V_DBLSCAN)
+	    refresh /= 2.0;
+	if (mode->VScan > 1)
+	    refresh /= (float)(mode->VScan);
+    }
+    return refresh;
+}
+
+/* From xf86DefMode{s,Set}.c */
+extern DisplayModeRec xf86DefaultModes[];
+
+static void
+i830AddEstablishedMode(ScrnInfoPtr pScrn, int x, int y, int refresh,
+		       DisplayModePtr *first, DisplayModePtr *last)
+{
+    DisplayModePtr mode, new;
+
+    for (mode = xf86DefaultModes; mode->name != NULL; mode++) {
+	float mode_refresh;
+
+	if (mode->HDisplay != x || mode->VDisplay != y)
+	    continue;
+
+	mode_refresh = ModeVRefresh(mode);
+	/* Select the default mode that's within 5% of the refresh rate we're
+	 * looking for.  Should get the right one every time.
+	 */
+	if (fabs(mode_refresh - refresh) >= (refresh * .05))
+	    continue;
+
+	new = xnfcalloc(1, sizeof(DisplayModeRec));
+	memcpy(new, mode, sizeof(DisplayModeRec));
+	new->name = strdup(mode->name);
+
+	new->next = NULL;
+	new->prev = *last;
+
+	if (*last)
+	    (*last)->next = new;
+	*last = new;
+	if (!first)
+	    *first = new;
+    }
+}
+
 /**
- *EDID mode validation routine for using panel fitting.
+ * EDID mode validation routine for using panel fitting.
  *
  * Modes in the list will be in the order of user-selected modes, followed by
  * EDID modes from the given monitor.  For now, it's only pulling out one set
@@ -211,9 +289,13 @@ i830ValidateEDIDModes(ScrnInfoPtr pScrn, xf86MonPtr MonInfo)
     DisplayModePtr last = NULL;
     DisplayModePtr new = NULL;
     DisplayModePtr first = NULL;
-    int i, count = 0;
+    int i;
     char stmp[32];
     struct detailed_timings *dt;
+
+    /* XXX: Need to insert user-requested modes first here if we can.  It's
+     * straight EDID at the moment.
+     */
 
     for (i = 0; i < DET_TIMINGS; i++) {
 	switch (MonInfo->det_mon[i].type) {
@@ -232,6 +314,7 @@ i830ValidateEDIDModes(ScrnInfoPtr pScrn, xf86MonPtr MonInfo)
 	    new->VSyncStart = dt->v_active + dt->v_sync_off;
 	    new->VSyncEnd   = new->VSyncStart + dt->v_sync_width;
 	    new->Clock      = dt->clock;
+	    /* XXX: Deal with syncing */
 	
 	    new->type |= M_T_DEFAULT;
 
@@ -240,6 +323,40 @@ i830ValidateEDIDModes(ScrnInfoPtr pScrn, xf86MonPtr MonInfo)
 	    break;
 	}
     }
+    if (MonInfo->timings1.t1 & 0x80)
+	i830AddEstablishedMode(pScrn, 720, 400, 70, &first, &last);
+    if (MonInfo->timings1.t1 & 0x40)
+	i830AddEstablishedMode(pScrn, 720, 400, 88, &first, &last);
+    if (MonInfo->timings1.t1 & 0x20)
+	i830AddEstablishedMode(pScrn, 640, 480, 60, &first, &last);
+    if (MonInfo->timings1.t1 & 0x10)
+	i830AddEstablishedMode(pScrn, 640, 480, 67, &first, &last);
+    if (MonInfo->timings1.t1 & 0x08)
+	i830AddEstablishedMode(pScrn, 640, 480, 72, &first, &last);
+    if (MonInfo->timings1.t1 & 0x04)
+	i830AddEstablishedMode(pScrn, 640, 480, 75, &first, &last);
+    if (MonInfo->timings1.t1 & 0x02)
+	i830AddEstablishedMode(pScrn, 800, 600, 56, &first, &last);
+    if (MonInfo->timings1.t1 & 0x01)
+	i830AddEstablishedMode(pScrn, 800, 600, 60, &first, &last);
+    if (MonInfo->timings1.t2 & 0x80)
+	i830AddEstablishedMode(pScrn, 800, 600, 72, &first, &last);
+    if (MonInfo->timings1.t2 & 0x40)
+	i830AddEstablishedMode(pScrn, 800, 600, 75, &first, &last);
+    if (MonInfo->timings1.t2 & 0x20)
+	i830AddEstablishedMode(pScrn, 832, 624, 75, &first, &last);
+    if (MonInfo->timings1.t2 & 0x10)
+	i830AddEstablishedMode(pScrn, 1024, 768, 87, &first, &last);
+    if (MonInfo->timings1.t2 & 0x08)
+	i830AddEstablishedMode(pScrn, 1024, 768, 60, &first, &last);
+    if (MonInfo->timings1.t2 & 0x04)
+	i830AddEstablishedMode(pScrn, 1024, 768, 70, &first, &last);
+    if (MonInfo->timings1.t2 & 0x02)
+	i830AddEstablishedMode(pScrn, 1024, 768, 75, &first, &last);
+    if (MonInfo->timings1.t2 & 0x01)
+	i830AddEstablishedMode(pScrn, 1280, 1024, 75, &first, &last);
+    if (MonInfo->timings1.t_manu & 0x80)
+	i830AddEstablishedMode(pScrn, 1152, 870, 75, &first, &last);
 
     /* Close the doubly-linked mode list */
     if (last) {
@@ -248,7 +365,8 @@ i830ValidateEDIDModes(ScrnInfoPtr pScrn, xf86MonPtr MonInfo)
     }
 
     xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-	       "Total number of valid EDID mode(s) found: %d\n", count);
+	       "Total number of valid EDID mode(s) found: %d\n",
+	       i830GetModeListLen(first));
 
     return first;
 }
