@@ -25,6 +25,7 @@
  *
  */
 
+/* i830_mode.c */
 DisplayModePtr
 i830ValidateFPModes(ScrnInfoPtr pScrn, char **ppModeName);
 
@@ -36,3 +37,7 @@ i830SetDefaultRootWindowSize(ScrnInfoPtr pScrn, DisplayModePtr first);
 
 void
 i830UpdateOutputModeList(ScrnInfoPtr pScrn, int i);
+
+/* i830_gtf.c */
+DisplayModePtr
+i830GetGTF(int h_pixels, int v_lines, float freq, int interlaced, int margins);

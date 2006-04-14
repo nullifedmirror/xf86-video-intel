@@ -323,6 +323,16 @@ i830ValidateEDIDModes(ScrnInfoPtr pScrn, xf86MonPtr MonInfo)
 	    break;
 	}
     }
+
+    for (i = 0; i < STD_TIMINGS; i++) {
+	if (MonInfo->timings2[i].hsize < 256)	/* sanity check */
+	    continue;
+
+	new = i830GetGTF(MonInfo->timings2[i].hsize, MonInfo->timings2[i].vsize,
+			 MonInfo->timings2[i].refresh, FALSE, 0);
+	ADD_NEW_TO_TAIL();
+    }
+
     if (MonInfo->timings1.t1 & 0x80)
 	i830AddEstablishedMode(pScrn, 720, 400, 70, &first, &last);
     if (MonInfo->timings1.t1 & 0x40)
