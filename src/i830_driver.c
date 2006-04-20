@@ -2346,7 +2346,7 @@ void I830DetectMonitors(ScrnInfoPtr pScrn)
     case I830_OUTPUT_SDVO:
       if (pI830->output[i].sdvo_drv->found)
       {
-	I830SDVOSetupDDC(pI830->output[i].sdvo_drv);
+	I830SDVOSetupDDC(pI830->output[i].sdvo_drv, 2);
 
 	pI830->output[i].MonInfo = xf86DoEDID_DDC2(pScrn->scrnIndex, pI830->output[i].pI2CBus);
 	

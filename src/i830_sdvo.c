@@ -174,7 +174,7 @@ I830SDVOSetupDDC(I830SDVOPtr s, int enable)
   memset(s->sdvo_regs, 0, 9);
 
   s->sdvo_regs[0x08] = 0x7a;
-  s->sdvo_regs[0x07] = 0x02;
+  s->sdvo_regs[0x07] = enable;
 
   I830SDVOWriteOutputs(s, 7);
 

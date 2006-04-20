@@ -208,7 +208,7 @@ calc_pll_params(int index, int clock,
 	if (p_max > pll->max_p)
 		p_max = pll->max_p;
 
-	if (clock < pll->ref_clk)
+	if (clock < pll->ref_clk/2)
 	{
 	  *flags |= I830_MFLAG_DOUBLE;
 	}
@@ -651,18 +651,15 @@ I830ProgramModeReg(ScrnInfoPtr pScrn, DisplayModePtr pMode)
 
 	/* turn off PLL */
 	tmp = INREG(dpll_reg);
-	dpll_reg &= ~DPLL_VCO_ENABLE;
+	tmp &= ~DPLL_VCO_ENABLE;
 	OUTREG(dpll_reg, tmp);
 
 	/* Set PLL parameters */
-	OUTREG(dpll_reg, *dpll & ~DPLL_VCO_ENABLE);
 	OUTREG(fp0_reg, *fp0);
 	OUTREG(fp1_reg, *fp1);
 
 	/* Enable PLL */
-	tmp = INREG(dpll_reg);
-	tmp |= DPLL_VCO_ENABLE;
-	OUTREG(dpll_reg, tmp);
+	OUTREG(dpll_reg, *dpll);
 
 	/* Set DVOs B/C */
 	OUTREG(DVOB, hw->dvob);
