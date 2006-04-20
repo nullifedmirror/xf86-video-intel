@@ -475,37 +475,3 @@ I830I2CDetectDVOControllers(ScrnInfoPtr pScrn, I2CBusPtr pI2CBus, struct _I830DV
   return FALSE;
 }
 
-
-Bool
-I830I2CDetectSDVOController(ScrnInfoPtr pScrn, int output_index)
-{
-  I830Ptr pI830 = I830PTR(pScrn);
-  I2CDevRec d;
-  unsigned char ch[64];
-  int i;
-  int addr = 0x39 << 1;
-  I2CBusPtr b = pI830->output[output_index].pI2CBus;
-  
-  /* attempt to talk to an SDVO controller */
-  d.DevName = "SDVO";
-  d.SlaveAddr = addr;
-  d.pI2CBus = b;
-  d.StartTimeout = b->StartTimeout;
-  d.BitTimeout = b->BitTimeout;
-  d.AcknTimeout = b->AcknTimeout;
-  d.ByteTimeout = b->ByteTimeout;
-  
-  for (i=0; i<0x40; i++)
-  {
-    if (!xf86I2CReadByte(&d, i, &ch[i]))
-    {
-      xf86DrvMsg(b->scrnIndex, X_ERROR, "unable to read from %d on %s\n", addr, b->BusName);
-      return FALSE;
-    }
-  }
-  
-  if (pI830->output[output_index].sdvo_drv)
-    pI830->output[output_index].sdvo_drv->found = 1;
-
-  return TRUE;
-}

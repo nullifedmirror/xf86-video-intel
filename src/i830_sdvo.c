@@ -22,7 +22,9 @@ OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 **************************************************************************/
-
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
 #include "xf86.h"
 #include "xf86_ansic.h"
 #include "xf86_OSproc.h"
@@ -93,34 +95,6 @@ static Bool sWriteByte(I830SDVOPtr s, int addr, unsigned char ch)
     return FALSE;
   }
   return TRUE;
-}
-
-void *
-I830SDVOInit(I2CBusPtr b)
-{
-  /**/
-  I830SDVOPtr sdvo;
-  
-  sdvo = xcalloc(1, sizeof(I830SDVORec));
-  if (sdvo==NULL)
-    return NULL;
-
-  sdvo->d.DevName = "SDVO Controller";
-  sdvo->d.SlaveAddr = 0x39 << 1;
-  sdvo->d.pI2CBus = b;
-  sdvo->d.StartTimeout = b->StartTimeout;
-  sdvo->d.BitTimeout = b->BitTimeout;
-  sdvo->d.AcknTimeout = b->AcknTimeout;
-  sdvo->d.ByteTimeout = b->ByteTimeout;
-  sdvo->d.DriverPrivate.ptr = sdvo;
-
-  if (!xf86I2CDevInit(&(sdvo->d)))
-      goto out;
-  return sdvo;
-
- out:
-  xfree(sdvo);
-  return NULL;
 }
 
 /* following on from tracing the intel BIOS i2c routines */
@@ -598,3 +572,48 @@ I830SDVOPostSetMode(I830SDVOPtr s, DisplayModePtr mode)
   return ret;
 }
 
+
+I830SDVOPtr
+I830SDVOInit(ScrnInfoPtr pScrn, int output_index, CARD32 output_device)
+{
+  I830Ptr pI830 = I830PTR(pScrn);
+  I830SDVOPtr sdvo;
+  unsigned char ch[0x40];
+  int i;
+
+  sdvo = xcalloc(1, sizeof(I830SDVORec));
+  if (sdvo == NULL)
+    return NULL;
+
+  if (output_device == DVOB) {
+    sdvo->d.DevName = "SDVO Controller B";
+    sdvo->d.SlaveAddr = 0x70;
+  } else {
+    sdvo->d.DevName = "SDVO Controller C";
+    sdvo->d.SlaveAddr = 0x72;
+  }
+  sdvo->d.pI2CBus = pI830->output[output_index].pI2CBus;
+  sdvo->d.DriverPrivate.ptr = sdvo;
+  sdvo->output_device = output_device;
+  
+  if (!xf86I2CDevInit(&sdvo->d)) {
+    xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
+	       "Failed to initialize SDVO I2C device %s\n",
+	       sdvo->d.DevName);
+    xfree(sdvo);
+    return NULL;
+  }
+  
+  /* Read the regs to test if we can talk to the device */
+  for (i = 0; i < 0x40; i++) {
+    if (!sReadByte(sdvo, i, &ch[i])) {
+      xf86DestroyI2CDevRec(&sdvo->d, 0);
+      xfree(sdvo);
+      return NULL;
+    }
+  }
+  
+  pI830->output[output_index].sdvo_drv = sdvo;
+  
+  return sdvo;
+}

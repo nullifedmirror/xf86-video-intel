@@ -422,7 +422,7 @@ I830RawSetHw(ScrnInfoPtr pScrn, DisplayModePtr pMode)
   *dpll &= ~DPLL_2X_CLOCK_ENABLE;
   for (i=0; i<pI830->num_outputs; i++)
   {
-    if (pI830->output[i].sdvo_drv && pI830->output[i].sdvo_drv->found)
+    if (pI830->output[i].sdvo_drv)
       *dpll |= DPLL_2X_CLOCK_ENABLE;
   }
   /* leave these alone for now */
@@ -851,7 +851,7 @@ I830RawSetMode(ScrnInfoPtr pScrn, DisplayModePtr mode)
   /* do SDVO setup */
   for (i = 0; i < pI830->num_outputs; i++)
   {
-    if (pI830->output[i].sdvo_drv && pI830->output[i].sdvo_drv->found)
+    if (pI830->output[i].sdvo_drv)
     {
       I830SDVOPreSetMode(pI830->output[i].sdvo_drv, mode);
     }
@@ -861,7 +861,7 @@ I830RawSetMode(ScrnInfoPtr pScrn, DisplayModePtr mode)
 
   for (i = 0; i < pI830->num_outputs; i++)
   {
-    if (pI830->output[i].sdvo_drv && pI830->output[i].sdvo_drv->found)
+    if (pI830->output[i].sdvo_drv)
     {
       ret = I830SDVOPostSetMode(pI830->output[i].sdvo_drv, mode);
       /* if it didn't enable the DFP on the output */
