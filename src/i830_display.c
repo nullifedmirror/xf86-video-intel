@@ -257,7 +257,7 @@ i830PipeSetMode(ScrnInfoPtr pScrn, DisplayModePtr pMode, int pipe)
     CARD32 htot, hblank, hsync, vtot, vblank, vsync, dspcntr;
     CARD32 pipesrc, dspsize, adpa, sdvoc = 0;
     Bool ok, is_sdvo;
-    int refclk, pixel_clock;
+    int refclk, pixel_clock, sdvo_mult;
     int outputs;
 
     ErrorF("Requested pix clock: %d\n", pMode->Clock);
@@ -353,6 +353,24 @@ i830PipeSetMode(ScrnInfoPtr pScrn, DisplayModePtr pMode, int pipe)
 	return FALSE;
     }
 
+    /* Find the multiplier for SDVO to keep the bus's clock rate (10 times the
+     * pixel rate) between 1.0Ghz and 2.0Ghz.  One doc says the multiplier is
+     * 1 <= mult <= 5, the other says 1, 2, or 4.  Be conservative.
+     */
+    for (sdvo_mult = 1; sdvo_mult <= 4; sdvo_mult *= 2) {
+	if (pixel_clock * sdvo_mult >= 100000 &&
+	    pixel_clock * sdvo_mult <= 200000)
+	{
+	    break;
+	}
+    }
+    if (sdvo_mult > 4 && is_sdvo) {
+	xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
+		   "Couldn't find port multiplier for SDVO with clock %d\n",
+		   pixel_clock);
+    }
+    ErrorF("mult %d\n", sdvo_mult);
+
     dpll = DPLL_VCO_ENABLE | DPLL_VGA_MODE_DIS;
     if (IS_I9XX(pI830)) {
 	if (outputs & PIPE_LCD_ACTIVE)
@@ -384,7 +402,6 @@ i830PipeSetMode(ScrnInfoPtr pScrn, DisplayModePtr pMode, int pipe)
 	dpll |= PLL_REF_INPUT_TVCLKINBC;
     else
 	dpll |= PLL_REF_INPUT_DREFCLK;
-    dpll |= SDVO_DEFAULT_MULTIPLIER;
 
     if (is_sdvo) {
 	dpll |= DPLL_DVO_HIGH_SPEED;
@@ -397,6 +414,13 @@ i830PipeSetMode(ScrnInfoPtr pScrn, DisplayModePtr pMode, int pipe)
 	    sdvoc |= SDVO_PIPE_B_SELECT;
 	//	sdvoc |= SDVO_PHASE_SELECT_DEFAULT;
 	sdvoc |= SDVO_BORDER_ENABLE;
+
+	if (IS_I915G(pI830) || IS_I915GM(pI830)) {
+	    sdvoc |= 1 << (23 + sdvo_mult - 1);
+	} else {
+	    dpll |= 1 << (4 + sdvo_mult - 1);
+	}
+
 	OUTREG(SDVOC, INREG(SDVOC) & ~SDVO_ENABLE);
     }
 

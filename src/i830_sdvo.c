@@ -477,6 +477,7 @@ I830SDVOPreSetMode(I830SDVOPtr s, DisplayModePtr mode)
     CARD8 c17a[8];
     CARD16 out_timings[6];
     CARD16 clock_min, clock_max;
+    int mult;
 
     /* do some mode translations */
     h_blank_len = mode->CrtcHBlankEnd - mode->CrtcHBlankStart;
@@ -536,10 +537,21 @@ I830SDVOPreSetMode(I830SDVOPtr s, DisplayModePtr mode)
     I830SDVOSetInputTimingsPart2(s, curr_table[3], curr_table[4],
 				 out_timings[5]);
 
-    /*if (mode->PrivFlags & I830_MFLAG_DOUBLE)
-	I830SDVOSetClockRateMult(s, 0x02);
-    else */
-	I830SDVOSetClockRateMult(s, 0x01);
+    for (mult = 1; mult <= 4; mult *= 2) {
+	if (mode->Clock * mult >= 100000 && mode->Clock * mult <= 200000)
+	    break;
+    }
+    switch (mult) {
+    case 1:
+	I830SDVOSetClockRateMult(s, SDVO_CLOCK_RATE_MULT_1X);
+	break;
+    case 2:
+	I830SDVOSetClockRateMult(s, SDVO_CLOCK_RATE_MULT_2X);
+	break;
+    case 4:
+	I830SDVOSetClockRateMult(s, SDVO_CLOCK_RATE_MULT_4X);
+	break;
+    }
 
     return TRUE;
 }
