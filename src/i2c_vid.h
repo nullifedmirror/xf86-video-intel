@@ -11,6 +11,6 @@ typedef struct _I830I2CVidOutputRec {
   void (*PrintRegs)(I2CDevPtr d);
   void (*SaveRegs)(I2CDevPtr d);
   void (*RestoreRegs)(I2CDevPtr d);
-} I830I2CVidOutputRec, *I30I2CVidOutputPtr;
+} I830I2CVidOutputRec, *I830I2CVidOutputPtr;
 
 #endif

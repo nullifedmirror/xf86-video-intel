@@ -315,4 +315,8 @@ extern int I810_DEBUG;
 
 #define PIPE_NAME(n)			('A' + (n))
 
+#ifndef MAX
+#define MAX(a,b) ((a) > (b) ? (a) : (b))
+#endif
+
 #endif /* _INTEL_COMMON_H_ */

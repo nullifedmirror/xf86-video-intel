@@ -190,7 +190,6 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 #endif
 
 #define BIT(x) (1 << (x))
-#define MAX(a,b) ((a) > (b) ? (a) : (b))
 #define NB_OF(x) (sizeof (x) / sizeof (*x))
 
 /* *INDENT-OFF* */

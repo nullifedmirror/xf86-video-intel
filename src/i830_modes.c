@@ -898,7 +898,7 @@ DisplayModePtr I830xf86DDCModes(ScrnInfoPtr pScrn)
 		       "Valid Mode from Detailed timing table: %s\n",
 		       new->name);
 
-	    xf86SortModes(&new, &first, &last);
+	    I830xf86SortModes(&new, &first, &last);
 	}
     }
 
@@ -928,7 +928,7 @@ DisplayModePtr I830xf86DDCModes(ScrnInfoPtr pScrn)
 			       "Valid Mode from standard timing table: %s\n",
 			       new->name);
 
-		    xf86SortModes(&new, &first, &last);
+		    I830xf86SortModes(&new, &first, &last);
 		    break;
 		}
 	    }
@@ -960,7 +960,7 @@ DisplayModePtr I830xf86DDCModes(ScrnInfoPtr pScrn)
 				   "Valid Mode from established timing "
 				   "table: %s\n", new->name);
 
-			xf86SortModes(&new, &first, &last);
+			I830xf86SortModes(&new, &first, &last);
 			break;
 		    }
 		}
@@ -996,7 +996,7 @@ int I830xf86ValidateDDCModes(ScrnInfoPtr pScrn1, char **ppModeName)
 	int  maxVirtY = pScrn->virtualY;
 
 	/* Collect all of the DDC modes */
-	first = last = ddcModes = xf86DDCModes(pScrn);
+	first = last = ddcModes = I830xf86DDCModes(pScrn);
 
 	for (p = ddcModes; p; p = p->next) {
 
