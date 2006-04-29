@@ -248,7 +248,7 @@ I830I2CStart(I2CBusPtr b, int timeout)
   
   sdalo(b);
   scllo(b);
-    
+  
   return TRUE;
 }
 

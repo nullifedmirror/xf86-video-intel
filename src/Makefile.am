@@ -57,7 +57,8 @@ i810_drv_la_SOURCES = \
          i830_randr.c \
          i830_raw.c \
          i830_i2c.c \
-         i830_sdvo.c
+         i830_sdvo.c \
+	 i2c_vid.h
 
 if DRI
 i810_drv_la_SOURCES += \
