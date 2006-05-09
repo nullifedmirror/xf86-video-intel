@@ -61,17 +61,18 @@ I830SDVOWriteOutputs(I830SDVOPtr s, int num_out)
 {
   int i;
 
-  ErrorF("SDVO: W: ");
-  for (i = num_out; i<9; i++)
+  ErrorF("SDVO: W: %02X ", s->sdvo_regs[SDVO_I2C_OPCODE]);
+  for (i = SDVO_I2C_ARG_0; i > SDVO_I2C_ARG_0 - num_out; i--)
     ErrorF("%02X ", s->sdvo_regs[i]);
   ErrorF("\n");
+
   /* blast the output regs */
-  for (i = 7; i >= num_out; i--)
-  {
+  for (i = SDVO_I2C_ARG_0; i > SDVO_I2C_ARG_0 - num_out; i--) {
     sWriteByte(s, i, s->sdvo_regs[i]);
   }
+
   /* blast the command reg */
-  sWriteByte(s, 8, s->sdvo_regs[8]);
+  sWriteByte(s, SDVO_I2C_OPCODE, s->sdvo_regs[SDVO_I2C_OPCODE]);
 }
 
 static const char *cmd_status_names[] = {
@@ -138,7 +139,7 @@ I830SDVOSetTargetInput(I830SDVOPtr s, Bool target_1, Bool target_2)
   //  s->sdvo_regs[SDVO_I2C_ARG_0] = target_1;
   //  s->sdvo_regs[SDVO_I2C_ARG_1] = target_2;
 
-  I830SDVOWriteOutputs(s, 0);
+  I830SDVOWriteOutputs(s, 2);
   
   I830SDVOReadInputRegs(s);
 
@@ -185,7 +186,7 @@ I830SDVOSetActiveOutputs(I830SDVOPtr s, Bool on_1, Bool on_2)
   s->sdvo_regs[SDVO_I2C_ARG_0] = on_1;
   s->sdvo_regs[SDVO_I2C_ARG_1] = on_2;
 
-  I830SDVOWriteOutputs(s, 0);
+  I830SDVOWriteOutputs(s, 2);
   I830SDVOReadInputRegs(s);
   
   return TRUE;
@@ -221,7 +222,7 @@ I830SDVOSetTargetOutput(I830SDVOPtr s, Bool target_1, Bool target_2)
   s->sdvo_regs[SDVO_I2C_ARG_0] = target_1;
   s->sdvo_regs[SDVO_I2C_ARG_1] = target_2;
 
-  I830SDVOWriteOutputs(s, 0);
+  I830SDVOWriteOutputs(s, 2);
   I830SDVOReadInputRegs(s);
   
   return TRUE;
@@ -277,7 +278,7 @@ I830SDVOSetTimingsPart1(I830SDVOPtr s, char cmd, unsigned short clock, CARD16 ma
   s->sdvo_regs[SDVO_I2C_ARG_7] = (magic1 >> 8) & 0xff;
 
 
-  I830SDVOWriteOutputs(s, 0);
+  I830SDVOWriteOutputs(s, 7);
   I830SDVOReadInputRegs(s);
   
   return TRUE;
@@ -312,7 +313,7 @@ I830SDVOSetTimingsPart2(I830SDVOPtr s, char cmd, unsigned short magic4, unsigned
   s->sdvo_regs[SDVO_I2C_ARG_4] = magic6 & 0xff;
   s->sdvo_regs[SDVO_I2C_ARG_5] = (magic6 >> 8) & 0xff;
 
-  I830SDVOWriteOutputs(s, 0);
+  I830SDVOWriteOutputs(s, 7);
   I830SDVOReadInputRegs(s);
   
   return TRUE;
@@ -347,7 +348,7 @@ I830SDVOCreatePreferredInputTiming(I830SDVOPtr s, unsigned short clock, unsigned
   s->sdvo_regs[SDVO_I2C_ARG_4] = height & 0xff;
   s->sdvo_regs[SDVO_I2C_ARG_5] = (height >> 8) & 0xff;
 
-  I830SDVOWriteOutputs(s, 0);
+  I830SDVOWriteOutputs(s, 7);
   I830SDVOReadInputRegs(s);
   
   return TRUE;
