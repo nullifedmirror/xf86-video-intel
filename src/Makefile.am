@@ -56,6 +56,8 @@ i810_drv_la_SOURCES = \
          i830_rotate.c \
          i830_randr.c \
          i830_raw.c \
+	 i830_sdvo.h \
+         i830_sdvo_regs.h \
          i830_i2c.c \
          i830_sdvo.c \
 	 i2c_vid.h
