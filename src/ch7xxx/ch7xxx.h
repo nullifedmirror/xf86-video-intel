@@ -28,13 +28,11 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "../i2c_vid.h"
 
-#define CH7xxx_VID 0x0001
-#define CH7xxx_DID 0x0006
+#define CH7xxx_VID 0x84
+#define CH7xxx_DID 0x17
 
-#define CH7xxx_VID_LO 0x00
-#define CH7xxx_VID_HI 0x01
-#define CH7xxx_DID_LO 0x02
-#define CH7xxx_DID_HI 0x03
+#define CH7xxx_REG_VID 0x4a
+#define CH7xxx_REG_DID 0x4b
 #define CH7xxx_REV    0x04
 #define CH7xxx_RSVD   0x05
 #define CH7xxx_FREQ_LO 0x06
@@ -58,7 +56,7 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #define CH7xxx_REGC 0x0c
 
-typedef struct _Sil164SaveRec {
+typedef struct _CH7xxxSaveRec {
   CARD8 freq_lo;
   CARD8 freq_hi;
   CARD8 reg8;
@@ -72,9 +70,9 @@ typedef struct {
   CH7xxxSaveRec ModeReg;
 } CH7xxxRec, *CH7xxxPtr;
 
-#define CH7xxx_ADDR_1 0x38
+#define CH7xxx_ADDR_1 0x76
 
 #define CH7xxx_SYMBOL_LIST "CH7xxxVidOutput"
 
-#define SILPTR(d) ((CH7xxxPtr)(d->DriverPrivate.ptr))
+#define CH7PTR(d) ((CH7xxxPtr)(d->DriverPrivate.ptr))
 #endif

@@ -74,7 +74,7 @@ static void *ch7xxxDetect(I2CBusPtr b, I2CSlaveAddr addr)
   sil->d.ByteTimeout = b->ByteTimeout;
   sil->d.DriverPrivate.ptr = sil;
 
-  if (!ch7xxxReadByte(sil, CH7xxx_VID_LO, &ch))
+  if (!ch7xxxReadByte(sil, CH7xxx_REG_VID, &ch))
     goto out;
 
   if (ch!=(CH7xxx_VID & 0xFF))
@@ -84,7 +84,7 @@ static void *ch7xxxDetect(I2CBusPtr b, I2CSlaveAddr addr)
   }
 
 
-  if (!ch7xxxReadByte(sil, CH7xxx_DID_LO, &ch))
+  if (!ch7xxxReadByte(sil, CH7xxx_REG_DID, &ch))
     goto out;
 
   if (ch!=(CH7xxx_DID & 0xFF))
@@ -109,7 +109,7 @@ static void *ch7xxxDetect(I2CBusPtr b, I2CSlaveAddr addr)
 
 static Bool ch7xxxInit(I2CDevPtr d)
 {
-  CH7xxxPtr sil = SILPTR(d);
+  CH7xxxPtr sil = CH7PTR(d);
 
   /* not much to do */
   return TRUE;
@@ -117,14 +117,14 @@ static Bool ch7xxxInit(I2CDevPtr d)
 
 static ModeStatus ch7xxxModeValid(I2CDevPtr d, DisplayModePtr mode)
 {
-  CH7xxxPtr sil = SILPTR(d);
+  CH7xxxPtr sil = CH7PTR(d);
   
   return MODE_OK;
 }
 
 static void ch7xxxMode(I2CDevPtr d, DisplayModePtr mode)
 {
-  CH7xxxPtr sil = SILPTR(d);
+  CH7xxxPtr sil = CH7PTR(d);
 
   /* don't do much */
   return;
@@ -133,7 +133,7 @@ static void ch7xxxMode(I2CDevPtr d, DisplayModePtr mode)
 /* set the CH7xxx power state */
 static void ch7xxxPower(I2CDevPtr d, Bool On)
 {
-  CH7xxxPtr sil = SILPTR(d);
+  CH7xxxPtr sil = CH7PTR(d);
   int ret;
   unsigned char ch;
   
@@ -152,12 +152,12 @@ static void ch7xxxPower(I2CDevPtr d, Bool On)
 
 static void ch7xxxPrintRegs(I2CDevPtr d)
 {
-  CH7xxxPtr sil = SILPTR(d);
+  CH7xxxPtr sil = CH7PTR(d);
 }
 
 static void ch7xxxSaveRegs(I2CDevPtr d)
 {
-  CH7xxxPtr sil = SILPTR(d);
+  CH7xxxPtr sil = CH7PTR(d);
   
   if (!ch7xxxReadByte(sil, CH7xxx_FREQ_LO, &sil->SavedReg.freq_lo))
       return;
@@ -178,7 +178,7 @@ static void ch7xxxSaveRegs(I2CDevPtr d)
 
 }
 
-I830I2CVidOutputRec CH7xxxxVidOutput = {
+I830I2CVidOutputRec CH7xxxVidOutput = {
   ch7xxxDetect,
   ch7xxxInit,
   ch7xxxModeValid,
