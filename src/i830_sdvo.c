@@ -131,7 +131,7 @@ I830SDVOSetControlBusSwitch(I830SDVOPtr s, CARD8 target)
 }
 
 
-Bool
+static Bool
 I830SDVOSetTargetInput(I830SDVOPtr s, Bool target_1, Bool target_2)
 {
   /* write out 0x10 */
@@ -160,35 +160,31 @@ I830DoSDVOTrans(I830SDVOPtr s, char cmd)
   return TRUE;
 }
 
-Bool
-I830SDVOWriteCommand03(I830SDVOPtr s, int on)
+static Bool
+I830SDVOGetTrainedInputs(I830SDVOPtr s)
 {
   memset(s->sdvo_regs, 0, 9);
 
-  s->sdvo_regs[SDVO_I2C_OPCODE] = 0x3;
+  s->sdvo_regs[SDVO_I2C_OPCODE] = SDVO_CMD_GET_TRAINED_INPUTS;
   
-
-  s->sdvo_regs[SDVO_I2C_ARG_0] = on ? 0x80 : 0x00;
-  s->sdvo_regs[0x04] = on ? 0x80 : 0x00;
-
   I830SDVOWriteOutputs(s, 0);
   I830SDVOReadInputRegs(s);
   
   return TRUE;
 }
 
-Bool
-I830SDVOWriteCommand04(I830SDVOPtr s, int on)
+static Bool
+I830SDVOGetActiveOutputs(I830SDVOPtr s, Bool *on_1, Bool *on_2)
 {
   memset(s->sdvo_regs, 0, 9);
   
-  s->sdvo_regs[SDVO_I2C_OPCODE] = 0x4;
-
-  s->sdvo_regs[SDVO_I2C_ARG_0] = on ? 0x01 : 0x00;
-  s->sdvo_regs[0x03] = 0x1;
+  s->sdvo_regs[SDVO_I2C_OPCODE] = SDVO_CMD_GET_ACTIVE_OUTPUTS;
 
   I830SDVOWriteOutputs(s, 0);
   I830SDVOReadInputRegs(s);
+
+  *on_1 = s->sdvo_regs[SDVO_I2C_ARG_0];
+  *on_2 = s->sdvo_regs[SDVO_I2C_ARG_1];
   
   return TRUE;
 }
@@ -437,6 +433,7 @@ I830SDVOPreSetMode(I830SDVOPtr s, DisplayModePtr mode)
   unsigned short *m_p;
   unsigned short h_blank_len, h_sync_len, v_blank_len, v_sync_len, h_sync_offset, v_sync_offset;
   unsigned short sync_flags;
+  Bool out1, out2;
 
   /* do some mode translations */
   h_blank_len = mode->CrtcHBlankEnd - mode->CrtcHBlankStart;
@@ -479,7 +476,7 @@ I830SDVOPreSetMode(I830SDVOPtr s, DisplayModePtr mode)
   I830SDVOSetTargetInput(s, TRUE, TRUE);
   I830SDVOWriteCommand1D(s, clock, height);
 
-  I830SDVOWriteCommand04(s, 0);
+  I830SDVOGetActiveOutputs(s, &out1, &out2);
   I830SDVOWriteCommand05(s, 0);
 
   I830SDVOWriteCommand11(s);
@@ -520,12 +517,12 @@ I830SDVOPostSetMode(I830SDVOPtr s, DisplayModePtr mode)
 {
   int clock = mode->Clock/10, height=mode->CrtcVDisplay;
   Bool ret = TRUE;
+  Bool out1, out2;
   /* the BIOS writes out 6 commands post mode set */
   /* two 03s, 04 05, 10, 1d */
   /* these contain the height and mode clock / 10 by the looks of it */
 
-  I830SDVOWriteCommand03(s, 1);
-  I830SDVOWriteCommand03(s, 0);
+  I830SDVOGetTrainedInputs(s);
 
   /* THIS IS A DIRTY HACK - sometimes for some reason on startup
      the BIOS doesn't find my DVI monitor -
@@ -537,7 +534,7 @@ I830SDVOPostSetMode(I830SDVOPtr s, DisplayModePtr mode)
     ret = FALSE;
   }
 
-  I830SDVOWriteCommand04(s, 1);
+  I830SDVOGetActiveOutputs(s, &out1, &out2);
   I830SDVOWriteCommand05(s, 1);
 
   I830SDVOSetTargetInput(s, TRUE, TRUE);
