@@ -12,4 +12,5 @@ ch7xxx_ladir = @moduledir@/drivers
 ch7xxx_la_SOURCES = \
 	ch7xxx.c \
 	ch7xxx_module.c \
-	ch7xxx.h
+	ch7xxx.h \
+	ch7xxx_reg.h

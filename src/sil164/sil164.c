@@ -32,6 +32,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "miscstruct.h"
 #include "xf86i2c.h"
 
+#include "../i2c_vid.h"
 #include "sil164.h"
 #include "sil164_reg.h"
 

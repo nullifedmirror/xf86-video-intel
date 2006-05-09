@@ -23,11 +23,29 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 **************************************************************************/
 
-#ifndef CH7xxx_H
-#define CH7xxx_H
+#ifndef CH7xxx_REG_H
+#define CH7xxx_REG_H
 
-#define CH7xxx_ADDR_1 0x76
+#define CH7xxx_REG_VID 0x4a
+#define CH7xxx_REG_DID 0x4b
 
-#define CH7xxx_SYMBOL_LIST "CH7xxxVidOutput"
+#define CH7xxx_VID 0x84
+#define CH7xxx_DID 0x17
+
+typedef struct _CH7xxxSaveRec {
+  CARD8 freq_lo;
+  CARD8 freq_hi;
+  CARD8 reg8;
+  CARD8 reg9;
+  CARD8 regc;
+} CH7xxxSaveRec;
+
+typedef struct {
+  I2CDevRec d;
+  CH7xxxSaveRec SavedReg;
+  CH7xxxSaveRec ModeReg;
+} CH7xxxRec, *CH7xxxPtr;
+
+#define CH7PTR(d) ((CH7xxxPtr)(d->DriverPrivate.ptr))
 
 #endif

@@ -26,8 +26,6 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 #ifndef SIL164_H
 #define SIL164_H
 
-#include "../i2c_vid.h"
-
 #define SIL164_ADDR_1 0x38
 
 #define SIL164_SYMBOL_LIST "SIL164VidOutput"
