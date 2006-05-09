@@ -4148,9 +4148,6 @@ SaveHWState(ScrnInfoPtr pScrn)
    if (pI830->rawmode)
    {
 
-     vgaHWUnlock(hwp);
-     vgaHWSave(pScrn, vgaReg, VGA_SR_FONTS);
-
      I830RawSaveState(pScrn, &pI830->SavedReg);
      for (i=0; i<8; i++)
        pI830->SavedReg.Fence[i] = pI830->ModeReg.Fence[i];
@@ -4236,8 +4233,6 @@ RestoreHWState(ScrnInfoPtr pScrn)
    if (pI830->rawmode)
    {
      I830RawRestoreState(pScrn, &pI830->SavedReg);
-     vgaHWRestore(pScrn, vgaReg, VGA_SR_FONTS);
-     vgaHWLock(hwp);
      return TRUE;
    }
 

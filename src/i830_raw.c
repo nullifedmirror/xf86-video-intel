@@ -706,7 +706,10 @@ Bool
 I830RawSaveState(ScrnInfoPtr pScrn, I830RegPtr hw)
 {
   I830Ptr pI830 = I830PTR(pScrn);
+  vgaHWPtr hwp = VGAHWPTR(pScrn);
+  vgaRegPtr vgaReg = &hwp->SavedReg;
   int i, count;
+
   hw->vga0_divisor = INREG(VCLK_DIVISOR_VGA0);
   hw->vga1_divisor = INREG(VCLK_DIVISOR_VGA1);
   hw->vga_pd = INREG(VCLK_POST_DIV);
@@ -765,6 +768,17 @@ I830RawSaveState(ScrnInfoPtr pScrn, I830RegPtr hw)
 
   for (count = 0, i = SWF10; i<SWF16; i+=4)
     hw->swf1x[count++] = INREG(i);
+  
+  for (i = 0; i < pI830->num_outputs; i++) {
+    if (pI830->output[i].type == I830_OUTPUT_SDVO &&
+	pI830->output[i].sdvo_drv != NULL)
+    {
+      i830SDVOSave(pScrn, i);
+    }
+  }
+
+  vgaHWUnlock(hwp);
+  vgaHWSave(pScrn, vgaReg, VGA_SR_ALL);
 
   return TRUE;
 }
@@ -773,6 +787,36 @@ Bool
 I830RawRestoreState(ScrnInfoPtr pScrn, I830RegPtr hw)
 {
   I830Ptr pI830 = I830PTR(pScrn);
+  vgaHWPtr hwp = VGAHWPTR(pScrn);
+  vgaRegPtr vgaReg = &hwp->SavedReg;  
+  CARD32 temp;
+  int i;
+
+  vgaHWRestore(pScrn, vgaReg, VGA_SR_ALL);
+  vgaHWLock(hwp);
+
+  /* First, disable display planes */
+  temp = INREG(DSPACNTR);
+  OUTREG(DSPACNTR, temp & ~DISPLAY_PLANE_ENABLE);
+  temp = INREG(DSPBCNTR);
+  OUTREG(DSPBCNTR, temp & ~DISPLAY_PLANE_ENABLE);
+  
+  /* Next, disable display pipes */
+  temp = INREG(PIPEACONF);
+  OUTREG(PIPEACONF, temp & ~PIPEACONF_ENABLE);
+  temp = INREG(PIPEBCONF);
+  OUTREG(PIPEBCONF, temp & ~PIPEBCONF_ENABLE);
+  
+  /* XXX: Wait for a vblank */
+  sleep(1);
+
+  for (i = 0; i < pI830->num_outputs; i++) {
+    if (pI830->output[i].type == I830_OUTPUT_SDVO &&
+	pI830->output[i].sdvo_drv != NULL)
+    {
+      i830SDVOPreRestore(pScrn, i);
+    }
+  }
 
   OUTREG(VCLK_DIVISOR_VGA0, hw->vga0_divisor);
   OUTREG(VCLK_DIVISOR_VGA1, hw->vga1_divisor);
@@ -807,6 +851,14 @@ I830RawRestoreState(ScrnInfoPtr pScrn, I830RegPtr hw)
   OUTREG(DSPBSTRIDE, hw->disp_b_stride);
 
   OUTREG(VGACNTRL, hw->vgacntrl);
+
+  for (i = 0; i < pI830->num_outputs; i++) {
+    if (pI830->output[i].type == I830_OUTPUT_SDVO &&
+	pI830->output[i].sdvo_drv != NULL)
+    {
+      i830SDVOPostRestore(pScrn, i);
+    }
+  }
   
   return TRUE;
 }
