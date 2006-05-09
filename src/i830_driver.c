@@ -2334,7 +2334,7 @@ void I830DetectMonitors(ScrnInfoPtr pScrn)
       
       /* if we are on an i2C bus > 0 and we see a monitor - try to
 	 find a controller chip */
-      if (pI830->output[i].MonInfo)
+      //      if (pI830->output[i].MonInfo)
       {
 	
 	ret = I830I2CDetectDVOControllers(pScrn, pI830->output[i].pI2CBus, &pI830->output[i].i2c_drv);
