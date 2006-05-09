@@ -35,9 +35,6 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 unsigned short curr_table[6];
 unsigned short out_timings[6];
 
-unsigned char c16a[8];
-unsigned char c17a[8];
-
 
 /* SDVO support for i9xx chipsets */
 static Bool sReadByte(I830SDVOPtr s, int addr, unsigned char *ch)
@@ -260,24 +257,25 @@ I830SDVOGetOutputTimingsPart2(I830SDVOPtr s)
 
 
 static Bool
-I830SDVOSetTimingsPart1(I830SDVOPtr s, char cmd, unsigned short clock, unsigned short magic1, unsigned short magic2, unsigned short magic3)
+I830SDVOSetTimingsPart1(I830SDVOPtr s, char cmd, unsigned short clock, CARD16 magic1, CARD16 magic2, CARD16 magic3)
 {
   memset(s->sdvo_regs, 0, 9);
   
   s->sdvo_regs[SDVO_I2C_OPCODE] = cmd;
   
   /* set clock regs */
-  s->sdvo_regs[0x06] = (clock >> 8) & 0xff;
   s->sdvo_regs[SDVO_I2C_ARG_0] = clock & 0xff;
+  s->sdvo_regs[SDVO_I2C_ARG_1] = (clock >> 8) & 0xff;
 
-  s->sdvo_regs[0x00] = (magic1 >> 8) & 0xff;
-  s->sdvo_regs[0x01] = magic1 & 0xff;
+  s->sdvo_regs[SDVO_I2C_ARG_2] = magic3 & 0xff;  
+  s->sdvo_regs[SDVO_I2C_ARG_3] = (magic3 >> 8) & 0xff;
 
-  s->sdvo_regs[0x02] = (magic2 >> 8) & 0xff;
-  s->sdvo_regs[0x03] = magic2 & 0xff;  
+  s->sdvo_regs[SDVO_I2C_ARG_4] = magic2 & 0xff;  
+  s->sdvo_regs[SDVO_I2C_ARG_5] = (magic2 >> 8) & 0xff;
 
-  s->sdvo_regs[0x04] = (magic3 >> 8) & 0xff;
-  s->sdvo_regs[0x05] = magic3 & 0xff;  
+  s->sdvo_regs[SDVO_I2C_ARG_6] = magic1 & 0xff;
+  s->sdvo_regs[SDVO_I2C_ARG_7] = (magic1 >> 8) & 0xff;
+
 
   I830SDVOWriteOutputs(s, 0);
   I830SDVOReadInputRegs(s);
@@ -305,14 +303,14 @@ I830SDVOSetTimingsPart2(I830SDVOPtr s, char cmd, unsigned short magic4, unsigned
   s->sdvo_regs[SDVO_I2C_OPCODE] = cmd;
  
   /* set clock regs */
-  s->sdvo_regs[0x06] = (magic4 >> 8) & 0xff;
   s->sdvo_regs[SDVO_I2C_ARG_0] = magic4 & 0xff;
+  s->sdvo_regs[SDVO_I2C_ARG_1] = (magic4 >> 8) & 0xff;
 
-  s->sdvo_regs[0x04] = (magic5 >> 8) & 0xff;
-  s->sdvo_regs[0x05] = magic5 & 0xff;
+  s->sdvo_regs[SDVO_I2C_ARG_2] = magic5 & 0xff;
+  s->sdvo_regs[SDVO_I2C_ARG_3] = (magic5 >> 8) & 0xff;
 
-  s->sdvo_regs[0x02] = (magic6 >> 8) & 0xff;
-  s->sdvo_regs[0x03] = magic6 & 0xff;
+  s->sdvo_regs[SDVO_I2C_ARG_4] = magic6 & 0xff;
+  s->sdvo_regs[SDVO_I2C_ARG_5] = (magic6 >> 8) & 0xff;
 
   I830SDVOWriteOutputs(s, 0);
   I830SDVOReadInputRegs(s);
@@ -340,14 +338,14 @@ I830SDVOCreatePreferredInputTiming(I830SDVOPtr s, unsigned short clock, unsigned
   s->sdvo_regs[SDVO_I2C_OPCODE] = SDVO_CMD_CREATE_PREFERRED_INPUT_TIMING;
   
   /* set clock regs */
-  s->sdvo_regs[0x06] = (clock >> 8) & 0xff;
   s->sdvo_regs[SDVO_I2C_ARG_0] = clock & 0xff;
+  s->sdvo_regs[SDVO_I2C_ARG_1] = (clock >> 8) & 0xff;
 
-  s->sdvo_regs[0x02] = (height >> 8) & 0xff;
-  s->sdvo_regs[0x03] = height & 0xff;  
+  s->sdvo_regs[SDVO_I2C_ARG_2] = width & 0xff;
+  s->sdvo_regs[SDVO_I2C_ARG_3] = (width >> 8) & 0xff;
 
-  s->sdvo_regs[0x04] = (width >> 8) & 0xff;
-  s->sdvo_regs[0x05] = width & 0xff;
+  s->sdvo_regs[SDVO_I2C_ARG_4] = height & 0xff;
+  s->sdvo_regs[SDVO_I2C_ARG_5] = (height >> 8) & 0xff;
 
   I830SDVOWriteOutputs(s, 0);
   I830SDVOReadInputRegs(s);
@@ -364,6 +362,10 @@ I830SDVOGetPreferredInputTimingPart1(I830SDVOPtr s)
   
   I830SDVOWriteOutputs(s, 0);
   I830SDVOReadInputRegs(s);
+
+  curr_table[0] = (s->sdvo_regs[0x10] | (s->sdvo_regs[0x11] << 8));
+  curr_table[1] = (s->sdvo_regs[0x0e] | (s->sdvo_regs[0x0f] << 8));
+  curr_table[2] = (s->sdvo_regs[0x0c] | (s->sdvo_regs[0x0d] << 8));  
   
   return TRUE;
 }
@@ -378,30 +380,12 @@ I830SDVOGetPreferredInputTimingPart2(I830SDVOPtr s)
   
   I830SDVOWriteOutputs(s, 0);
   I830SDVOReadInputRegs(s);
-  
-  return TRUE;  
-}
 
-static Bool
-I830SDVOParsePreferredInputTimingsPart1(I830SDVOPtr s)
-{
-  /* 1B response */
-  curr_table[0] = (s->sdvo_regs[0x10] | (s->sdvo_regs[0x11] << 8));
-
-  curr_table[1] = (s->sdvo_regs[0x0e] | (s->sdvo_regs[0x0f] << 8));
-
-  curr_table[2] = (s->sdvo_regs[0x0c] | (s->sdvo_regs[0x0d] << 8));
-
-}
-
-static Bool
-I830SDVOParsePreferredInputTimingsPart2(I830SDVOPtr s)
-{
   curr_table[3] = (s->sdvo_regs[0x0a] | (s->sdvo_regs[0x0b] << 8));
   curr_table[4] = (s->sdvo_regs[0x0c] | (s->sdvo_regs[0x0d] << 8));
-
   curr_table[5] = 0x1e;
 
+  return TRUE;  
 }
 
 static Bool
@@ -427,7 +411,7 @@ I830SDVOPreSetMode(I830SDVOPtr s, DisplayModePtr mode)
   unsigned short sync_flags;
   Bool out1, out2;
   CARD16 min_clock, max_clock;
-  
+
   /* do some mode translations */
   h_blank_len = mode->CrtcHBlankEnd - mode->CrtcHBlankStart;
   h_sync_len = mode->CrtcHSyncEnd - mode->CrtcHSyncStart;
@@ -443,28 +427,23 @@ I830SDVOPreSetMode(I830SDVOPtr s, DisplayModePtr mode)
     sync_flags |= 0x2;
   if (mode->Flags & V_PVSYNC)
     sync_flags |= 0x4;
-  /* high bits of 0 */
-  c16a[7] = clock & 0xff;
-  c16a[6] = (clock >> 8) & 0xff;
-  c16a[5] = (width & 0xff);
-  c16a[4] = (h_blank_len & 0xff);
-  c16a[3] = (((width >> 8) & 0xf) << 4) | ((h_blank_len >> 8) & 0xf);
-  c16a[2] = (height & 0xff);
-  c16a[1] = (v_blank_len & 0xff);
-  c16a[0] = (((height >> 8) & 0xf) << 4) | ((v_blank_len >> 8) & 0xf);
 
-  c17a[7] = h_sync_offset;
-  c17a[6] = h_sync_len & 0xff;
-  c17a[5] = (v_sync_offset & 0xf) << 4 | (v_sync_len & 0xf);
-  c17a[4] = 0;
-  c17a[3] = sync_flags;
-  c17a[2] = 0;
-  out_timings[0] = c16a[1] | ((short)c16a[0] << 8);
-  out_timings[1] = c16a[3] | ((short)c16a[2] << 8);
-  out_timings[2] = c16a[5] | ((short)c16a[4] << 8);
-  out_timings[3] = c17a[7] | ((short)c17a[6] << 8);
-  out_timings[4] = c17a[5] | ((short)c17a[4] << 8);
-  out_timings[5] = c17a[3] | ((short)c17a[2] << 8);
+  out_timings[0] = (v_blank_len & 0xff);
+  out_timings[0] |= ((((height >> 8) & 0xf) << 4) | ((v_blank_len >> 8) & 0xf)) << 8;
+
+  out_timings[1] = ((((width >> 8) & 0xf) << 4) | ((h_blank_len >> 8) & 0xf));
+  out_timings[1] |= ((height & 0xff)<<8);
+
+  out_timings[2] = (width & 0xff);
+  out_timings[2] |= (h_blank_len & 0xff) << 8;
+
+  out_timings[3] = h_sync_offset | ((h_sync_len & 0xff) << 8);
+
+  out_timings[4] = (v_sync_offset & 0xf) << 4 | (v_sync_len & 0xf);
+  out_timings[4] |= 0 << 8;
+
+  out_timings[5] = sync_flags;
+  out_timings[5] |= 0 << 8;
   
   I830SDVOSetTargetInput(s, TRUE, TRUE);
   I830SDVOGetInputPixelClockRange(s, &min_clock, &max_clock);
@@ -481,9 +460,7 @@ I830SDVOPreSetMode(I830SDVOPtr s, DisplayModePtr mode)
   I830SDVOCreatePreferredInputTiming(s, clock, width, height);
 
   I830SDVOGetPreferredInputTimingPart1(s);
-  I830SDVOParsePreferredInputTimingsPart1(s);
   I830SDVOGetPreferredInputTimingPart2(s);
-  I830SDVOParsePreferredInputTimingsPart2(s);
 
   I830SDVOSetTargetInput(s, TRUE, TRUE);
 

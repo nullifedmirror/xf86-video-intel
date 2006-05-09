@@ -68,6 +68,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #endif
 
 #include "common.h"
+#include "i830_sdvo.h"
 
 #include "i2c_vid.h"
 /* I830 Video BIOS support */
@@ -255,6 +256,12 @@ typedef struct _I830SDVODriver {
   I2CDevRec d;
   unsigned char sdvo_regs[20];
   CARD32 output_device;
+
+  int save_sdvo_mult;
+  Bool save_sdvo_active_1, save_sdvo_active_2;
+  i830_sdvo_dtd save_input_dtd_1, save_input_dtd_2;
+  i830_sdvo_dtd save_output_dtd_1, save_output_dtd_2;
+  CARD32 save_SDVOX;
 } I830SDVORec, *I830SDVOPtr;
 
 struct _I830OutputRec {
