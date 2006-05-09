@@ -12,4 +12,5 @@ sil164_ladir = @moduledir@/drivers
 sil164_la_SOURCES = \
 	sil164.c \
 	sil164_module.c \
-	sil164.h
+	sil164.h \
+	sil164_reg.h

@@ -33,6 +33,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "xf86i2c.h"
 
 #include "sil164.h"
+#include "sil164_reg.h"
 
 static Bool sil164ReadByte(SIL164Ptr sil, int addr, unsigned char *ch)
 {
