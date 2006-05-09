@@ -401,15 +401,16 @@ I830SDVOParseResponse1C(I830SDVOPtr s)
   curr_table[5] = 0x1e;
 
 }
-Bool
-I830SDVOWriteCommand21(I830SDVOPtr s, unsigned char val)
+
+static Bool
+I830SDVOSetClockRateMult(I830SDVOPtr s, unsigned char val)
 {
   memset(s->sdvo_regs, 0, 9);
   
-  s->sdvo_regs[SDVO_I2C_OPCODE] = 0x21;
+  s->sdvo_regs[SDVO_I2C_OPCODE] = SDVO_CMD_SET_CLOCK_RATE_MULT;
   
   s->sdvo_regs[SDVO_I2C_ARG_0] = val;
-  I830SDVOWriteOutputs(s, 0);
+  I830SDVOWriteOutputs(s, 1);
   I830SDVOReadInputRegs(s);
   
   return TRUE;
@@ -495,9 +496,9 @@ I830SDVOPreSetMode(I830SDVOPtr s, DisplayModePtr mode)
 
   I830SDVOWriteCommand10(s);
   if (mode->PrivFlags & I830_MFLAG_DOUBLE)
-    I830SDVOWriteCommand21(s, 0x02);
+    I830SDVOSetClockRateMult(s, 0x02);
   else
-    I830SDVOWriteCommand21(s, 0x01);
+    I830SDVOSetClockRateMult(s, 0x01);
 }
 
 Bool
