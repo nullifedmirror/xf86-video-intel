@@ -2347,14 +2347,10 @@ void I830DetectMonitors(ScrnInfoPtr pScrn)
     case I830_OUTPUT_SDVO:
       if (pI830->output[i].sdvo_drv)
       {
-#if 0
-	I830SDVOSetupDDC(pI830->output[i].sdvo_drv, 2);
-
-	pI830->output[i].MonInfo = xf86DoEDID_DDC2(pScrn->scrnIndex, pI830->output[i].pI2CBus);
+	pI830->output[i].MonInfo = xf86DoEDID_DDC2(pScrn->scrnIndex, pI830->output[i].pDDCBus);
 	
 	xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "DDC SDVO %d, %08X\n", i, pI830->output[i].pI2CBus->DriverPrivate.uval);
 	xf86PrintEDID(pI830->output[i].MonInfo);
-#endif
       }
       break;
     case I830_OUTPUT_UNUSED:
