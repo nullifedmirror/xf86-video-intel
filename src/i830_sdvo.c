@@ -77,28 +77,40 @@ I830SDVOWriteOutputs(I830SDVOPtr s, int num_out)
   sWriteByte(s, 8, s->sdvo_regs[8]);
 }
 
-/* the INTEL BIOS seems to always read back a bunch of regs
-   from 0x09 to 0x11 in reverse order */
-Bool
+static const char *cmd_status_names[] = {
+	"Power on",
+	"Success",
+	"Not supported",
+	"Invalid arg",
+	"Pending",
+	"Target not supported",
+	"Scaling not supported"
+};
+
+
+static void
 I830SDVOReadInputRegs(I830SDVOPtr s)
 {
   int i;
   
-  /* follow BIOS ordering */
-  sReadByte(s, 0x09, &s->sdvo_regs[0x09]);
+  sReadByte(s, SDVO_I2C_CMD_STATUS, &s->sdvo_regs[SDVO_I2C_CMD_STATUS]);
   
-  sReadByte(s, 0x0D, &s->sdvo_regs[0x0d]);
-  sReadByte(s, 0x0C, &s->sdvo_regs[0x0c]);
-  sReadByte(s, 0x0B, &s->sdvo_regs[0x0b]);
-  sReadByte(s, 0x0A, &s->sdvo_regs[0x0a]);
-  sReadByte(s, 0x11, &s->sdvo_regs[0x11]);
-  sReadByte(s, 0x10, &s->sdvo_regs[0x10]);
-  sReadByte(s, 0x0f, &s->sdvo_regs[0x0f]);
-  sReadByte(s, 0x0E, &s->sdvo_regs[0x0e]);
+  sReadByte(s, SDVO_I2C_RETURN_3, &s->sdvo_regs[SDVO_I2C_RETURN_3]);
+  sReadByte(s, SDVO_I2C_RETURN_2, &s->sdvo_regs[SDVO_I2C_RETURN_2]);
+  sReadByte(s, SDVO_I2C_RETURN_1, &s->sdvo_regs[SDVO_I2C_RETURN_1]);
+  sReadByte(s, SDVO_I2C_RETURN_0, &s->sdvo_regs[SDVO_I2C_RETURN_0]);
+  sReadByte(s, SDVO_I2C_RETURN_7, &s->sdvo_regs[SDVO_I2C_RETURN_7]);
+  sReadByte(s, SDVO_I2C_RETURN_6, &s->sdvo_regs[SDVO_I2C_RETURN_6]);
+  sReadByte(s, SDVO_I2C_RETURN_5, &s->sdvo_regs[SDVO_I2C_RETURN_5]);
+  sReadByte(s, SDVO_I2C_RETURN_4, &s->sdvo_regs[SDVO_I2C_RETURN_4]);
 
   ErrorF("SDVO: R: ");
-  for (i=0x09; i< 0x12; i++)
+  for (i = SDVO_I2C_RETURN_0; i <= SDVO_I2C_RETURN_7; i++)
     ErrorF("%02X ", s->sdvo_regs[i]);
+  if (s->sdvo_regs[SDVO_I2C_CMD_STATUS] <= SDVO_CMD_STATUS_SCALING_NOT_SUPP)
+    ErrorF("(%s)", cmd_status_names[s->sdvo_regs[SDVO_I2C_CMD_STATUS]]);
+  else
+    ErrorF("(??? %d)", s->sdvo_regs[SDVO_I2C_CMD_STATUS]);
   ErrorF("\n");
 }
 
