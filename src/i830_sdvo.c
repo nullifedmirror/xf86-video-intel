@@ -132,12 +132,14 @@ I830SDVOSetControlBusSwitch(I830SDVOPtr s, CARD8 target)
 
 
 Bool
-I830SDVOWriteCommand10(I830SDVOPtr s)
+I830SDVOSetTargetInput(I830SDVOPtr s, Bool target_1, Bool target_2)
 {
   /* write out 0x10 */
   memset(s->sdvo_regs, 0, 9);
   
-  s->sdvo_regs[SDVO_I2C_OPCODE] = 0x10;
+  s->sdvo_regs[SDVO_I2C_OPCODE] = SDVO_CMD_SET_TARGET_INPUT;
+  //  s->sdvo_regs[SDVO_I2C_ARG_0] = target_1;
+  //  s->sdvo_regs[SDVO_I2C_ARG_1] = target_2;
 
   I830SDVOWriteOutputs(s, 0);
   
@@ -474,7 +476,7 @@ I830SDVOPreSetMode(I830SDVOPtr s, DisplayModePtr mode)
   out_timings[4] = c17a[5] | ((short)c17a[4] << 8);
   out_timings[5] = c17a[3] | ((short)c17a[2] << 8);
   
-  I830SDVOWriteCommand10(s);
+  I830SDVOSetTargetInput(s, TRUE, TRUE);
   I830SDVOWriteCommand1D(s, clock, height);
 
   I830SDVOWriteCommand04(s, 0);
@@ -486,27 +488,27 @@ I830SDVOPreSetMode(I830SDVOPtr s, DisplayModePtr mode)
   I830SDVOWriteCommand11(s);
   I830SDVOWriteCommand17(s, out_timings[3], out_timings[4],out_timings[5]);
 
-  I830SDVOWriteCommand10(s);
+  I830SDVOSetTargetInput(s, TRUE, TRUE);
 
   I830SDVOWriteCommand1A(s, clock, width, height);
-  I830SDVOWriteCommand10(s);
+  I830SDVOSetTargetInput(s, TRUE, TRUE);
 
   I830SDVOWriteCommand1B(s);
   I830SDVOParseResponse1B(s);
-  I830SDVOWriteCommand10(s);
+  I830SDVOSetTargetInput(s, TRUE, TRUE);
 
 
   I830SDVOWriteCommand1C(s, clock, out_timings[0], out_timings[1], out_timings[2]);
   I830SDVOParseResponse1C(s);
-  I830SDVOWriteCommand10(s);
+  I830SDVOSetTargetInput(s, TRUE, TRUE);
 
 
   I830SDVOWriteCommand14(s, clock, curr_table[0], curr_table[1], curr_table[2]);
 
-  I830SDVOWriteCommand10(s);
+  I830SDVOSetTargetInput(s, TRUE, TRUE);
   I830SDVOWriteCommand15(s, curr_table[3], curr_table[4], out_timings[5]);
 
-  I830SDVOWriteCommand10(s);
+  I830SDVOSetTargetInput(s, TRUE, TRUE);
   if (mode->PrivFlags & I830_MFLAG_DOUBLE)
     I830SDVOSetClockRateMult(s, 0x02);
   else
@@ -538,7 +540,7 @@ I830SDVOPostSetMode(I830SDVOPtr s, DisplayModePtr mode)
   I830SDVOWriteCommand04(s, 1);
   I830SDVOWriteCommand05(s, 1);
 
-  I830SDVOWriteCommand10(s);
+  I830SDVOSetTargetInput(s, TRUE, TRUE);
   I830SDVOWriteCommand1D(s, clock, height);
 
   return ret;
