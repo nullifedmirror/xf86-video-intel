@@ -312,6 +312,7 @@ I830RawSetHw(ScrnInfoPtr pScrn, DisplayModePtr pMode)
   int index;
   int displays = pI830->operatingDevices;
   int ret, i;
+  CARD32 new_dvo;
   
   index = IS_I9XX(pI830) ? PLLS_I9xx : PLLS_I8xx;
 
@@ -426,15 +427,34 @@ I830RawSetHw(ScrnInfoPtr pScrn, DisplayModePtr pMode)
       *dpll |= DPLL_2X_CLOCK_ENABLE;
   }
   /* leave these alone for now */
+  if (pMode->PrivFlags & I830_MFLAG_DOUBLE)
+    new_dvo = 0x81c80080;
+  else
+    new_dvo = 0x80480080;
 
+  if (IS_I9XX(pI830)) {
+    for (i = 0; i < pI830->num_outputs; i++)
+    {
+      if (pI830->output[i].sdvo_drv)
+      {
+	if (pI830->output[i].sdvo_drv->output_device == DVOB)
+	{
+	  hw->dvob = new_dvo;
+	}
+	else if (pI830->output[i].sdvo_drv->output_device == DVOC)
+	{
+	  hw->dvoc = new_dvo;
+	}
+      }
+    }
+  }
+  else
+    hw->dvoc = new_dvo;
   //  hw->dvob &= ~DVO_ENABLE;
   //hw->dvoc &= ~DVO_ENABLE;
   //  hw->dvoc |= 0x4084 | DVO_ENABLE;
   //hw->dvob |= DVO_ENABLE;
-  if (pMode->PrivFlags & I830_MFLAG_DOUBLE)
-    hw->dvoc = 0x81c80080;
-  else
-    hw->dvoc = 0x80480080;
+
 
   /* Use display plane A. */
   hw->disp_a_ctrl |= DISPLAY_PLANE_ENABLE;
