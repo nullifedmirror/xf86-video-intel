@@ -1029,6 +1029,11 @@ GetDisplayDevices(ScrnInfoPtr pScrn)
 	   }
 	 }
        case I830_OUTPUT_SDVO:
+	 if (pI830->output[i].MonInfo)
+	 {
+	     ret |= PIPE_DFP;
+	     break;
+	 }
 	 /* needs more work */
 	 break;
        case I830_OUTPUT_LVDS:
