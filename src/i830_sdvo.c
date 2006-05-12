@@ -136,8 +136,8 @@ I830SDVOSetTargetInput(I830SDVOPtr s, Bool target_1, Bool target_2)
   memset(s->sdvo_regs, 0, 9);
   
   s->sdvo_regs[SDVO_I2C_OPCODE] = SDVO_CMD_SET_TARGET_INPUT;
-  //  s->sdvo_regs[SDVO_I2C_ARG_0] = target_1;
-  //  s->sdvo_regs[SDVO_I2C_ARG_1] = target_2;
+  s->sdvo_regs[SDVO_I2C_ARG_0] = target_1;
+  s->sdvo_regs[SDVO_I2C_ARG_1] = target_2;
 
   I830SDVOWriteOutputs(s, 2);
   
@@ -410,8 +410,8 @@ I830SDVOGetClockRateMult(I830SDVOPtr s)
     }
 
     return s->sdvo_regs[SDVO_I2C_RETURN_0];
-}
 
+}
 static Bool
 I830SDVOSetClockRateMult(I830SDVOPtr s, unsigned char val)
 {
@@ -538,7 +538,7 @@ I830SDVOPreSetMode(I830SDVOPtr s, DisplayModePtr mode)
   out_timings[5] = sync_flags;
   out_timings[5] |= 0 << 8;
   
-  I830SDVOSetTargetInput(s, TRUE, TRUE);
+  I830SDVOSetTargetInput(s, FALSE, FALSE);
   I830SDVOGetInputPixelClockRange(s, &min_clock, &max_clock);
 
   I830SDVOGetActiveOutputs(s, &out1, &out2);
@@ -548,19 +548,19 @@ I830SDVOPreSetMode(I830SDVOPtr s, DisplayModePtr mode)
   I830SDVOSetOutputTimingsPart1(s, clock, out_timings[0], out_timings[1], out_timings[2]);
   I830SDVOSetOutputTimingsPart2(s, out_timings[3], out_timings[4],out_timings[5]);
 
-  I830SDVOSetTargetInput(s, TRUE, TRUE);
+  I830SDVOSetTargetInput(s, FALSE, FALSE);
 
   I830SDVOCreatePreferredInputTiming(s, clock, width, height);
 
   I830SDVOGetPreferredInputTimingPart1(s);
   I830SDVOGetPreferredInputTimingPart2(s);
 
-  I830SDVOSetTargetInput(s, TRUE, TRUE);
+  I830SDVOSetTargetInput(s, FALSE, FALSE);
 
   I830SDVOSetInputTimingsPart1(s, clock, curr_table[0], curr_table[1], curr_table[2]);
   I830SDVOSetInputTimingsPart2(s, curr_table[3], curr_table[4], out_timings[5]);
 
-  I830SDVOSetTargetInput(s, TRUE, TRUE);
+  I830SDVOSetTargetInput(s, FALSE, FALSE);
   if (mode->PrivFlags & I830_MFLAG_DOUBLE)
     I830SDVOSetClockRateMult(s, 0x02);
   else
@@ -589,7 +589,7 @@ I830SDVOPostSetMode(I830SDVOPtr s, DisplayModePtr mode)
   I830SDVOGetActiveOutputs(s, &out1, &out2);
   I830SDVOSetActiveOutputs(s, TRUE, FALSE);
 
-  I830SDVOSetTargetInput(s, TRUE, TRUE);
+  I830SDVOSetTargetInput(s, FALSE, FALSE);
 
   return ret;
 }
@@ -604,19 +604,29 @@ i830SDVOSave(ScrnInfoPtr pScrn, int output_index)
     I830SDVOGetActiveOutputs(sdvo, &sdvo->save_sdvo_active_1,
 			     &sdvo->save_sdvo_active_2);
 
-    I830SDVOSetTargetInput(sdvo, TRUE, FALSE);
-    I830SDVOGetTimings(sdvo, &sdvo->save_input_dtd_1,
-		       SDVO_CMD_GET_INPUT_TIMINGS_PART1);
-    I830SDVOSetTargetInput(sdvo, FALSE, TRUE);
-    I830SDVOGetTimings(sdvo, &sdvo->save_input_dtd_2,
-		       SDVO_CMD_GET_INPUT_TIMINGS_PART1);
+    if (sdvo->caps.caps & 0x1) {
+      I830SDVOSetTargetInput(sdvo, FALSE, FALSE);
+      I830SDVOGetTimings(sdvo, &sdvo->save_input_dtd_1,
+			 SDVO_CMD_GET_INPUT_TIMINGS_PART1);
+    }
 
-    I830SDVOSetTargetOutput(sdvo, TRUE, FALSE);
-    I830SDVOGetTimings(sdvo, &sdvo->save_output_dtd_1,
-		       SDVO_CMD_GET_OUTPUT_TIMINGS_PART1);
-    I830SDVOSetTargetOutput(sdvo, FALSE, TRUE);
-    I830SDVOGetTimings(sdvo, &sdvo->save_output_dtd_2,
-		       SDVO_CMD_GET_OUTPUT_TIMINGS_PART1);
+    if (sdvo->caps.caps & 0x2) {
+      I830SDVOSetTargetInput(sdvo, FALSE, TRUE);
+      I830SDVOGetTimings(sdvo, &sdvo->save_input_dtd_2,
+			 SDVO_CMD_GET_INPUT_TIMINGS_PART1);
+    }
+
+    if (sdvo->caps.output_0_supported) {
+      I830SDVOSetTargetOutput(sdvo, TRUE, FALSE);
+      I830SDVOGetTimings(sdvo, &sdvo->save_output_dtd_1,
+			 SDVO_CMD_GET_OUTPUT_TIMINGS_PART1);
+    }
+    
+    if (sdvo->caps.output_1_supported) {
+      I830SDVOSetTargetOutput(sdvo, FALSE, TRUE);
+      I830SDVOGetTimings(sdvo, &sdvo->save_output_dtd_2,
+			 SDVO_CMD_GET_OUTPUT_TIMINGS_PART1);
+    }
 
     sdvo->save_SDVOX = INREG(sdvo->output_device);
 }
@@ -636,19 +646,29 @@ i830SDVOPostRestore(ScrnInfoPtr pScrn, int output_index)
     I830Ptr pI830 = I830PTR(pScrn);
     I830SDVOPtr sdvo = pI830->output[output_index].sdvo_drv;
 
-    I830SDVOSetTargetInput(sdvo, TRUE, FALSE);
-    I830SDVOSetTimings(sdvo, &sdvo->save_input_dtd_1,
-		       SDVO_CMD_SET_INPUT_TIMINGS_PART1);
-    I830SDVOSetTargetInput(sdvo, FALSE, TRUE);
-    I830SDVOSetTimings(sdvo, &sdvo->save_input_dtd_2,
-		       SDVO_CMD_SET_INPUT_TIMINGS_PART1);
+    if (sdvo->caps.caps & 0x1) {
+      I830SDVOSetTargetInput(sdvo, FALSE, FALSE);
+      I830SDVOSetTimings(sdvo, &sdvo->save_input_dtd_1,
+			 SDVO_CMD_SET_INPUT_TIMINGS_PART1);
+    }
 
-    I830SDVOSetTargetOutput(sdvo, TRUE, FALSE);
-    I830SDVOSetTimings(sdvo, &sdvo->save_output_dtd_1,
-		       SDVO_CMD_SET_OUTPUT_TIMINGS_PART1);
-    I830SDVOSetTargetOutput(sdvo, FALSE, TRUE);
-    I830SDVOSetTimings(sdvo, &sdvo->save_output_dtd_2,
-		       SDVO_CMD_SET_OUTPUT_TIMINGS_PART1);
+    if (sdvo->caps.caps & 0x2) {
+      I830SDVOSetTargetInput(sdvo, FALSE, TRUE);
+      I830SDVOSetTimings(sdvo, &sdvo->save_input_dtd_2,
+			 SDVO_CMD_SET_INPUT_TIMINGS_PART1);
+    }
+
+    if (sdvo->caps.output_0_supported) {
+      I830SDVOSetTargetOutput(sdvo, TRUE, FALSE);
+      I830SDVOSetTimings(sdvo, &sdvo->save_output_dtd_1,
+			 SDVO_CMD_SET_OUTPUT_TIMINGS_PART1);
+    }
+    
+    if (sdvo->caps.output_1_supported) {
+      I830SDVOSetTargetOutput(sdvo, FALSE, TRUE);
+      I830SDVOSetTimings(sdvo, &sdvo->save_output_dtd_2,
+			 SDVO_CMD_SET_OUTPUT_TIMINGS_PART1);
+    }
 
     I830SDVOSetClockRateMult(sdvo, sdvo->save_sdvo_mult);
 
@@ -656,6 +676,24 @@ i830SDVOPostRestore(ScrnInfoPtr pScrn, int output_index)
 
     I830SDVOSetActiveOutputs(sdvo, sdvo->save_sdvo_active_1,
 			     sdvo->save_sdvo_active_2);
+}
+
+static void
+I830SDVOGetCapabilities(I830SDVOPtr s, i830_sdvo_caps *caps)
+{
+  memset(s->sdvo_regs, 0, 9);
+  s->sdvo_regs[SDVO_I2C_OPCODE] = SDVO_CMD_GET_DEVICE_CAPS;
+  I830SDVOWriteOutputs(s, 0);
+  I830SDVOReadInputRegs(s);
+
+  caps->vendor_id = s->sdvo_regs[SDVO_I2C_RETURN_0];
+  caps->device_id = s->sdvo_regs[SDVO_I2C_RETURN_1];
+  caps->device_rev_id = s->sdvo_regs[SDVO_I2C_RETURN_2];
+  caps->sdvo_version_major = s->sdvo_regs[SDVO_I2C_RETURN_3];
+  caps->sdvo_version_minor = s->sdvo_regs[SDVO_I2C_RETURN_4];
+  caps->caps = s->sdvo_regs[SDVO_I2C_RETURN_5];
+  caps->output_0_supported = s->sdvo_regs[SDVO_I2C_RETURN_6];
+  caps->output_1_supported = s->sdvo_regs[SDVO_I2C_RETURN_7];
 }
 
 static Bool
@@ -807,5 +845,15 @@ I830SDVOInit(ScrnInfoPtr pScrn, int output_index, CARD32 output_device)
   
   pI830->output[output_index].sdvo_drv = sdvo;
   
+  I830SDVOGetCapabilities(sdvo, &sdvo->caps);
+  
+  xf86DrvMsg(pScrn->scrnIndex, X_INFO,
+	     "SDVO device VID/DID: %02X:%02X.%02X, %02X, output 1: %c, output 2: %c\n",
+	     sdvo->caps.vendor_id, sdvo->caps.device_id,
+	     sdvo->caps.device_rev_id, sdvo->caps.caps,
+	     sdvo->caps.output_0_supported ? 'Y' : 'N',
+	     sdvo->caps.output_1_supported ? 'Y' : 'N');
+
+
   return sdvo;
 }
