@@ -730,6 +730,9 @@ I830RawSaveState(ScrnInfoPtr pScrn, I830RegPtr hw)
   vgaRegPtr vgaReg = &hwp->SavedReg;
   int i, count;
 
+  I830DumpModeDebugInfo(pScrn);
+
+  hw->adpa = INREG(ADPA);
   hw->vga0_divisor = INREG(VCLK_DIVISOR_VGA0);
   hw->vga1_divisor = INREG(VCLK_DIVISOR_VGA1);
   hw->vga_pd = INREG(VCLK_POST_DIV);
@@ -765,7 +768,6 @@ I830RawSaveState(ScrnInfoPtr pScrn, I830RegPtr hw)
   hw->dvob_srcdim = INREG(DVOB_SRCDIM);
   hw->dvoc_srcdim = INREG(DVOC_SRCDIM);
   hw->lvds = INREG(LVDS);
-
   
   hw->pipe_a_conf = INREG(PIPEACONF);
   hw->pipe_b_conf = INREG(PIPEBCONF);
@@ -778,6 +780,8 @@ I830RawSaveState(ScrnInfoPtr pScrn, I830RegPtr hw)
   hw->disp_b_base = INREG(DSPBBASE);
   hw->disp_a_stride = INREG(DSPASTRIDE);
   hw->disp_b_stride = INREG(DSPBSTRIDE);
+  hw->disp_a_ctrl = INREG(DSPASIZE);
+  hw->disp_b_ctrl = INREG(DSPBSIZE);
 
   hw->add_id = INREG(ADD_ID);
   
@@ -838,10 +842,48 @@ I830RawRestoreState(ScrnInfoPtr pScrn, I830RegPtr hw)
     }
   }
 
+	
+  OUTREG(ADPA, INREG(ADPA) & ~ADPA_DAC_ENABLE);
+  
+  /* Disable Sync */
+  temp = INREG(ADPA);
+  temp &= ~(ADPA_VSYNC_CNTL_DISABLE | ADPA_HSYNC_CNTL_DISABLE);
+  temp |= ADPA_VSYNC_CNTL_DISABLE | ADPA_HSYNC_CNTL_DISABLE;
+  OUTREG(ADPA, temp);
+
+  /* do some funky magic - xyzzy */
+  OUTREG(0x61204, 0xabcd0000);
+
+  /* turn off PLL */
+  OUTREG(DPLL_A, INREG(DPLL_A) &~ DPLL_VCO_ENABLE);
+  OUTREG(DPLL_B, INREG(DPLL_B) &~ DPLL_VCO_ENABLE);
+
+  OUTREG(FPA0, hw->fpa0);
+  OUTREG(FPA1, hw->fpa1);
+  OUTREG(FPB0, hw->fpa0);
+  OUTREG(FPB1, hw->fpa1);
+
+  OUTREG(DPLL_A, hw->dpll_a);
+  OUTREG(DPLL_B, hw->dpll_b);
+
+  OUTREG(DVOB, hw->dvob);
+  OUTREG(DVOC, hw->dvoc);
+
+  OUTREG(DVOB_SRCDIM, hw->dvob_srcdim);
+  OUTREG(DVOC_SRCDIM, hw->dvoc_srcdim);
+
   OUTREG(VCLK_DIVISOR_VGA0, hw->vga0_divisor);
   OUTREG(VCLK_DIVISOR_VGA1, hw->vga1_divisor);
   OUTREG(VCLK_POST_DIV, hw->vga_pd);
 
+  OUTREG(0x61204, 0x0);
+
+  
+  OUTREG(ADPA, INREG(ADPA) | ADPA_DAC_ENABLE);
+  
+  /* Set ADPA */
+  OUTREG(ADPA, (hw->adpa & ~(ADPA_VSYNC_CNTL_DISABLE|ADPA_HSYNC_CNTL_DISABLE)) | (ADPA_VSYNC_CNTL_DISABLE|ADPA_HSYNC_CNTL_DISABLE));
+  
   OUTREG(HTOTAL_A, hw->htotal_a);
   OUTREG(HBLANK_A, hw->hblank_a);
   OUTREG(HSYNC_A, hw->hsync_a);
@@ -851,14 +893,6 @@ I830RawRestoreState(ScrnInfoPtr pScrn, I830RegPtr hw)
   OUTREG(VSYNC_A, hw->vsync_a);
 
   OUTREG(PIPEASRC, hw->pipe_src_a);
-	 
-  OUTREG(DPLL_A, hw->dpll_a);
-  OUTREG(DPLL_B, hw->dpll_b);
-  OUTREG(FPA0, hw->fpa0);
-  OUTREG(FPA1, hw->fpa1);
-  OUTREG(FPB0, hw->fpa0);
-  OUTREG(FPB1, hw->fpa1);
-
   OUTREG(PIPEACONF, hw->pipe_a_conf);
   OUTREG(PIPEBCONF, hw->pipe_b_conf);
   OUTREG(DISPLAY_ARB, hw->disp_arb);
@@ -869,8 +903,11 @@ I830RawRestoreState(ScrnInfoPtr pScrn, I830RegPtr hw)
   OUTREG(DSPBBASE, hw->disp_b_base);
   OUTREG(DSPASTRIDE, hw->disp_a_stride);
   OUTREG(DSPBSTRIDE, hw->disp_b_stride);
-
+  OUTREG(DSPASIZE, hw->disp_a_ctrl);
+  OUTREG(DSPBSIZE, hw->disp_b_ctrl);
   OUTREG(VGACNTRL, hw->vgacntrl);
+
+  OUTREG(ADPA, hw->adpa);
 
   for (i = 0; i < pI830->num_outputs; i++) {
     if (pI830->output[i].type == I830_OUTPUT_SDVO &&
@@ -879,7 +916,8 @@ I830RawRestoreState(ScrnInfoPtr pScrn, I830RegPtr hw)
       i830SDVOPostRestore(pScrn, i);
     }
   }
-  
+
+  I830DumpModeDebugInfo(pScrn);  
   return TRUE;
 }
 

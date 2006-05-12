@@ -202,6 +202,8 @@ typedef struct _I830SaveRec {
   CARD32 disp_b_ctrl;
   CARD32 disp_a_base;
   CARD32 disp_b_base;
+  CARD32 disp_a_size;
+  CARD32 disp_b_size;
   CARD32 cursor_a_palette[4];
   CARD32 cursor_b_palette[4];
   CARD32 disp_a_stride;
