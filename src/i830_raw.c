@@ -780,8 +780,8 @@ I830RawSaveState(ScrnInfoPtr pScrn, I830RegPtr hw)
   hw->disp_b_base = INREG(DSPBBASE);
   hw->disp_a_stride = INREG(DSPASTRIDE);
   hw->disp_b_stride = INREG(DSPBSTRIDE);
-  hw->disp_a_ctrl = INREG(DSPASIZE);
-  hw->disp_b_ctrl = INREG(DSPBSIZE);
+  hw->disp_a_size = INREG(DSPASIZE);
+  hw->disp_b_size = INREG(DSPBSIZE);
 
   hw->add_id = INREG(ADD_ID);
   
@@ -903,8 +903,8 @@ I830RawRestoreState(ScrnInfoPtr pScrn, I830RegPtr hw)
   OUTREG(DSPBBASE, hw->disp_b_base);
   OUTREG(DSPASTRIDE, hw->disp_a_stride);
   OUTREG(DSPBSTRIDE, hw->disp_b_stride);
-  OUTREG(DSPASIZE, hw->disp_a_ctrl);
-  OUTREG(DSPBSIZE, hw->disp_b_ctrl);
+  OUTREG(DSPASIZE, hw->disp_a_size);
+  OUTREG(DSPBSIZE, hw->disp_b_size);
   OUTREG(VGACNTRL, hw->vgacntrl);
 
   OUTREG(ADPA, hw->adpa);
