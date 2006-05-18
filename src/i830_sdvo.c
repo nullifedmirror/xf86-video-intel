@@ -833,7 +833,7 @@ I830SDVOInit(ScrnInfoPtr pScrn, int output_index, CARD32 output_device)
   pI830->output[output_index].pDDCBus = ddcbus;
     
   /* Read the regs to test if we can talk to the device */
-  for (i = 0; i < 0x40; i++) {
+  for (i = 0; i < 0x8; i++) {
     if (!sReadByte(sdvo, i, &ch[i])) {
       xf86DestroyI2CBusRec(pI830->output[output_index].pDDCBus, FALSE,
 			   FALSE);
