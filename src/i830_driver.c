@@ -324,11 +324,10 @@ I830DumpModeDebugInfo(ScrnInfoPtr pScrn)
 
   DR(ADPA);
 
-  DR(0x6000);
-  DR(0x6004);
-  DR(0x6010);
+  DR(VCLK_DIVISOR_VGA0);
+  DR(VCLK_DIVISOR_VGA1);
+  DR(VCLK_POST_DIV);
 
-  DR(0x604C);
   DR(0x6104);
   DR(0x6200);
   DR(0x6204);
@@ -1092,6 +1091,9 @@ GetBIOSPipe(ScrnInfoPtr pScrn)
    vbeInfoPtr pVbe = pI830->pVbe;
    int pipe;
 
+   if (pI830->rawmode)
+     return 0;
+
    DPRINTF(PFX, "GetBIOSPipe:\n");
 
    /* single pipe machines should always return Pipe A */
@@ -1120,6 +1122,9 @@ SetBIOSPipe(ScrnInfoPtr pScrn, int pipe)
 {
    I830Ptr pI830 = I830PTR(pScrn);
    vbeInfoPtr pVbe = pI830->pVbe;
+
+   if (pI830->rawmode)
+     return TRUE;
 
    DPRINTF(PFX, "SetBIOSPipe: pipe 0x%x\n", pipe);
 
@@ -1197,6 +1202,8 @@ SetDisplayDevices(ScrnInfoPtr pScrn, int devices)
    Bool setmode = FALSE;
 #endif
 
+   if (pI830->rawmode)
+     return TRUE;
    DPRINTF(PFX, "SetDisplayDevices: devices 0x%x\n", devices);
 
    if (!pI830->specifiedMonitor)
@@ -1599,7 +1606,7 @@ I830DetectDisplayDevice(ScrnInfoPtr pScrn)
    DisplayType i;
    
    /* This seems to lockup some Dell BIOS'. So it's on option to turn on */
-   if (pI830->displayInfo) {
+   if (pI830->displayInfo && !pI830->rawmode) {
        xf86DrvMsg(pScrn->scrnIndex, X_INFO,
 		  "Broken BIOSes cause the system to hang here.\n"
 		  "\t      If you encounter this problem please add \n"
@@ -3268,7 +3275,7 @@ I830BIOSPreInit(ScrnInfoPtr pScrn, int flags)
    /* This performs an active detect of the currently attached monitors
     * or, at least it's meant to..... alas it doesn't seem to always work.
     */
-   if (pI830->devicePresence) {
+   if (pI830->devicePresence && !pI830->rawmode) {
       int req=0, att=0, enc=0;
       GetDevicePresence(pScrn, &req, &att, &enc);
       for (i = 0; i < NumDisplayTypes; i++) {
