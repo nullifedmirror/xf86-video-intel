@@ -830,9 +830,13 @@ I830RawRestoreState(ScrnInfoPtr pScrn, I830RegPtr hw)
   /* turn off pipe A */
   temp = hw->pipe_a_conf;
   OUTREG(PIPEACONF, temp & ~PIPEACONF_ENABLE);
+  
+  if (hw->dvob & DVO_ENABLE)
+    OUTREG(DVOB, (hw->dvob & ~DVO_ENABLE) | SDVO_BORDER_ENABLE);
 
-  OUTREG(DVOC, (hw->dvoc & ~DVO_ENABLE) | SDVO_BORDER_ENABLE);
-  OUTREG(DVOB, (hw->dvob & ~DVO_ENABLE) | SDVO_BORDER_ENABLE);
+  if (hw->dvoc & DVO_ENABLE)
+    OUTREG(DVOC, (hw->dvoc & ~DVO_ENABLE) | SDVO_BORDER_ENABLE);
+
   OUTREG(ADPA, hw->adpa & ~ADPA_DAC_ENABLE);
 
   OUTREG(0x61204, 0xabcd0000);
@@ -848,8 +852,11 @@ I830RawRestoreState(ScrnInfoPtr pScrn, I830RegPtr hw)
   OUTREG(VCLK_DIVISOR_VGA1, hw->vga1_divisor);
   OUTREG(VCLK_POST_DIV, hw->vga_pd);
 
-  OUTREG(DVOB, hw->dvob);
-  OUTREG(DVOC, hw->dvoc | SDVO_BORDER_ENABLE);
+  if (hw->dvob & DVO_ENABLE)
+    OUTREG(DVOB, hw->dvob | SDVO_BORDER_ENABLE);
+
+  if (hw->dvob & DVO_ENABLE)
+    OUTREG(DVOC, hw->dvoc | SDVO_BORDER_ENABLE);
 
   OUTREG(0x61204, 0x00000000);
 
@@ -898,8 +905,13 @@ I830RawRestoreState(ScrnInfoPtr pScrn, I830RegPtr hw)
   OUTREG(PIPEACONF, hw->pipe_a_conf);
   OUTREG(PIPEBCONF, hw->pipe_b_conf);
 
-  OUTREG(DVOC, hw->dvoc | SDVO_BORDER_ENABLE);
-  OUTREG(DVOC, hw->dvoc);
+  if (hw->dvoc & DVO_ENABLE) {
+    OUTREG(DVOC, hw->dvoc);
+  }
+
+  if (hw->dvob & DVO_ENABLE) {
+    OUTREG(DVOB, hw->dvoc);
+  }
 
   OUTREG(VGACNTRL, hw->vgacntrl);
 
