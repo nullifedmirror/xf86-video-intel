@@ -541,8 +541,7 @@ I830RawSetHw(ScrnInfoPtr pScrn, DisplayModePtr pMode)
     return FALSE;
   
   *ht = (htotal << HTOTAL_SHIFT) | (hactive << HACTIVE_SHIFT);
-  *hb = (hblank_start << HBLANKSTART_SHIFT) |
-    (hblank_end << HSYNCEND_SHIFT);
+  *hb = (hblank_start << HBLANKSTART_SHIFT) | (hblank_end << HBLANKEND_SHIFT);
   *hs = (hsync_start << HSYNCSTART_SHIFT) | (hsync_end << HSYNCEND_SHIFT);
   
   *vt = (vtotal << VTOTAL_SHIFT) | (vactive << VACTIVE_SHIFT);

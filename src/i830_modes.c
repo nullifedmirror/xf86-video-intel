@@ -895,8 +895,10 @@ DisplayModePtr I830xf86DDCModes(ScrnInfoPtr pScrn)
 	    count++;
 
 	    xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-		       "Valid Mode from Detailed timing table: %s\n",
-		       new->name);
+		       "Valid Mode from Detailed timing table: %s (ht %d hss %d hse %d vt %d vss %d vse %d)\n",
+		       new->name,
+		       new->HTotal, new->HSyncStart, new->HSyncEnd,
+		       new->VTotal, new->VSyncStart, new->VSyncEnd);
 
 	    I830xf86SortModes(&new, &first, &last);
 	}
@@ -912,8 +914,11 @@ DisplayModePtr I830xf86DDCModes(ScrnInfoPtr pScrn)
 		(ddc->timings2[j].vsize == p->VDisplay)) {
 		float  refresh =
 		    (float)p->Clock * 1000.0 / p->HTotal / p->VTotal;
+		float err = (float)ddc->timings2[j].refresh - refresh;
 
-		if (abs((float)ddc->timings2[j].refresh - refresh) < 1.0) {
+		if (err < 0) err = -err;
+
+		if (err < 1.0) {
 		    /* Is this good enough? */
 		    new = xnfcalloc(1, sizeof (DisplayModeRec));
 		    memcpy(new, p, sizeof(DisplayModeRec));
