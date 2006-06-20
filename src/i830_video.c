@@ -572,18 +572,53 @@ I830SetOneLineModeRatio(ScrnInfoPtr pScrn)
       pPriv->oneLineMode = FALSE;
 }
 
+static CARD32 I830BoundGammaElt (CARD32 elt, CARD32 eltPrev)
+{
+   elt &= 0xff;
+   eltPrev &= 0xff;
+   if (elt < eltPrev)
+      elt = eltPrev;
+   else if ((elt - eltPrev) > 0x7e)
+      elt = eltPrev + 0x7e;
+   return elt;
+}
+
+static CARD32 I830BoundGamma (CARD32 gamma, CARD32 gammaPrev)
+{
+   return (I830BoundGammaElt (gamma >> 24, gammaPrev >> 24) << 24 |
+	   I830BoundGammaElt (gamma >> 16, gammaPrev >> 16) << 16 |
+	   I830BoundGammaElt (gamma >>  8, gammaPrev >>  8) <<  8 |
+	   I830BoundGammaElt (gamma      , gammaPrev      ));
+}
+
 static void
 I830UpdateGamma(ScrnInfoPtr pScrn)
 {
    I830Ptr pI830 = I830PTR(pScrn);
    I830PortPrivPtr pPriv = pI830->adaptor->pPortPrivates[0].ptr;
+   CARD32   gamma0 = pPriv->gamma0;
+   CARD32   gamma1 = pPriv->gamma1;
+   CARD32   gamma2 = pPriv->gamma2;
+   CARD32   gamma3 = pPriv->gamma3;
+   CARD32   gamma4 = pPriv->gamma4;
+   CARD32   gamma5 = pPriv->gamma5;
 
-   OUTREG(OGAMC5, pPriv->gamma5);
-   OUTREG(OGAMC4, pPriv->gamma4);
-   OUTREG(OGAMC3, pPriv->gamma3);
-   OUTREG(OGAMC2, pPriv->gamma2);
-   OUTREG(OGAMC1, pPriv->gamma1);
-   OUTREG(OGAMC0, pPriv->gamma0);
+   ErrorF ("Original gamma: 0x%lx 0x%lx 0x%lx 0x%lx 0x%lx 0x%lx\n",
+	   gamma0, gamma1, gamma2, gamma3, gamma4, gamma5);
+   gamma1 = I830BoundGamma (gamma1, gamma0);
+   gamma2 = I830BoundGamma (gamma2, gamma1);
+   gamma3 = I830BoundGamma (gamma3, gamma2);
+   gamma4 = I830BoundGamma (gamma4, gamma3);
+   gamma5 = I830BoundGamma (gamma5, gamma4);
+   ErrorF ("Bounded  gamma: 0x%lx 0x%lx 0x%lx 0x%lx 0x%lx 0x%lx\n",
+	   gamma0, gamma1, gamma2, gamma3, gamma4, gamma5);
+
+   OUTREG(OGAMC5, gamma5);
+   OUTREG(OGAMC4, gamma4);
+   OUTREG(OGAMC3, gamma3);
+   OUTREG(OGAMC2, gamma2);
+   OUTREG(OGAMC1, gamma1);
+   OUTREG(OGAMC0, gamma0);
 }
 
 static XF86VideoAdaptorPtr
@@ -806,50 +841,18 @@ I830SetPortAttribute(ScrnInfoPtr pScrn,
          overlay->OCONFIG |= OVERLAY_PIPE_B;
       if (pPriv->overlayOK)
          OVERLAY_UPDATE;
-   } else if (attribute == xvGamma0 && (IS_I915G(pI830) || IS_I915GM(pI830) || IS_I945G(pI830))) {
-      /* Avoid video anomalies, so set gamma registers when overlay is off */
-      /* We also clamp the values if they are outside the ranges */
-      if (!*pI830->overlayOn) {
-         pPriv->gamma0 = value;
-	 if (pPriv->gamma1 - pPriv->gamma0 > 0x7d)
-	   pPriv->gamma1 = pPriv->gamma0 + 0x7d;
-      } else
-         return BadRequest;
-   } else if (attribute == xvGamma1 && (IS_I915G(pI830) || IS_I915GM(pI830) || IS_I945G(pI830))) {
-      if (!*pI830->overlayOn) {
-         pPriv->gamma1 = value;
-         if (pPriv->gamma1 - pPriv->gamma0 > 0x7d)
-           pPriv->gamma0 = pPriv->gamma1 - 0x7d;
-      } else
-         return BadRequest;
-   } else if (attribute == xvGamma2 && (IS_I915G(pI830) || IS_I915GM(pI830) || IS_I945G(pI830))) {
-      if (!*pI830->overlayOn) {
-         pPriv->gamma2 = value;
-         if (pPriv->gamma3 - pPriv->gamma2 > 0x7d)
-            pPriv->gamma3 = pPriv->gamma2 + 0x7d;
-      } else
-         return BadRequest;
-   } else if (attribute == xvGamma3 && (IS_I915G(pI830) || IS_I915GM(pI830) || IS_I945G(pI830))) {
-      if (!*pI830->overlayOn) {
-         pPriv->gamma3 = value;
-         if (pPriv->gamma3 - pPriv->gamma2 > 0x7d)
-            pPriv->gamma2 = pPriv->gamma3 - 0x7d;
-      } else
-         return BadRequest;
-   } else if (attribute == xvGamma4 && (IS_I915G(pI830) || IS_I915GM(pI830) || IS_I945G(pI830))) {
-      if (!*pI830->overlayOn) {
-         pPriv->gamma4 = value;
-         if (pPriv->gamma5 - pPriv->gamma4 > 0x7d)
-            pPriv->gamma5 = pPriv->gamma4 + 0x7d;
-      } else
-         return BadRequest;
-   } else if (attribute == xvGamma5 && (IS_I915G(pI830) || IS_I915GM(pI830) || IS_I945G(pI830))) {
-      if (!*pI830->overlayOn) {
-         pPriv->gamma5 = value;
-         if (pPriv->gamma5 - pPriv->gamma4 > 0x7d)
-            pPriv->gamma4 = pPriv->gamma5 - 0x7d;
-      } else
-         return BadRequest;
+   } else if (attribute == xvGamma0 && (IS_I9XX(pI830))) {
+      pPriv->gamma0 = value; 
+   } else if (attribute == xvGamma1 && (IS_I9XX(pI830))) {
+      pPriv->gamma1 = value;
+   } else if (attribute == xvGamma2 && (IS_I9XX(pI830))) {
+      pPriv->gamma2 = value;
+   } else if (attribute == xvGamma3 && (IS_I9XX(pI830))) {
+      pPriv->gamma3 = value;
+   } else if (attribute == xvGamma4 && (IS_I9XX(pI830))) {
+      pPriv->gamma4 = value;
+   } else if (attribute == xvGamma5 && (IS_I9XX(pI830))) {
+      pPriv->gamma5 = value;
    } else if (attribute == xvColorKey) {
       pPriv->colorKey = value;
       switch (pScrn->depth) {
