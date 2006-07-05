@@ -7,9 +7,9 @@ typedef struct _I830I2CVidOutputRec {
   Bool (*Init)(I2CDevPtr d);
   ModeStatus (*ModeValid)(I2CDevPtr d, DisplayModePtr mode);
   void (*Mode)(I2CDevPtr d, DisplayModePtr mode);
-  void (*Power)(I2CDevPtr d, DisplayModePtr mode);
+  void (*Power)(I2CDevPtr d, Bool On);
   void (*PrintRegs)(I2CDevPtr d);
-  void (*SaveRegs)(I2CDevPtr d);
+  void (*SaveRegs)(void *d);
   void (*RestoreRegs)(I2CDevPtr d);
 } I830I2CVidOutputRec, *I830I2CVidOutputPtr;
 
