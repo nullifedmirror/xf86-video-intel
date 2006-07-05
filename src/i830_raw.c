@@ -423,16 +423,18 @@ I830RawSetHw(ScrnInfoPtr pScrn, DisplayModePtr pMode)
   *dpll &= ~DPLL_2X_CLOCK_ENABLE;
   for (i=0; i<pI830->num_outputs; i++)
   {
-    if (pI830->output[i].sdvo_drv)
+    if (pI830->output[i].sdvo_drv || pI830->output[i].i2c_drv)
       *dpll |= DPLL_2X_CLOCK_ENABLE;
   }
-  /* leave these alone for now */
-  if (pMode->PrivFlags & I830_MFLAG_DOUBLE)
-    new_dvo = 0x81c80080;
-  else
-    new_dvo = 0x80480080;
 
   if (IS_I9XX(pI830)) {
+    /* leave these alone for now */
+    if (pMode->PrivFlags & I830_MFLAG_DOUBLE)
+      new_dvo = 0x81c80080;
+    else
+      new_dvo = 0x80480080;
+
+
     for (i = 0; i < pI830->num_outputs; i++)
     {
       if (pI830->output[i].sdvo_drv)
@@ -448,8 +450,10 @@ I830RawSetHw(ScrnInfoPtr pScrn, DisplayModePtr pMode)
       }
     }
   }
-  else
+  else {
+    new_dvo = 0x8000408c;
     hw->dvoc = new_dvo;
+  }
   //  hw->dvob &= ~DVO_ENABLE;
   //hw->dvoc &= ~DVO_ENABLE;
   //  hw->dvoc |= 0x4084 | DVO_ENABLE;
@@ -793,6 +797,12 @@ I830RawSaveState(ScrnInfoPtr pScrn, I830RegPtr hw)
     hw->swf1x[count++] = INREG(i);
   
   for (i = 0; i < pI830->num_outputs; i++) {
+    if (pI830->output[i].type == I830_OUTPUT_DVO &&
+	pI830->output[i].i2c_drv != NULL)
+    {
+      pI830->output[i].i2c_drv->vid_rec->SaveRegs(pI830->output[i].i2c_drv->devpriv);
+    }
+
     if (pI830->output[i].type == I830_OUTPUT_SDVO &&
 	pI830->output[i].sdvo_drv != NULL)
     {
@@ -821,6 +831,12 @@ I830RawRestoreState(ScrnInfoPtr pScrn, I830RegPtr hw)
   vgaHWLock(hwp);
 
   for (i = 0; i < pI830->num_outputs; i++) {
+    if (pI830->output[i].type == I830_OUTPUT_DVO &&
+	pI830->output[i].i2c_drv != NULL)
+    {
+      pI830->output[i].i2c_drv->vid_rec->RestoreRegs(pI830->output[i].i2c_drv->devpriv);
+    }
+
     if (pI830->output[i].type == I830_OUTPUT_SDVO &&
 	pI830->output[i].sdvo_drv != NULL)
     {
@@ -987,6 +1003,11 @@ I830RawSetMode(ScrnInfoPtr pScrn, DisplayModePtr mode)
       }
       else
 	      ret = TRUE;
+    }
+
+    if (pI830->output[i].i2c_drv)
+    {
+      pI830->output[i].i2c_drv->vid_rec->Mode(pI830->output[i].i2c_drv->devpriv, mode);
     }
   }
   if (didLock)
