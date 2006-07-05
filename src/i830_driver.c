@@ -320,6 +320,8 @@ I830DumpModeDebugInfo(ScrnInfoPtr pScrn)
   CARD32 temp, planeA, planeB;
   planeA = INREG(DSPACNTR);
   planeB = INREG(DSPBCNTR);
+  int i;
+
 #if 1
 
   DR(ADPA);
@@ -467,15 +469,13 @@ I830DumpModeDebugInfo(ScrnInfoPtr pScrn)
 
   DR(0x240c);
 
-#if 0
-  if (pI830->sdvo && pI830->sdvo->found) {
-    I830SDVOWriteCommand10(pI830->sdvo);
-    I830SDVOWriteCommand18(pI830->sdvo);
-    I830SDVOWriteCommand10(pI830->sdvo);
-    I830SDVOWriteCommand19(pI830->sdvo);
-    I830SDVOWriteCommand10(pI830->sdvo);
+  for (i=0; i<pI830->num_outputs; i++) {
+    if (pI830->output[i].type == I830_OUTPUT_DVO &&
+	pI830->output[i].i2c_drv != NULL)
+    {
+      pI830->output[i].i2c_drv->vid_rec->PrintRegs(pI830->output[i].i2c_drv->devpriv);
+    }
   }
-#endif
 #endif
 }
 
