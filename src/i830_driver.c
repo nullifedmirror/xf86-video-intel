@@ -184,7 +184,6 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "vbeModes.h"
 #include "shadow.h"
 #include "i830.h"
-#include "i830_debug.h"
 
 #ifdef XF86DRI
 #include "dri.h"
@@ -4773,7 +4772,6 @@ I830VESASetMode(ScrnInfoPtr pScrn, DisplayModePtr pMode)
    }
 #endif
 
-    i830DumpRegs (pScrn);
 #if MODESWITCH_RESET_STATE
    ResetState(pScrn, TRUE);
    SetHWOperatingState(pScrn);
