@@ -140,7 +140,7 @@ static void sil164Power(I2CDevPtr d, Bool On)
   unsigned char ch;
   
   ret = sil164ReadByte(sil, SIL164_REG8, &ch);
-  if (ret)
+  if (ret == FALSE)
     return;
 
   if (On)
