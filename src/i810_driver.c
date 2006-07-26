@@ -60,11 +60,14 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  * DGA
  */
 
+#include <math.h>
+#include <string.h>
+#include <unistd.h>
+
 /*
  * These are X and server generic header files.
  */
 #include "xf86.h"
-#include "xf86_ansic.h"
 #include "xf86_OSproc.h"
 #include "xf86Resources.h"
 #include "xf86RAC.h"
@@ -136,6 +139,7 @@ static SymTabRec I810Chipsets[] = {
    {PCI_CHIP_E7221_G,		"E7221 (i915)"},
    {PCI_CHIP_I915_GM,		"915GM"},
    {PCI_CHIP_I945_G,		"945G"},
+   {PCI_CHIP_I945_GM,		"945GM"},
    {-1,				NULL}
 };
 
@@ -154,6 +158,7 @@ static PciChipsets I810PciChipsets[] = {
    {PCI_CHIP_E7221_G,		PCI_CHIP_E7221_G,	RES_SHARED_VGA},
    {PCI_CHIP_I915_GM,		PCI_CHIP_I915_GM,	RES_SHARED_VGA},
    {PCI_CHIP_I945_G,		PCI_CHIP_I945_G,	RES_SHARED_VGA},
+   {PCI_CHIP_I945_GM,		PCI_CHIP_I945_GM,	RES_SHARED_VGA},
    {-1,				-1, RES_UNDEFINED }
 };
 
@@ -299,6 +304,7 @@ const char *I810drmSymbols[] = {
    "drmGetInterruptFromBusID",
    "drmGetLibVersion",
    "drmGetVersion",
+   "drmRmMap",
    "drmMMInit",
    "drmMMtakedown",
    NULL
@@ -308,6 +314,7 @@ const char *I810drmSymbols[] = {
 const char *I810driSymbols[] = {
    "DRICloseScreen",
    "DRICreateInfoRec",
+   "DRIGetContext",
    "DRIDestroyInfoRec",
    "DRIFinishScreenInit",
    "DRIGetSAREAPrivate",
@@ -319,15 +326,16 @@ const char *I810driSymbols[] = {
    "DRICreatePCIBusID",
    NULL
 };
+#endif 
 
 const char *I810shadowSymbols[] = {
     "shadowInit",
     "shadowSetup",
     "shadowAdd",
+    "shadowRemove",
+    "shadowUpdateRotatePacked",
     NULL
 };
-
-#endif 
 
 #ifndef I810_DEBUG
 int I810_DEBUG = (0
@@ -571,6 +579,7 @@ I810Probe(DriverPtr drv, int flags)
 	    case PCI_CHIP_E7221_G:
 	    case PCI_CHIP_I915_GM:
 	    case PCI_CHIP_I945_G:
+	    case PCI_CHIP_I945_GM:
     	       xf86SetEntitySharable(usedChips[i]);
 
     	       /* Allocate an entity private if necessary */		
@@ -1086,7 +1095,7 @@ I810PreInit(ScrnInfoPtr pScrn, int flags)
 #ifdef XF86DRI
    if (!pI810->directRenderingDisabled) {
      pI810->allowPageFlip = enable;
-     if (pI810->allowPageFlip == enable)
+     if (pI810->allowPageFlip == TRUE)
      {
        if (!xf86LoadSubModule(pScrn, "shadowfb")) {
 	 pI810->allowPageFlip = 0;
@@ -1214,21 +1223,24 @@ I810PrintErrorState(ScrnInfoPtr pScrn)
    I810Ptr pI810 = I810PTR(pScrn);
 
    ErrorF("pgetbl_ctl: 0x%lx pgetbl_err: 0x%lx\n",
-	  INREG(PGETBL_CTL), INREG(PGE_ERR));
+	  (unsigned long) INREG(PGETBL_CTL), (unsigned long) INREG(PGE_ERR));
 
-   ErrorF("ipeir: %lx iphdr: %lx\n", INREG(IPEIR), INREG(IPEHR));
+   ErrorF("ipeir: %lx iphdr: %lx\n", (unsigned long) INREG(IPEIR), 
+	  (unsigned long) INREG(IPEHR));
 
    ErrorF("LP ring tail: %lx head: %lx len: %lx start %lx\n",
-	  INREG(LP_RING + RING_TAIL),
-	  INREG(LP_RING + RING_HEAD) & HEAD_ADDR,
-	  INREG(LP_RING + RING_LEN), INREG(LP_RING + RING_START));
+	  (unsigned long) INREG(LP_RING + RING_TAIL),
+	  (unsigned long) INREG(LP_RING + RING_HEAD) & HEAD_ADDR,
+	  (unsigned long) INREG(LP_RING + RING_LEN), 
+	  (unsigned long) INREG(LP_RING + RING_START));
 
    ErrorF("eir: %x esr: %x emr: %x\n",
 	  INREG16(EIR), INREG16(ESR), INREG16(EMR));
 
    ErrorF("instdone: %x instpm: %x\n", INREG16(INST_DONE), INREG8(INST_PM));
 
-   ErrorF("memmode: %lx instps: %lx\n", INREG(MEMMODE), INREG(INST_PS));
+   ErrorF("memmode: %lx instps: %lx\n", (unsigned long) INREG(MEMMODE), 
+	  (unsigned long) INREG(INST_PS));
 
    ErrorF("hwstam: %x ier: %x imr: %x iir: %x\n",
 	  INREG16(HWSTAM), INREG16(IER), INREG16(IMR), INREG16(IIR));

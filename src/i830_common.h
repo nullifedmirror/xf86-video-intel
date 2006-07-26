@@ -51,6 +51,10 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define DRM_I830_FREE                     0x09
 #define DRM_I830_INIT_HEAP                0x0a
 #define DRM_I830_CMDBUFFER                0x0b
+#define DRM_I830_DESTROY_HEAP             0x0c
+#define DRM_I830_SET_VBLANK_PIPE	  0x0d
+#define DRM_I830_GET_VBLANK_PIPE	  0x0e
+
 
 typedef struct {
    enum {
@@ -87,6 +91,30 @@ typedef struct {
         int pf_active;               
         int pf_current_page;	/* which buffer is being displayed? */
         int perf_boxes;	        /* performance boxes to be displayed */   
+	int width, height;      /* screen size in pixels */
+
+	drm_handle_t front_handle;
+	int front_offset;
+	int front_size;
+
+	drm_handle_t back_handle;
+	int back_offset;
+	int back_size;
+
+	drm_handle_t depth_handle;
+	int depth_offset;
+	int depth_size;
+
+	drm_handle_t tex_handle;
+	int tex_offset;
+	int tex_size;
+	int log_tex_granularity;
+	int pitch;
+	int rotation;           /* 0, 90, 180 or 270 */
+	int rotated_offset;
+	int rotated_size;
+	int rotated_pitch;
+	int virtualX, virtualY;
 } drmI830Sarea;
 
 /* Flags for perf_boxes
@@ -164,5 +192,15 @@ typedef struct {
 	int start;	
 } drmI830MemInitHeap;
 
+typedef struct {
+	int region;
+} drmI830MemDestroyHeap;
+
+#define	DRM_I830_VBLANK_PIPE_A	1
+#define	DRM_I830_VBLANK_PIPE_B	2
+
+typedef struct {
+	int pipe;
+} drmI830VBlankPipe;
 
 #endif /* _I830_DRM_H_ */

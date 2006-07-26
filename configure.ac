@@ -22,7 +22,7 @@
 
 AC_PREREQ(2.57)
 AC_INIT([xf86-video-i810],
-        1.4.1.3,
+        1.6.1,
         [https://bugs.freedesktop.org/enter_bug.cgi?product=xorg],
         xf86-video-i810)
 
@@ -88,6 +88,18 @@ if test x$DRI = xauto; then
         fi
 fi
 AC_MSG_RESULT([$DRI])
+
+dnl Use lots of warning flags with GCC
+
+WARN_CFLAGS=""
+
+if test "x$GCC" = "xyes"; then
+	WARN_CFLAGS="-Wall -Wpointer-arith -Wstrict-prototypes \
+	-Wmissing-prototypes -Wmissing-declarations \
+	-Wnested-externs -fno-strict-aliasing"
+fi
+
+CFLAGS="$CFLAGS $WARN_CFLAGS"
 
 AM_CONDITIONAL(DRI, test x$DRI = xyes)
 if test "$DRI" = yes; then
