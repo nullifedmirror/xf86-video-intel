@@ -905,7 +905,7 @@ I830Allocate2DMemory(ScrnInfoPtr pScrn, const int flags)
 		       "offscreen memory at 0x%lx, size %ld KB\n", 
 			pI830->Offscreen.Start, pI830->Offscreen.Size/1024);
       }
-      if (IS_I965G(pI830)) {
+      if (pI830->useEXA && IS_I965G(pI830)) {
           memset(&(pI830->EXAStateMem), 0, sizeof(I830MemRange));
           pI830->EXAStateMem.Key = -1;
           size = ROUND_TO_PAGE(EXA_LINEAR_EXTRA);
@@ -1565,9 +1565,11 @@ I830FixupOffsets(ScrnInfoPtr pScrn)
    }
 #endif
 #ifdef I830_USE_EXA
-   I830FixOffset(pScrn, &(pI830->Offscreen));
-   if (IS_I965G(pI830))
-       I830FixOffset(pScrn, &(pI830->EXAStateMem));
+   if (pI830->useEXA) {
+      I830FixOffset(pScrn, &(pI830->Offscreen));
+      if (IS_I965G(pI830))
+          I830FixOffset(pScrn, &(pI830->EXAStateMem));
+   }
 #endif
    return TRUE;
 }
@@ -1970,10 +1972,12 @@ I830BindAGPMemory(ScrnInfoPtr pScrn)
       }
 #endif
 #ifdef I830_USE_EXA
-     if (!BindMemRange(pScrn, &(pI830->Offscreen)))
-	return FALSE;
-     if (IS_I965G(pI830) && !BindMemRange(pScrn, &(pI830->EXAStateMem)))
-	return FALSE;
+     if (pI830->useEXA) {
+         if (!BindMemRange(pScrn, &(pI830->Offscreen)))
+	    return FALSE;
+         if (IS_I965G(pI830) && !BindMemRange(pScrn, &(pI830->EXAStateMem)))
+	    return FALSE;
+     }
 #endif
       pI830->GttBound = 1;
    }
@@ -2060,10 +2064,12 @@ I830UnbindAGPMemory(ScrnInfoPtr pScrn)
       }
 #endif
 #ifdef I830_USE_EXA
-     if (!UnbindMemRange(pScrn, &(pI830->Offscreen)))
-	return FALSE;
-     if (IS_I965G(pI830) && !UnbindMemRange(pScrn, &(pI830->EXAStateMem)))
-	return FALSE;
+     if (pI830->useEXA) {
+         if (!UnbindMemRange(pScrn, &(pI830->Offscreen)))
+	    return FALSE;
+         if (IS_I965G(pI830) && !UnbindMemRange(pScrn, &(pI830->EXAStateMem)))
+	    return FALSE;
+     }
 #endif
       if (!xf86ReleaseGART(pScrn->scrnIndex))
 	 return FALSE;
