@@ -1211,6 +1211,10 @@ i830_crtc_init(ScrnInfoPtr pScrn, int pipe)
 	intel_crtc->lut_g[i] = i;
 	intel_crtc->lut_b[i] = i;
     }
+    /* initialize rotation */
+    crtc->rotation = RR_Rotate_0;
+    crtc->rotations = RR_Rotate_0;
+
     crtc->driver_private = intel_crtc;
 }
 

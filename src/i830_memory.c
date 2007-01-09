@@ -471,6 +471,30 @@ IsTileable(ScrnInfoPtr pScrn, int pitch)
    }
 }
 
+static Bool
+I965AllocateRotateStateMemory (ScrnInfoPtr pScrn, I830MemRange *mem, const int flags)
+{
+/* XXX move to head */
+#define BRW_LINEAR_EXTRA (32*1024)
+       I830Ptr pI830 = I830PTR(pScrn);
+       unsigned long size, alloced;
+       int align;
+
+       memset(mem, 0, sizeof(I830MemRange));
+       mem->Key = -1;
+       size = ROUND_TO_PAGE(BRW_LINEAR_EXTRA);
+       align = GTT_PAGE_SIZE;
+       alloced = I830AllocVidMem(pScrn, mem,
+				&(pI830->StolenPool), size, align,
+				flags | FROM_ANYWHERE | ALLOCATE_AT_TOP);
+       if (alloced < size)
+          return FALSE;
+       xf86DrvMsg(pScrn->scrnIndex, X_INFO,
+		  "Allocated %ld kB for the G965 rotate state buffer at 0x%lx - 0x%lx.\n",
+		alloced / 1024, mem->Start, mem->End);
+       return TRUE;
+}
+
 Bool
 I830AllocateRotatedBuffer(ScrnInfoPtr pScrn, int flags)
 {
@@ -532,25 +556,14 @@ I830AllocateRotatedBuffer(ScrnInfoPtr pScrn, int flags)
 		  "%sAllocated %ld kB for the rotated buffer at 0x%lx.\n", s,
 		  alloced / 1024, pI830->RotatedMem.Start);
 
-#define BRW_LINEAR_EXTRA (32*1024)
    if (IS_I965G(pI830)) {
-       memset(&(pI830->RotateStateMem), 0, sizeof(I830MemRange));
-       pI830->RotateStateMem.Key = -1;
-       size = ROUND_TO_PAGE(BRW_LINEAR_EXTRA);
-       align = GTT_PAGE_SIZE;
-       alloced = I830AllocVidMem(pScrn, &(pI830->RotateStateMem),
-				&(pI830->StolenPool), size, align,
-				flags | FROM_ANYWHERE | ALLOCATE_AT_TOP);
-       if (alloced < size) {
+       if (!I965AllocateRotateStateMemory (pScrn, &pI830->RotateStateMem, flags)) {
           if (!dryrun) {
 	     xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
 		    "G965: Failed to allocate rotate state buffer space.\n");
           }
           return FALSE;
        }
-       xf86DrvMsgVerb(pScrn->scrnIndex, X_INFO, verbosity,
-		  "%sAllocated %ld kB for the G965 rotate state buffer at 0x%lx - 0x%lx.\n", s, 
-		alloced / 1024, pI830->RotateStateMem.Start, pI830->RotateStateMem.End);
    }
   
    return TRUE;
@@ -768,6 +781,95 @@ I830AllocateFramebuffer(ScrnInfoPtr pScrn, I830Ptr pI830, BoxPtr FbMemBox,
    return TRUE;
 }
 
+static Bool
+I830AllocateCursorMemory (ScrnInfoPtr pScrn, I830MemRange *cursor_mem,
+			  I830MemRange *cursor_mem_argb, const int flags)
+{
+      I830Ptr pI830 = I830PTR(pScrn);
+      int cursFlags = 0;
+      unsigned long size, alloced;
+
+      /*
+       * Mouse cursor -- The i810-i830 need a physical address in system
+       * memory from which to upload the cursor.  We get this from
+       * the agpgart module using a special memory type.
+       */
+
+      size = HWCURSOR_SIZE;
+      cursFlags = FROM_ANYWHERE | ALLOCATE_AT_TOP;
+      if (pI830->CursorNeedsPhysical)
+	 cursFlags |= NEED_PHYSICAL_ADDR;
+
+      alloced = I830AllocVidMem(pScrn, cursor_mem,
+				&(pI830->StolenPool), size,
+				GTT_PAGE_SIZE, flags | cursFlags);
+      if (alloced < size) {
+           xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
+		       "Failed to allocate HW cursor space.\n");
+	   return FALSE;
+      } else {
+	 xf86DrvMsg(pScrn->scrnIndex, X_INFO,
+			"Allocated %ld kB for HW cursor at 0x%lx",
+			alloced / 1024, cursor_mem->Start);
+	 if (pI830->CursorNeedsPhysical)
+	    xf86ErrorF(" (0x%08lx)", cursor_mem->Physical);
+	 xf86ErrorF("\n");
+      }
+
+      size = HWCURSOR_SIZE_ARGB;
+      cursFlags = FROM_ANYWHERE | ALLOCATE_AT_TOP;
+      if (pI830->CursorNeedsPhysical)
+	 cursFlags |= NEED_PHYSICAL_ADDR;
+
+      alloced = I830AllocVidMem(pScrn, cursor_mem_argb,
+				&(pI830->StolenPool), size,
+				GTT_PAGE_SIZE, flags | cursFlags);
+      if (alloced < size) {
+           xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
+		       "Failed to allocate HW (ARGB) cursor space.\n");
+	   return FALSE;
+      } else {
+	 xf86DrvMsg(pScrn->scrnIndex, X_INFO,
+			"Allocated %ld kB for HW (ARGB) cursor at 0x%lx",
+			alloced / 1024, cursor_mem_argb->Start);
+	 if (pI830->CursorNeedsPhysical)
+	    xf86ErrorF(" (0x%08lx)", cursor_mem_argb->Physical);
+	 xf86ErrorF("\n");
+      }
+
+      return TRUE;
+}
+
+/* 
+ * Allocate memory for randr12 rotate mem 
+ */
+static Bool
+I830AllocateRandR12RotateBuffer (ScrnInfoPtr pScrn, const int flags)
+{
+   I830Ptr pI830 = I830PTR(pScrn);
+   xf86CrtcConfigPtr config = XF86_CRTC_CONFIG_PTR(pScrn);
+   int c;
+
+   for (c = 0; c < config->num_crtc; c++) {
+	xf86CrtcPtr crtc = config->crtc[c];
+	I830CrtcPrivatePtr intel_crtc = crtc->driver_private;
+	if (!I830AllocateFramebuffer (pScrn, pI830, &intel_crtc->RotateMemBox,
+				      &intel_crtc->RotateMem, 
+				      &pI830->StolenPool,
+				      FALSE, flags))
+	    return FALSE;
+	if (!I830AllocateCursorMemory (pScrn, &intel_crtc->RotateCursorMem,
+				       &intel_crtc->RotateCursorMemARGB, flags))
+	    return FALSE;
+	if (IS_I965G(pI830)) {
+	    if (!I965AllocateRotateStateMemory (pScrn, &intel_crtc->RotateStateMem,
+						flags))
+		return FALSE;
+        }
+   }
+   return TRUE;
+}
+
 /*
  * Allocate memory for 2D operation.  This includes the (front) framebuffer,
  * ring buffer, scratch memory, HW cursor.
@@ -837,6 +939,13 @@ I830Allocate2DMemory(ScrnInfoPtr pScrn, const int flags)
       {
 	 return FALSE;
       }
+      /* 
+       * Allocate rotate mem buffer for crtcs. 
+       */
+#if RANDR_12_INTERFACE
+       if (!I830AllocateRandR12RotateBuffer(pScrn, flags))
+	    return FALSE;
+#endif
 
 #ifdef I830_USE_EXA
       if (pI830->useEXA) {
@@ -985,56 +1094,13 @@ I830Allocate2DMemory(ScrnInfoPtr pScrn, const int flags)
    pI830->CursorMemARGB->Key = -1;
 
    if (!pI830->SWCursor) {
-      int cursFlags = 0;
-      /*
-       * Mouse cursor -- The i810-i830 need a physical address in system
-       * memory from which to upload the cursor.  We get this from
-       * the agpgart module using a special memory type.
-       */
-
-      size = HWCURSOR_SIZE;
-      cursFlags = FROM_ANYWHERE | ALLOCATE_AT_TOP;
-      if (pI830->CursorNeedsPhysical)
-	 cursFlags |= NEED_PHYSICAL_ADDR;
-
-      alloced = I830AllocVidMem(pScrn, pI830->CursorMem,
-				&(pI830->StolenPool), size,
-				GTT_PAGE_SIZE, flags | cursFlags);
-      if (alloced < size) {
-	 if (!dryrun) {
-	    xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
-		       "Failed to allocate HW cursor space.\n");
-	 }
-      } else {
-	 xf86DrvMsgVerb(pScrn->scrnIndex, X_INFO, verbosity,
-			"%sAllocated %ld kB for HW cursor at 0x%lx", s,
-			alloced / 1024, pI830->CursorMem->Start);
-	 if (pI830->CursorNeedsPhysical)
-	    xf86ErrorFVerb(verbosity, " (0x%08lx)", pI830->CursorMem->Physical);
-	 xf86ErrorFVerb(verbosity, "\n");
-      }
-
-      size = HWCURSOR_SIZE_ARGB;
-      cursFlags = FROM_ANYWHERE | ALLOCATE_AT_TOP;
-      if (pI830->CursorNeedsPhysical)
-	 cursFlags |= NEED_PHYSICAL_ADDR;
-
-      alloced = I830AllocVidMem(pScrn, pI830->CursorMemARGB,
-				&(pI830->StolenPool), size,
-				GTT_PAGE_SIZE, flags | cursFlags);
-      if (alloced < size) {
-	 if (!dryrun) {
-	    xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
+	if (!I830AllocateCursorMemory(pScrn, pI830->CursorMem,
+			  pI830->CursorMemARGB, flags)) {
+	     if (!dryrun) {
+	         xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
 		       "Failed to allocate HW (ARGB) cursor space.\n");
-	 }
-      } else {
-	 xf86DrvMsgVerb(pScrn->scrnIndex, X_INFO, verbosity,
-			"%sAllocated %ld kB for HW (ARGB) cursor at 0x%lx", s,
-			alloced / 1024, pI830->CursorMemARGB->Start);
-	 if (pI830->CursorNeedsPhysical)
-	    xf86ErrorFVerb(verbosity, " (0x%08lx)", pI830->CursorMemARGB->Physical);
-	 xf86ErrorFVerb(verbosity, "\n");
-      }
+	     }
+        }
    }
 
 #ifdef I830_XV
@@ -1504,6 +1570,10 @@ Bool
 I830FixupOffsets(ScrnInfoPtr pScrn)
 {
    I830Ptr pI830 = I830PTR(pScrn);
+#if RANDR_12_INTERFACE
+   xf86CrtcConfigPtr config = XF86_CRTC_CONFIG_PTR(pScrn);
+   int c;
+#endif
 
    DPRINTF(PFX, "I830FixupOffsets\n");
 
@@ -1540,6 +1610,17 @@ I830FixupOffsets(ScrnInfoPtr pScrn)
        if (IS_I965G(pI830))
            I830FixOffset(pScrn, &(pI830->EXAStateMem));
     }
+#endif
+#if RANDR_12_INTERFACE
+   for (c = 0; c < config->num_crtc; c++) {
+	xf86CrtcPtr crtc = config->crtc[c];
+	I830CrtcPrivatePtr intel_crtc = crtc->driver_private;
+	I830FixOffset(pScrn, &intel_crtc->RotateMem);
+	I830FixOffset(pScrn, &intel_crtc->RotateCursorMem);
+	I830FixOffset(pScrn, &intel_crtc->RotateCursorMemARGB);
+	if (IS_I965G(pI830)) 
+	    I830FixOffset(pScrn, &intel_crtc->RotateStateMem);
+   }
 #endif
    return TRUE;
 }
@@ -1886,6 +1967,10 @@ Bool
 I830BindAGPMemory(ScrnInfoPtr pScrn)
 {
    I830Ptr pI830 = I830PTR(pScrn);
+#if RANDR_12_INTERFACE
+   xf86CrtcConfigPtr config = XF86_CRTC_CONFIG_PTR(pScrn);
+   int c;
+#endif
 
    DPRINTF(PFX,
 	   "I830BindAGPMemory: StolenOnly is %s, pI830->GttBound is %s\n",
@@ -1958,6 +2043,21 @@ I830BindAGPMemory(ScrnInfoPtr pScrn)
 	    return FALSE;
      }
 #endif
+#if RANDR_12_INTERFACE
+   for (c = 0; c < config->num_crtc; c++) {
+	xf86CrtcPtr crtc = config->crtc[c];
+	I830CrtcPrivatePtr intel_crtc = crtc->driver_private;
+	if (!BindMemRange(pScrn, &intel_crtc->RotateMem))
+	    return FALSE;
+	if (!BindMemRange(pScrn, &intel_crtc->RotateCursorMem))
+	    return FALSE;
+	if (!BindMemRange(pScrn, &intel_crtc->RotateCursorMemARGB))
+	    return FALSE;
+	if (IS_I965G(pI830)) 
+	    if (!BindMemRange(pScrn, &intel_crtc->RotateStateMem))
+		return FALSE;
+   }
+#endif
       pI830->GttBound = 1;
    }
 
@@ -1981,6 +2081,10 @@ Bool
 I830UnbindAGPMemory(ScrnInfoPtr pScrn)
 {
    I830Ptr pI830 = I830PTR(pScrn);
+#if RANDR_12_INTERFACE
+   xf86CrtcConfigPtr config = XF86_CRTC_CONFIG_PTR(pScrn);
+   int c;
+#endif
 
    DPRINTF(PFX,
 	   "I830UnbindAGPMemory: StolenOnly is %s, pI830->GttBound is %s\n",
@@ -2050,6 +2154,21 @@ I830UnbindAGPMemory(ScrnInfoPtr pScrn)
          if (IS_I965G(pI830) && !UnbindMemRange(pScrn, &(pI830->EXAStateMem)))
 	    return FALSE;
      }
+#endif
+#if RANDR_12_INTERFACE
+   for (c = 0; c < config->num_crtc; c++) {
+	xf86CrtcPtr crtc = config->crtc[c];
+	I830CrtcPrivatePtr intel_crtc = crtc->driver_private;
+	if (!UnbindMemRange(pScrn, &intel_crtc->RotateMem))
+	    return FALSE;
+	if (!UnbindMemRange(pScrn, &intel_crtc->RotateCursorMem))
+	    return FALSE;
+	if (!UnbindMemRange(pScrn, &intel_crtc->RotateCursorMemARGB))
+	    return FALSE;
+	if (IS_I965G(pI830)) 
+	    if (!UnbindMemRange(pScrn, &intel_crtc->RotateStateMem))
+		return FALSE;
+   }
 #endif
       if (!xf86ReleaseGART(pScrn->scrnIndex))
 	 return FALSE;

@@ -99,6 +99,12 @@ typedef struct _xf86CrtcFuncs {
      */
     void
     (*destroy) (xf86CrtcPtr	crtc);
+    /**
+     * Rotate
+     */ 
+    Bool
+    (*rotate) (xf86CrtcPtr crtc, Rotation request_rotation);
+
 } xf86CrtcFuncsRec, *xf86CrtcFuncsPtr;
 
 struct _xf86Crtc {
@@ -146,6 +152,15 @@ struct _xf86Crtc {
      */
     DisplayModeRec  desiredMode;
     
+    /**
+     * current rotation
+     */
+    Rotation 	    rotation;
+    /**
+     * support rotations
+     */
+    Rotation 	    rotations;
+
     /** crtc-specific functions */
     const xf86CrtcFuncsRec *funcs;
 
