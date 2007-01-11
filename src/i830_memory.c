@@ -788,6 +788,9 @@ I830AllocateCursorMemory (ScrnInfoPtr pScrn, I830MemRange *cursor_mem,
       I830Ptr pI830 = I830PTR(pScrn);
       int cursFlags = 0;
       unsigned long size, alloced;
+      Bool dryrun = ((flags & ALLOCATE_DRY_RUN) != 0);
+      int verbosity = dryrun ? 4 : 1;
+      const char *s = dryrun ? "[dryrun] " : "";
 
       /*
        * Mouse cursor -- The i810-i830 need a physical address in system
@@ -804,16 +807,17 @@ I830AllocateCursorMemory (ScrnInfoPtr pScrn, I830MemRange *cursor_mem,
 				&(pI830->StolenPool), size,
 				GTT_PAGE_SIZE, flags | cursFlags);
       if (alloced < size) {
-           xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
+           if (!dryrun) 
+               xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
 		       "Failed to allocate HW cursor space.\n");
 	   return FALSE;
       } else {
 	 xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			"Allocated %ld kB for HW cursor at 0x%lx",
+			"%sAllocated %ld kB for HW cursor at 0x%lx\n",s,
 			alloced / 1024, cursor_mem->Start);
 	 if (pI830->CursorNeedsPhysical)
-	    xf86ErrorF(" (0x%08lx)", cursor_mem->Physical);
-	 xf86ErrorF("\n");
+	    xf86ErrorFVerb(verbosity, " (0x%08lx)", cursor_mem->Physical);
+	 xf86ErrorFVerb(verbosity, "\n");
       }
 
       size = HWCURSOR_SIZE_ARGB;
@@ -825,16 +829,17 @@ I830AllocateCursorMemory (ScrnInfoPtr pScrn, I830MemRange *cursor_mem,
 				&(pI830->StolenPool), size,
 				GTT_PAGE_SIZE, flags | cursFlags);
       if (alloced < size) {
-           xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
+           if (!dryrun) 
+               xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
 		       "Failed to allocate HW (ARGB) cursor space.\n");
 	   return FALSE;
       } else {
 	 xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			"Allocated %ld kB for HW (ARGB) cursor at 0x%lx",
+			"%sAllocated %ld kB for HW (ARGB) cursor at 0x%lx\n",s,
 			alloced / 1024, cursor_mem_argb->Start);
 	 if (pI830->CursorNeedsPhysical)
-	    xf86ErrorF(" (0x%08lx)", cursor_mem_argb->Physical);
-	 xf86ErrorF("\n");
+	    xf86ErrorFVerb(verbosity, " (0x%08lx)", cursor_mem_argb->Physical);
+	 xf86ErrorFVerb(verbosity, "\n");
       }
 
       return TRUE;
@@ -967,8 +972,8 @@ I830Allocate2DMemory(ScrnInfoPtr pScrn, const int flags)
 	    }
 	    return FALSE;
 	 } else {
-	    xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Successful allocation of "
-		       "EXA offscreen memory at 0x%lx, size %ld KB\n",
+	    xf86DrvMsg(pScrn->scrnIndex, X_INFO, "%sSuccessful allocation of "
+		       "EXA offscreen memory at 0x%lx, size %ld KB\n",s,
 		       pI830->Offscreen.Start, pI830->Offscreen.Size/1024);
 	 }
       }
