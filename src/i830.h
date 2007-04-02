@@ -352,6 +352,9 @@ typedef struct _I830Rec {
    Bool tiling;
    Bool fb_compression;
 
+   Bool hwz;
+   i830_memory *hwb_ring_mem;
+
    int backPitch;
 
    Bool CursorNeedsPhysical;

@@ -607,6 +607,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 #define LP_RING     0x2030
 #define HP_RING     0x2040
+#define HWB_RING    0x2400
 
 #define RING_TAIL      0x00
 #define TAIL_ADDR           0x000FFFF8

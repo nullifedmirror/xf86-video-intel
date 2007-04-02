@@ -234,6 +234,7 @@ i830_reset_allocations(ScrnInfoPtr pScrn)
     pI830->memory_manager = NULL;
 #endif
     pI830->LpRing->mem = NULL;
+    pI830->hwb_ring_mem = NULL;
 
     /* Reset the fence register allocation. */
     pI830->next_fence = 0;
@@ -256,6 +257,8 @@ i830_free_3d_memory(ScrnInfoPtr pScrn)
     pI830->textures = NULL;
     i830_free_memory(pScrn, pI830->memory_manager);
     pI830->memory_manager = NULL;
+    i830_free_memory(pScrn, pI830->hwb_ring_mem);
+    pI830->hwb_ring_mem = NULL;
 #endif
 }
 
@@ -690,23 +693,21 @@ i830_describe_allocations(ScrnInfoPtr pScrn, int verbosity, const char *prefix)
 }
 
 static Bool
-i830_allocate_ringbuffer(ScrnInfoPtr pScrn)
+i830_allocate_ringbuffer(ScrnInfoPtr pScrn, CARD32 size, i830_memory **ring_mem,
+			 const char *name)
 {
     I830Ptr pI830 = I830PTR(pScrn);
 
-    if (pI830->noAccel || pI830->LpRing->mem != NULL)
+    if (pI830->noAccel || *ring_mem != NULL)
 	return TRUE;
 
-    pI830->LpRing->mem = i830_allocate_memory(pScrn, "ring buffer",
-					      PRIMARY_RINGBUFFER_SIZE,
-					      GTT_PAGE_SIZE, 0);
-    if (pI830->LpRing->mem == NULL) {
+    *ring_mem = i830_allocate_memory(pScrn, name, size, GTT_PAGE_SIZE, 0);
+    if (*ring_mem == NULL) {
 	xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
-		   "Failed to allocate Ring Buffer space\n");
+		   "Failed to allocate %s space\n", name);
 	return FALSE;
     }
 
-    pI830->LpRing->tail_mask = pI830->LpRing->mem->size - 1;
     return TRUE;
 }
 
@@ -1078,7 +1079,9 @@ i830_allocate_2d_memory(ScrnInfoPtr pScrn)
     }
 
     /* Allocate the ring buffer first, so it ends up in stolen mem. */
-    i830_allocate_ringbuffer(pScrn);
+    if (i830_allocate_ringbuffer(pScrn, PRIMARY_RINGBUFFER_SIZE,
+				 &pI830->LpRing->mem, "LP ring buffer"))
+       pI830->LpRing->tail_mask = pI830->LpRing->mem->size - 1;
 
     if (pI830->fb_compression)
 	i830_setup_fb_compression(pScrn);
@@ -1392,6 +1395,13 @@ i830_allocate_3d_memory(ScrnInfoPtr pScrn)
 
     if (!i830_allocate_texture_memory(pScrn))
 	return FALSE;
+
+    if (pI830->hwz &&
+	!i830_allocate_ringbuffer(pScrn, PRIMARY_RINGBUFFER_SIZE,
+				  &pI830->hwb_ring_mem, "HWB ring buffer")) {
+       xf86DrvMsg(pScrn->scrnIndex, X_WARNING,
+		  "Failed to allocate HWB ring buffer, HWZ inactive\n");
+    }
 
     return TRUE;
 }

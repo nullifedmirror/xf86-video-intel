@@ -296,6 +296,7 @@ typedef enum {
    OPTION_INTELMMSIZE,
 #endif
    OPTION_TRIPLEBUFFER,
+   OPTION_HWZ,
 } I830Opts;
 
 static OptionInfoRec I830Options[] = {
@@ -319,6 +320,7 @@ static OptionInfoRec I830Options[] = {
    {OPTION_INTELMMSIZE, "AperTexSize",  OPTV_INTEGER,	{0},	FALSE},
 #endif
    {OPTION_TRIPLEBUFFER, "TripleBuffer", OPTV_BOOLEAN,	{0},	FALSE},
+   {OPTION_HWZ,		"HWZ",		OPTV_BOOLEAN,	{0},	FALSE},
    {-1,			NULL,		OPTV_NONE,	{0},	FALSE}
 };
 /* *INDENT-ON* */
@@ -1552,9 +1554,15 @@ I830PreInit(ScrnInfoPtr pScrn, int flags)
 
    xf86DrvMsg(pScrn->scrnIndex, from, "Will%s try to enable page flipping\n",
 	      pI830->allowPageFlip ? "" : " not");
-#endif
 
-#ifdef XF86DRI
+   pI830->hwz = FALSE;
+   from = (!pI830->directRenderingDisabled &&
+	   xf86GetOptValBool(pI830->Options, OPTION_HWZ, &pI830->hwz)) ?
+	    X_CONFIG : X_DEFAULT;
+
+   xf86DrvMsg(pScrn->scrnIndex, from, "HWZ %sabled\n",
+	      pI830->hwz ? "en" : "dis");
+
    pI830->TripleBuffer = FALSE;
    from =  (!pI830->directRenderingDisabled &&
 	    xf86GetOptValBool(pI830->Options, OPTION_TRIPLEBUFFER,
@@ -1789,7 +1797,7 @@ SetFenceRegs(ScrnInfoPtr pScrn)
 }
 
 static void
-SetRingRegs(ScrnInfoPtr pScrn)
+SetRingRegs(ScrnInfoPtr pScrn, CARD32 reg, i830_memory *ring_mem)
 {
    I830Ptr pI830 = I830PTR(pScrn);
    unsigned int itemp;
@@ -1801,32 +1809,27 @@ SetRingRegs(ScrnInfoPtr pScrn)
 
    if (!I830IsPrimary(pScrn)) return;
 
-   if (pI830->entityPrivate)
-      pI830->entityPrivate->RingRunning = 1;
+   OUTREG(reg + RING_LEN, 0);
+   OUTREG(reg + RING_TAIL, 0);
+   OUTREG(reg + RING_HEAD, 0);
 
-   OUTREG(LP_RING + RING_LEN, 0);
-   OUTREG(LP_RING + RING_TAIL, 0);
-   OUTREG(LP_RING + RING_HEAD, 0);
-
-   assert((pI830->LpRing->mem->offset & I830_RING_START_MASK) ==
-	   pI830->LpRing->mem->offset);
+   assert((ring_mem->offset & I830_RING_START_MASK) == ring_mem->offset);
 
    /* Don't care about the old value.  Reserved bits must be zero anyway. */
-   itemp = pI830->LpRing->mem->offset;
-   OUTREG(LP_RING + RING_START, itemp);
+   itemp = ring_mem->offset;
+   OUTREG(reg + RING_START, itemp);
 
-   if (((pI830->LpRing->mem->size - 4096) & I830_RING_NR_PAGES) !=
-       pI830->LpRing->mem->size - 4096) {
+   if (((ring_mem->size - 4096) & I830_RING_NR_PAGES) !=
+       ring_mem->size - 4096) {
       xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
 		 "I830SetRingRegs: Ring buffer size - 4096 (%lx) violates its "
-		 "mask (%x)\n", pI830->LpRing->mem->size - 4096,
+		 "mask (%x)\n", ring_mem->size - 4096,
 		 I830_RING_NR_PAGES);
    }
    /* Don't care about the old value.  Reserved bits must be zero anyway. */
-   itemp = (pI830->LpRing->mem->size - 4096) & I830_RING_NR_PAGES;
+   itemp = (ring_mem->size - 4096) & I830_RING_NR_PAGES;
    itemp |= (RING_NO_REPORT | RING_VALID);
-   OUTREG(LP_RING + RING_LEN, itemp);
-   I830RefreshRing(pScrn);
+   OUTREG(reg + RING_LEN, itemp);
 }
 
 /*
@@ -1853,8 +1856,15 @@ SetHWOperatingState(ScrnInfoPtr pScrn)
       OUTREG(DSPCLK_GATE_D, OVRUNIT_CLOCK_GATE_DISABLE);
    }
 
-   if (!pI830->noAccel)
-      SetRingRegs(pScrn);
+   if (!pI830->noAccel) {
+      SetRingRegs(pScrn, LP_RING, pI830->LpRing->mem);
+
+#ifdef XF86DRI
+      if (pI830->hwb_ring_mem)
+	 SetRingRegs(pScrn, HWB_RING, pI830->hwb_ring_mem);
+#endif
+   }
+
    SetFenceRegs(pScrn);
    if (!pI830->SWCursor)
       I830InitHWCursor(pScrn);

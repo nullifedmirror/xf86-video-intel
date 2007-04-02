@@ -760,6 +760,14 @@ I830DRIScreenInit(ScreenPtr pScreen)
 	    pI830->allowPageFlip = FALSE;
 	 }
 #endif	 
+	 if (pI830->hwz && pI830->drmMinor < 10) {
+	    xf86DrvMsg(pScrn->scrnIndex, X_WARNING,
+		       "DRM version 1.10 or newer required for HWZ. "
+		       "Disabling.\n");
+	    pI830->hwz = FALSE;
+	    i830_free_memory(pScrn, pI830->hwb_ring_mem);
+	    pI830->hwb_ring_mem = NULL;
+	 }
 	 drmFreeVersion(version);
       }
    }
@@ -1116,6 +1124,24 @@ I830DRIFinishScreenInit(ScreenPtr pScreen)
 
    if (!DRIFinishScreenInit(pScreen))
       return FALSE;
+
+   if (pI830->hwb_ring_mem) {
+      drm_i915_hwz_t hwz;
+
+      memset(&hwz, 0, sizeof(hwz));
+
+      hwz.op = DRM_I915_HWZ_INIT;
+      hwz.arg.init.hwb_start = pI830->hwb_ring_mem->offset + pI830->LinearAddr;
+      hwz.arg.init.hwb_end = pI830->hwb_ring_mem->end + pI830->LinearAddr;
+      hwz.arg.init.hwb_size = pI830->hwb_ring_mem->size;
+
+      if (drmCommandWrite(pI830->drmSubFD, DRM_I915_HWZ, &hwz, sizeof(hwz))) {
+	 xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
+		    "[drm] failure initializing HWZ, inactive\n");
+	 i830_free_memory(pScrn, pI830->hwb_ring_mem);
+	 pI830->hwb_ring_mem = NULL;
+      }
+   }
 
    /* Okay now initialize the dma engine */
    {
