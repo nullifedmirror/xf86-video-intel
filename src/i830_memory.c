@@ -665,7 +665,7 @@ i830_allocate_overlay(ScrnInfoPtr pScrn)
 	}
     }
 
-    if (!pI830->useEXA && pI830->LinearAlloc) {
+    if (pI830->AccelMethod == USE_XAA && pI830->LinearAlloc) {
 	pI830->xaa_linear = i830_allocate_memory(pScrn, "XAA linear memory",
 						 KB(pI830->LinearAlloc),
 						 GTT_PAGE_SIZE, 0);
@@ -766,7 +766,7 @@ i830_allocate_framebuffer(ScrnInfoPtr pScrn, I830Ptr pI830, BoxPtr FbMemBox,
     minspace = pitch * pScrn->virtualY;
     avail = pScrn->videoRam * 1024;
 
-    if (!pI830->useEXA) {
+    if (pI830->AccelMethod == USE_XAA) {
 	maxCacheLines = (avail - minspace) / pitch;
 	/* This shouldn't happen. */
 	if (maxCacheLines < 0) {
@@ -971,7 +971,7 @@ i830_allocate_2d_memory(ScrnInfoPtr pScrn)
 	return FALSE;
     }
 #ifdef I830_USE_EXA
-    if (pI830->useEXA) {
+    if (pI830->AccelMethod == USE_EXA) {
 	if (IS_I965G(pI830) && pI830->exa_965_state == NULL) {
 	    pI830->exa_965_state =
 		i830_allocate_memory(pScrn, "exa G965 state buffer",
@@ -1009,7 +1009,7 @@ i830_allocate_2d_memory(ScrnInfoPtr pScrn)
 	return FALSE;
 
 #ifdef I830_USE_EXA
-    if (pI830->useEXA) {
+    if (pI830->AccelMethod == USE_EXA) {
 	if (pI830->exa_offscreen == NULL) {
 	    /* Default EXA to having 3 screens worth of offscreen memory space
 	     * (for pixmaps), plus a double-buffered, 1920x1088 video's worth.
@@ -1033,7 +1033,7 @@ i830_allocate_2d_memory(ScrnInfoPtr pScrn)
     }
 #endif /* I830_USE_EXA */
 
-    if (!pI830->noAccel && !pI830->useEXA) {
+    if (!pI830->noAccel && pI830->AccelMethod == USE_XAA) {
 	pI830->xaa_scratch =
 	    i830_allocate_memory(pScrn, "xaa scratch", MAX_SCRATCH_BUFFER_SIZE,
 				 GTT_PAGE_SIZE, 0);

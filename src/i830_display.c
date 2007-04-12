@@ -1057,7 +1057,7 @@ i830_crtc_shadow_allocate (xf86CrtcPtr crtc, int width, int height)
      * setter for offscreen area locking in EXA currently.  So, we just
      * allocate offscreen memory and fake up a pixmap header for it.
      */
-    if (pI830->useEXA) {
+    if (pI830->AccelMethod == USE_EXA) {
 	assert(intel_crtc->rotate_mem_exa == NULL);
 
 	intel_crtc->rotate_mem_exa = exaOffscreenAlloc(pScreen, size, align,
@@ -1071,7 +1071,7 @@ i830_crtc_shadow_allocate (xf86CrtcPtr crtc, int width, int height)
     }
 #endif /* I830_USE_EXA */
 #ifdef I830_USE_XAA
-    if (!pI830->useEXA) {
+    if (pI830->AccelMethod == USE_XAA) {
 	/* The XFree86 linear allocator operates in units of screen pixels,
 	 * sadly.
 	 */
@@ -1139,13 +1139,13 @@ i830_crtc_shadow_destroy(xf86CrtcPtr crtc, PixmapPtr rotate_pixmap, void *data)
     if (data)
     {
 #ifdef I830_USE_EXA
-	if (pI830->useEXA && intel_crtc->rotate_mem_exa != NULL) {
+	if (pI830->AccelMethod == USE_EXA && intel_crtc->rotate_mem_exa != NULL) {
 	    exaOffscreenFree(pScrn->pScreen, intel_crtc->rotate_mem_exa);
 	    intel_crtc->rotate_mem_exa = NULL;
 	}
 #endif /* I830_USE_EXA */
 #ifdef I830_USE_XAA
-	if (!pI830->useEXA) {
+	if (pI830->AccelMethod == USE_XAA) {
 	    xf86FreeOffscreenLinear(intel_crtc->rotate_mem_xaa);
 	    intel_crtc->rotate_mem_xaa = NULL;
 	}

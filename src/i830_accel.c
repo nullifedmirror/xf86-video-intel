@@ -68,7 +68,7 @@ intel_get_pixmap_offset(PixmapPtr pPix)
     I830Ptr pI830 = I830PTR(pScrn);
 
 #ifdef I830_USE_EXA
-    if (pI830->useEXA)
+    if (pI830->AccelMethod == USE_EXA)
 	return exaGetPixmapOffset(pPix);
 #endif
     return (unsigned long)pPix->devPrivate.ptr - (unsigned long)pI830->FbBase;
@@ -82,7 +82,7 @@ intel_get_pixmap_pitch(PixmapPtr pPix)
     I830Ptr pI830 = I830PTR(pScrn);
 
 #ifdef I830_USE_EXA
-    if (pI830->useEXA)
+    if (pI830->AccelMethod == USE_EXA)
 	return exaGetPixmapPitch(pPix);
 #endif
 #ifdef I830_USE_XAA
@@ -266,15 +266,20 @@ I830RefreshRing(ScrnInfoPtr pScrn)
 Bool
 I830AccelInit(ScreenPtr pScreen)
 {
-#ifdef I830_USE_EXA
     ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
     I830Ptr pI830 = I830PTR(pScrn);
 
-    if (pI830->useEXA)
+#ifdef I830_USE_EXA
+    if (pI830->AccelMethod == USE_EXA)
 	return I830EXAInit(pScreen);
 #endif
 #ifdef I830_USE_XAA
-    return I830XAAInit(pScreen);
+    if (pI830->AccelMethod == USE_XAA)
+    	return I830XAAInit(pScreen);
+#endif
+#ifdef I830_USE_GLUCOSE
+    if (pI830->AccelMethod == USE_GLUCOSE)
+    	return glucoseScreenInit(pScreen, 0);
 #endif
     return FALSE;
 }

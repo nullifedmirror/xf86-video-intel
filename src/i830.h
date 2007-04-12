@@ -372,7 +372,7 @@ typedef struct _I830Rec {
    unsigned int fence[FENCE_NEW_NR * 2];
    unsigned int next_fence;
 
-   Bool useEXA;
+   int AccelMethod;
    Bool noAccel;
    Bool SWCursor;
 #ifdef I830_USE_XAA

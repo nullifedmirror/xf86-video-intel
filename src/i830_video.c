@@ -2058,7 +2058,7 @@ I830AllocateMemory(ScrnInfoPtr pScrn, struct linear_alloc *linear, int size,
    I830Ptr pI830 = I830PTR(pScrn);
 
 #ifdef I830_USE_EXA
-   if (pI830->useEXA) {
+   if (pI830->AccelMethod == USE_EXA) {
       if (linear->exa != NULL) {
 	 if (linear->exa->size >= size)
 	    return;
@@ -2075,7 +2075,7 @@ I830AllocateMemory(ScrnInfoPtr pScrn, struct linear_alloc *linear, int size,
    }
 #endif /* I830_USE_EXA */
 #ifdef I830_USE_XAA
-   if (!pI830->useEXA) {
+   if (pI830->AccelMethod == USE_XAA) {
       /* Converts an offset from XAA's linear allocator to an offset from the
        * start of fb.
        */
@@ -2118,7 +2118,7 @@ I830FreeMemory(ScrnInfoPtr pScrn, struct linear_alloc *linear)
    I830Ptr pI830 = I830PTR(pScrn);
 
 #ifdef I830_USE_EXA
-   if (pI830->useEXA) {
+   if (pI830->AccelMethod == USE_EXA) {
       if (linear->exa != NULL) {
 	 exaOffscreenFree(pScrn->pScreen, linear->exa);
 	 linear->exa = NULL;
@@ -2126,7 +2126,7 @@ I830FreeMemory(ScrnInfoPtr pScrn, struct linear_alloc *linear)
    }
 #endif /* I830_USE_EXA */
 #ifdef I830_USE_XAA
-   if (!pI830->useEXA) {
+   if (pI830->AccelMethod == USE_XAA) {
       if (linear->xaa != NULL) {
 	 xf86FreeOffscreenLinear(linear->xaa);
 	 linear->xaa = NULL;
@@ -2388,7 +2388,7 @@ I830PutImage(ScrnInfoPtr pScrn,
    }
 
 #ifdef I830_USE_EXA
-   if (pI830->useEXA) {
+   if (pI830->AccelMethod == USE_EXA) {
        /* Force the pixmap into framebuffer so we can draw to it. */
        exaMoveInPixmap(pPixmap);
    }

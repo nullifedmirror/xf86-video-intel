@@ -262,7 +262,7 @@ static PciChipsets I830PciChipsets[] = {
  */
 
 typedef enum {
-#if defined(I830_USE_XAA) && defined(I830_USE_EXA)
+#if defined(I830_USE_XAA) || defined(I830_USE_EXA) || defined(I830_USE_GLUCOSE)
    OPTION_ACCELMETHOD,
 #endif
    OPTION_NOACCEL,
@@ -284,7 +284,7 @@ typedef enum {
 } I830Opts;
 
 static OptionInfoRec I830Options[] = {
-#if defined(I830_USE_XAA) && defined(I830_USE_EXA)
+#if defined(I830_USE_XAA) || defined(I830_USE_EXA) || defined(I830_USE_GLUCOSE)
    {OPTION_ACCELMETHOD,	"AccelMethod",	OPTV_ANYSTR,	{0},	FALSE},
 #endif
    {OPTION_NOACCEL,	"NoAccel",	OPTV_BOOLEAN,	{0},	FALSE},
@@ -1209,26 +1209,31 @@ I830PreInit(ScrnInfoPtr pScrn, int flags)
     */
    if (!pI830->noAccel) {
 #if (defined(I830_USE_EXA) && defined(I830_USE_XAA)) || !defined(I830_USE_EXA)
-       pI830->useEXA = FALSE;
+       pI830->AccelMethod = USE_XAA;
 #else
-       pI830->useEXA = TRUE;
+       pI830->AccelMethod = USE_EXA;
 #endif
-#if defined(I830_USE_XAA) && defined(I830_USE_EXA)
+#if defined(I830_USE_XAA) || defined(I830_USE_EXA) || defined(I830_USE_GLUCOSE)
        int from = X_DEFAULT;
        if ((s = (char *)xf86GetOptValString(pI830->Options,
 					    OPTION_ACCELMETHOD))) {
-	   if (!xf86NameCmp(s, "EXA")) {
+	   if (!xf86NameCmp(s, "GLUCOSE")) {
 	       from = X_CONFIG;
-	       pI830->useEXA = TRUE;
+	       pI830->AccelMethod = USE_GLUCOSE;
+	   }
+	   else if (!xf86NameCmp(s, "EXA")) {
+	       from = X_CONFIG;
+	       pI830->AccelMethod = USE_EXA;
 	   }
 	   else if (!xf86NameCmp(s, "XAA")) {
 	       from = X_CONFIG;
-	       pI830->useEXA = FALSE;
+	       pI830->AccelMethod = USE_XAA;
 	   }
        }
 #endif
        xf86DrvMsg(pScrn->scrnIndex, from, "Using %s for acceleration\n",
-		  pI830->useEXA ? "EXA" : "XAA");
+		  (pI830->AccelMethod == USE_GLUCOSE) ? "GLUCOSE" :
+		  (pI830->AccelMethod == USE_EXA) ? "EXA" : "XAA");
    }
 
    if (xf86ReturnOptValBool(pI830->Options, OPTION_SW_CURSOR, FALSE)) {
@@ -1460,7 +1465,7 @@ I830PreInit(ScrnInfoPtr pScrn, int flags)
    xf86LoaderReqSymLists(I810fbSymbols, NULL);
 
 #ifdef I830_USE_XAA
-   if (!pI830->noAccel && !pI830->useEXA) {
+   if (!pI830->noAccel && pI830->AccelMethod == USE_XAA) {
       if (!xf86LoadSubModule(pScrn, "xaa")) {
 	 PreInitCleanup(pScrn);
 	 return FALSE;
@@ -1470,7 +1475,7 @@ I830PreInit(ScrnInfoPtr pScrn, int flags)
 #endif
 
 #ifdef I830_USE_EXA
-   if (!pI830->noAccel && pI830->useEXA) {
+   if (!pI830->noAccel && pI830->AccelMethod == USE_EXA) {
       XF86ModReqInfo req;
       int errmaj, errmin;
 
@@ -1486,6 +1491,17 @@ I830PreInit(ScrnInfoPtr pScrn, int flags)
       xf86LoaderReqSymLists(I830exaSymbols, NULL);
    }
 #endif
+
+#ifdef I830_USE_GLUCOSE
+   if (!pI830->noAccel && pI830->AccelMethod == USE_GLUCOSE) {
+      if (!xf86LoadSubModule(pScrn, "glucose")) {
+	 PreInitCleanup(pScrn);
+	 return FALSE;
+      }
+      xf86LoaderReqSymLists(I810glucoseSymbols, NULL);
+   }
+#endif
+
    if (!pI830->SWCursor) {
       if (!xf86LoadSubModule(pScrn, "ramdac")) {
 	 PreInitCleanup(pScrn);
@@ -1566,11 +1582,11 @@ ResetState(ScrnInfoPtr pScrn, Bool flush)
       } \
    } while(0)
 #ifdef I830_USE_XAA
-   if (!pI830->useEXA && flush && pI830->AccelInfoRec)
+   if (pI830->AccelMethod == USE_XAA && flush && pI830->AccelInfoRec)
        flush_ring();
 #endif
 #ifdef I830_USE_EXA
-   if (pI830->useEXA && flush && pI830->EXADriverPtr)
+   if (pI830->AccelMethod == USE_EXA && flush && pI830->EXADriverPtr)
        flush_ring();
 #endif
 
@@ -2538,7 +2554,7 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
 
    DPRINTF(PFX, "assert( if(!I830EnterVT(scrnIndex, 0)) )\n");
 
-   if (!pI830->useEXA) {
+   if (pI830->AccelMethod == USE_XAA) {
       if (I830IsPrimary(pScrn)) {
 	 if (!I830InitFBManager(pScreen, &(pI830->FbMemBox))) {
 	    xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
@@ -2997,7 +3013,7 @@ I830CloseScreen(int scrnIndex, ScreenPtr pScreen)
    }
 #endif
 #ifdef I830_USE_EXA
-   if (pI830->useEXA && pI830->EXADriverPtr) {
+   if (pI830->AccelMethod == USE_EXA && pI830->EXADriverPtr) {
        exaDriverFini(pScreen);
        xfree(pI830->EXADriverPtr);
        pI830->EXADriverPtr = NULL;
@@ -3197,14 +3213,14 @@ i830WaitSync(ScrnInfoPtr pScrn)
    I830Ptr pI830 = I830PTR(pScrn);
 
 #ifdef I830_USE_XAA
-   if (!pI830->noAccel && !pI830->useEXA && pI830->AccelInfoRec 
+   if (!pI830->noAccel && pI830->AccelMethod == USE_XAA && pI830->AccelInfoRec 
 	&& pI830->AccelInfoRec->NeedToSync) {
       (*pI830->AccelInfoRec->Sync)(pScrn);
       pI830->AccelInfoRec->NeedToSync = FALSE;
    }
 #endif
 #ifdef I830_USE_EXA
-   if (!pI830->noAccel && pI830->useEXA && pI830->EXADriverPtr) {
+   if (!pI830->noAccel && pI830->AccelMethod == USE_EXA && pI830->EXADriverPtr) {
 	ScreenPtr pScreen = screenInfo.screens[pScrn->scrnIndex];
 	exaWaitSync(pScreen);
    }
@@ -3217,11 +3233,11 @@ i830MarkSync(ScrnInfoPtr pScrn)
    I830Ptr pI830 = I830PTR(pScrn);
 
 #ifdef I830_USE_XAA
-   if (!pI830->useEXA && pI830->AccelInfoRec)
+   if (pI830->AccelMethod == USE_XAA && pI830->AccelInfoRec)
       pI830->AccelInfoRec->NeedToSync = TRUE;
 #endif
 #ifdef I830_USE_EXA
-   if (pI830->useEXA && pI830->EXADriverPtr) {
+   if (pI830->AccelMethod == USE_EXA && pI830->EXADriverPtr) {
       ScreenPtr pScreen = screenInfo.screens[pScrn->scrnIndex];
       exaMarkSync(pScreen);
    }

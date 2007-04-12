@@ -271,6 +271,10 @@ const char *I810int10Symbols[] = {
    NULL
 };
 
+const char *I810glucoseSymbols[] = {
+   "glucoseScreenInit",
+};
+
 const char *I810xaaSymbols[] = {
    "XAACreateInfoRec",
    "XAADestroyInfoRec",
