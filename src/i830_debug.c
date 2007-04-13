@@ -777,16 +777,28 @@ i830_dump_error_state(ScrnInfoPtr pScrn)
 	   (unsigned long)INREG(LP_RING + RING_LEN),
 	   (unsigned long)INREG(LP_RING + RING_START));
 
+#ifdef XF86DRI
+    if (pI830->hwz) {
+	ErrorF("HWB ring tail: %lx head: %lx len: %lx start %lx\n",
+	       (unsigned long)INREG(HWB_RING + RING_TAIL),
+	       (unsigned long)INREG(HWB_RING + RING_HEAD) & HEAD_ADDR,
+	       (unsigned long)INREG(HWB_RING + RING_LEN),
+	       (unsigned long)INREG(HWB_RING + RING_START));
+    }
+#endif
+
     ErrorF("eir: %x esr: %x emr: %x\n",
 	   INREG16(EIR), INREG16(ESR), INREG16(EMR));
 
-    ErrorF("instdone: %x instpm: %x\n", INREG16(INST_DONE), INREG8(INST_PM));
+    ErrorF("instdone: %x instpm: %x\n", (unsigned)INREG(INST_DONE),
+	   INREG8(INST_PM));
 
     ErrorF("memmode: %lx instps: %lx\n", (unsigned long)INREG(MEMMODE),
 	   (unsigned long)INREG(INST_PS));
 
     ErrorF("hwstam: %x ier: %x imr: %x iir: %x\n",
-	   INREG16(HWSTAM), INREG16(IER), INREG16(IMR), INREG16(IIR));
+	   INREG16(HWSTAM), (unsigned)INREG(IER), (unsigned)INREG(IMR),
+	   (unsigned)INREG(IIR));
     i830_dump_ring (pScrn);
 }
 
