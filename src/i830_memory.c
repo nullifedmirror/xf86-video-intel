@@ -1758,4 +1758,24 @@ i830_xf86AllocateOffscreenLinear(ScreenPtr pScreen, int length,
 
     return linear;
 }
+
 #endif
+
+/*
+ * Allocate memory for MC compensation
+ */
+Bool i830_allocate_xvmc_buffer(ScrnInfoPtr pScrn, const char *name,
+                               i830_memory **buffer, unsigned long size,
+                               int flags)
+{
+    *buffer = i830_allocate_memory(pScrn, name, size,
+                                   GTT_PAGE_SIZE, flags);
+
+    if (!*buffer) {
+        xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
+                   "Failed to allocate memory for %s.\n", name);
+        return FALSE;
+    }
+
+    return TRUE;
+}
