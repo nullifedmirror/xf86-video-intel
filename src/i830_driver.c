@@ -1192,6 +1192,9 @@ I830PreInit(ScrnInfoPtr pScrn, int flags)
    xf86DrvMsg(pScrn->scrnIndex, from, "IO registers at addr 0x%lX\n",
 	      (unsigned long)pI830->MMIOAddr);
 
+   /* check quirks */
+   i830_fixup_devices(pScrn);
+
    /* Allocate an xf86CrtcConfig */
    xf86CrtcConfigInit (pScrn, &i830_xf86crtc_config_funcs);
    xf86_config = XF86_CRTC_CONFIG_PTR(pScrn);
@@ -2721,14 +2724,6 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
       pI830->directRenderingEnabled = I830DRIFinishScreenInit(pScreen);
    }
 
-#ifdef XvMCExtension
-   if (pI830->XvEnabled && (pI830->directRenderingEnabled) && 
-       (IS_I915G(pI830) || IS_I915GM(pI830) || 
-        IS_I945G(pI830) || IS_I945GM(pI830) ||
-        IS_G33CLASS(pI830))) {
-       I915InitMC(pScreen);
-   }
-#endif
 #endif
 
    /* Setup 3D engine, needed for rotation too */

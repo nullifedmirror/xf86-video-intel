@@ -66,7 +66,7 @@
                                  SIZE_Y420(surface->width, surface->height))
 
 /* Lookup tables to speed common calculations */
-_STATIC_ unsigned mb_bytes[] = {
+_STATIC_ unsigned int mb_bytes[] = {
     000, 128, 128, 256, 128, 256, 256, 384,  // 0
     128, 256, 256, 384, 256, 384, 384, 512,  // 1
     128, 256, 256, 384, 256, 384, 384, 512,  // 10
@@ -86,13 +86,13 @@ _STATIC_ char I915KernelDriverName[] = "i915";
 _STATIC_ int error_base;
 _STATIC_ int event_base;
 
-_STATIC_ int findOverlap(unsigned width, unsigned height,
+_STATIC_ int findOverlap(unsigned int width, unsigned int height,
                        short *dstX, short *dstY,
                        short *srcX, short *srcY, 
                        unsigned short *areaW, unsigned short *areaH)
 {
     int w, h;
-    unsigned mWidth, mHeight;
+    unsigned int mWidth, mHeight;
 
     w = *areaW;
     h = *areaH;
@@ -122,52 +122,13 @@ _STATIC_ int findOverlap(unsigned width, unsigned height,
     return 0;
 }
 
-_STATIC_ void setupAttribDesc(Display * display, XvPortID port,
-                            const I915XvMCAttrHolder * attrib, XvAttribute attribDesc[])
-{  
-    XvAttribute *XvAttribs, *curAD;
-    int num;
-    unsigned i, j;
-
-    XLockDisplay(display);
-    XvAttribs = XvQueryPortAttributes(display, port, &num);
-    for (i = 0; i < attrib->numAttr; ++i) {
-        curAD = attribDesc + i;
-        curAD->flags = 0;
-        curAD->min_value = 0;
-        curAD->max_value = 0;
-        curAD->name = NULL;
-        for (j = 0; j < num; ++j) {
-            if (attrib->attributes[i].attribute ==
-                XInternAtom(display, XvAttribs[j].name, TRUE)) {
-                *curAD = XvAttribs[j];
-                curAD->name = strdup(XvAttribs[j].name);
-                break;
-            }
-        }
-    }
-    if (XvAttribs)
-        XFree(XvAttribs);
-    XUnlockDisplay(display);
-}
-
-_STATIC_ void releaseAttribDesc(int numAttr, XvAttribute attribDesc[])
-{
-    int i;
-
-    for (i = 0; i < numAttr; ++i) {
-        if (attribDesc[i].name)
-            free(attribDesc[i].name);
-    }
-}
-
 _STATIC_ __inline__ void renderError(void) 
 {
     printf("Invalid Macroblock Parameters found.\n");
     return;
 }
 
-_STATIC_ void I915XvMCContendedLock(i915XvMCContext *pI915XvMC, unsigned flags)
+_STATIC_ void I915XvMCContendedLock(i915XvMCContext *pI915XvMC, drmLockFlags flags)
 {
     drmGetLock(pI915XvMC->fd, pI915XvMC->hHWContext, flags);
 }
@@ -241,16 +202,16 @@ _STATIC_ void i915_flush(i915XvMCContext *pI915XvMC, int map, int render)
 /* for MC picture rendering */
 _STATIC_ void i915_mc_static_indirect_state_buffer(XvMCContext *context, 
                                                    XvMCSurface *surface,
-                                                   unsigned picture_structure,
-                                                   unsigned flags,
-                                                   unsigned picture_coding_type)
+                                                   unsigned int picture_structure,
+                                                   unsigned int flags,
+                                                   unsigned int picture_coding_type)
 {
     struct i915_3dstate_buffer_info *buffer_info;
     struct i915_3dstate_dest_buffer_variables *dest_buffer_variables;
     struct i915_3dstate_dest_buffer_variables_mpeg *dest_buffer_variables_mpeg;
     i915XvMCSurface *pI915Surface = (i915XvMCSurface *)surface->privData;
     i915XvMCContext *pI915XvMC = (i915XvMCContext *)context->privData;
-    unsigned w = surface->width, h = surface->height;
+    unsigned int w = surface->width, h = surface->height;
 
     /* 3DSTATE_BUFFER_INFO */
     /* DEST Y */
@@ -373,7 +334,7 @@ _STATIC_ void i915_mc_map_state_buffer(XvMCContext *context,
     struct i915_3dstate_map_state *map_state;
     struct texture_map *tm;
     i915XvMCContext *pI915XvMC = (i915XvMCContext *)context->privData;
-    unsigned w = context->width, h = context->height;
+    unsigned int w = context->width, h = context->height;
  
     /* 3DSATE_MAP_STATE: Y */
     map_state = (struct i915_3dstate_map_state *)pI915XvMC->msb.map;
@@ -518,7 +479,7 @@ _STATIC_ void i915_mc_load_sis_msb_buffers(XvMCContext *context)
     msb_state *msb = NULL;
     i915XvMCContext *pI915XvMC = (i915XvMCContext *)context->privData;
     void *base = NULL;
-    unsigned size;
+    unsigned int size;
     int mem_select = 1;
 
     /* 3DSTATE_LOAD_INDIRECT */
@@ -663,7 +624,7 @@ _STATIC_ void i915_mc_mpeg_macroblock_1fbmv(XvMCContext *context, XvMCMacroBlock
     intelBatchbufferData(pI915XvMC, &macroblock_1fbmv, sizeof(macroblock_1fbmv), 0);
 }
 
-_STATIC_ void i915_mc_mpeg_macroblock_2fbmv(XvMCContext *context, XvMCMacroBlock *mb, unsigned ps)
+_STATIC_ void i915_mc_mpeg_macroblock_2fbmv(XvMCContext *context, XvMCMacroBlock *mb, unsigned int ps)
 {
     struct i915_3dmpeg_macroblock_2fbmv macroblock_2fbmv;
     i915XvMCContext *pI915XvMC = (i915XvMCContext *)context->privData;
@@ -800,12 +761,12 @@ _STATIC_ void i915_mc_sampler_state_buffer(XvMCContext *context)
     ts->ts2.default_color = 0;
 }
 
-_STATIC_ void i915_inst_arith(unsigned *inst,
-                            unsigned op,
-                            unsigned dest,
-                            unsigned mask,
-                            unsigned saturate,
-                            unsigned src0, unsigned src1, unsigned src2)
+_STATIC_ void i915_inst_arith(unsigned int *inst,
+                            unsigned int op,
+                            unsigned int dest,
+                            unsigned int mask,
+                            unsigned int saturate,
+                            unsigned int src0, unsigned int src1, unsigned int src2)
 {
     dest = UREG(GET_UREG_TYPE(dest), GET_UREG_NR(dest));
     *inst = (op | A0_DEST(dest) | mask | saturate | A0_SRC0(src0));
@@ -815,12 +776,12 @@ _STATIC_ void i915_inst_arith(unsigned *inst,
     *inst = (A2_SRC1(src1) | A2_SRC2(src2));
 }
 
-_STATIC_ void i915_inst_decl(unsigned *inst, 
-                           unsigned type,
-                           unsigned nr,
-                           unsigned d0_flags)
+_STATIC_ void i915_inst_decl(unsigned int *inst, 
+                           unsigned int type,
+                           unsigned int nr,
+                           unsigned int d0_flags)
 {
-    unsigned reg = UREG(type, nr);
+    unsigned int reg = UREG(type, nr);
     
     *inst = (D0_DCL | D0_DEST(reg) | d0_flags);
     inst++;
@@ -829,11 +790,11 @@ _STATIC_ void i915_inst_decl(unsigned *inst,
     *inst = D2_MBZ;
 }
 
-_STATIC_ void i915_inst_texld(unsigned *inst,
-                              unsigned op,
-                              unsigned dest,
-                              unsigned coord,
-                              unsigned sampler)
+_STATIC_ void i915_inst_texld(unsigned int *inst,
+                              unsigned int op,
+                              unsigned int dest,
+                              unsigned int coord,
+                              unsigned int sampler)
 {
    dest = UREG(GET_UREG_TYPE(dest), GET_UREG_NR(dest));
    *inst = (op | T0_DEST(dest) | T0_SAMPLER(sampler));
@@ -847,8 +808,8 @@ _STATIC_ void i915_mc_pixel_shader_program_buffer(XvMCContext *context)
 {
     struct i915_3dstate_pixel_shader_program *pixel_shader_program;
     i915XvMCContext *pI915XvMC = (i915XvMCContext *)context->privData;
-    unsigned *inst;
-    unsigned dest, src0, src1, src2;
+    unsigned int *inst;
+    unsigned int dest, src0, src1, src2;
 
     /* Shader 0 */
     pixel_shader_program = (struct i915_3dstate_pixel_shader_program *)pI915XvMC->psp.map;
@@ -858,7 +819,7 @@ _STATIC_ void i915_mc_pixel_shader_program_buffer(XvMCContext *context)
     pixel_shader_program->dw0.retain = 1;
     pixel_shader_program->dw0.length = 2;
     /* mov oC, c0.0000 */
-    inst = (unsigned *)(++pixel_shader_program);
+    inst = (unsigned int*)(++pixel_shader_program);
     dest = UREG(REG_TYPE_OC, 0);
     src0 = UREG(REG_TYPE_CONST, 0);
     src1 = 0;
@@ -875,7 +836,7 @@ _STATIC_ void i915_mc_pixel_shader_program_buffer(XvMCContext *context)
     pixel_shader_program->dw0.retain = 1;
     pixel_shader_program->dw0.length = 14;
     /* dcl t0.xy */
-    inst = (unsigned *)(++pixel_shader_program);
+    inst = (unsigned int*)(++pixel_shader_program);
     i915_inst_decl(inst, REG_TYPE_T, T_TEX0, D0_CHANNEL_XY);
     /* dcl t1.xy */
     inst += 3;
@@ -906,7 +867,7 @@ _STATIC_ void i915_mc_pixel_shader_program_buffer(XvMCContext *context)
     pixel_shader_program->dw0.retain = 1;
     pixel_shader_program->dw0.length = 14;
     /* dcl t2.xy */
-    inst = (unsigned *)(++pixel_shader_program);
+    inst = (unsigned int*)(++pixel_shader_program);
     i915_inst_decl(inst, REG_TYPE_T, T_TEX2, D0_CHANNEL_XY);
     /* dcl t3.xy */
     inst += 3;
@@ -937,7 +898,7 @@ _STATIC_ void i915_mc_pixel_shader_program_buffer(XvMCContext *context)
     pixel_shader_program->dw0.retain = 1;
     pixel_shader_program->dw0.length = 29;
     /* dcl t0.xy */
-    inst = (unsigned *)(++pixel_shader_program);
+    inst = (unsigned int*)(++pixel_shader_program);
     i915_inst_decl(inst, REG_TYPE_T, T_TEX0, D0_CHANNEL_XY);
     /* dcl t1.xy */
     inst += 3;
@@ -1015,7 +976,7 @@ _STATIC_ void i915_mc_one_time_state_initialization(XvMCContext *context)
     psp_state *psp = NULL;
     psc_state *psc = NULL;
     i915XvMCContext *pI915XvMC = (i915XvMCContext *)context->privData;
-    unsigned size;
+    unsigned int size;
     void *base = NULL;
     int mem_select = 1;
 
@@ -1116,7 +1077,7 @@ _STATIC_ void i915_mc_one_time_state_initialization(XvMCContext *context)
     free(base);
 }
 
-_STATIC_ void i915_mc_invalidate_subcontext_buffers(XvMCContext *context, unsigned mask)
+_STATIC_ void i915_mc_invalidate_subcontext_buffers(XvMCContext *context, unsigned int mask)
 {
     struct i915_3dstate_load_indirect *load_indirect = NULL;
     sis_state *sis = NULL;
@@ -1126,7 +1087,7 @@ _STATIC_ void i915_mc_invalidate_subcontext_buffers(XvMCContext *context, unsign
     psp_state *psp = NULL;
     psc_state *psc = NULL;
     i915XvMCContext *pI915XvMC = (i915XvMCContext *)context->privData;
-    unsigned size;
+    unsigned int size;
     void *base = NULL, *ptr = NULL;
 
     size = sizeof(*load_indirect);
@@ -1325,7 +1286,7 @@ _STATIC_ void i915_yuv2rgb_map_state_buffer(XvMCSurface *target_surface)
     struct texture_map *tm;
     i915XvMCSurface *privTarget = NULL;
     i915XvMCContext *pI915XvMC = NULL;
-    unsigned w = target_surface->width, h = target_surface->height;
+    unsigned int w = target_surface->width, h = target_surface->height;
 
     privTarget = (i915XvMCSurface *)target_surface->privData;
     pI915XvMC = (i915XvMCContext *)privTarget->privContext;
@@ -1491,7 +1452,7 @@ _STATIC_ void i915_yuv2rgb_sampler_state_buffer(XvMCSurface *surface)
 }
 
 _STATIC_ void i915_yuv2rgb_static_indirect_state_buffer(XvMCSurface *surface,
-                                                      unsigned dstaddr, 
+                                                      unsigned int dstaddr, 
                                                       int dstpitch)
 {
     struct i915_3dstate_buffer_info *buffer_info;
@@ -1529,8 +1490,8 @@ _STATIC_ void i915_yuv2rgb_pixel_shader_program_buffer(XvMCSurface *surface)
     struct i915_3dstate_pixel_shader_program *pixel_shader_program;
     i915XvMCSurface *privSurface = (i915XvMCSurface *)surface->privData;
     i915XvMCContext *pI915XvMC = (i915XvMCContext *)privSurface->privContext;
-    unsigned *inst;
-    unsigned dest, src0, src1;
+    unsigned int *inst;
+    unsigned int dest, src0, src1;
 
     /* Shader 0 */
     pixel_shader_program = (struct i915_3dstate_pixel_shader_program *)pI915XvMC->psp.map;
@@ -1540,7 +1501,7 @@ _STATIC_ void i915_yuv2rgb_pixel_shader_program_buffer(XvMCSurface *surface)
     pixel_shader_program->dw0.retain = 0;
     pixel_shader_program->dw0.length = 23;
     /* dcl      t0.xy */
-    inst = (unsigned *)(++pixel_shader_program);
+    inst = (unsigned int*)(++pixel_shader_program);
     i915_inst_decl(inst, REG_TYPE_T, T_TEX0, D0_CHANNEL_XY);
     /* dcl         t1.xy */
     inst += 3;
@@ -1593,7 +1554,7 @@ _STATIC_ void i915_yuv2rgb_proc(XvMCSurface *surface)
     psp_state *psp = NULL;
     struct i915_3dprimitive *_3dprimitive = NULL;
     struct vertex_data *vd = NULL;
-    unsigned size;
+    unsigned int size;
     void *base = NULL;
 
     /* 3DSTATE_LOAD_STATE_IMMEDIATE_1 */
@@ -1747,7 +1708,6 @@ _STATIC_ void i915_release_resource(Display *display, XvMCContext *context)
 
     pI915XvMC->ref--;
     i915_xvmc_unmap_buffers(pI915XvMC);
-    releaseAttribDesc(pI915XvMC->attrib.numAttr, pI915XvMC->attribDesc);
 
     driDestroyHashContents(pI915XvMC->drawHash);
     drmHashDestroy(pI915XvMC->drawHash);
@@ -1934,7 +1894,6 @@ Status XvMCCreateContext(Display *display, XvPortID port,
     pI915XvMC->sarea_priv_offset = tmpComm->sarea_priv_offset;
     pI915XvMC->screen = tmpComm->screen;
     pI915XvMC->depth = tmpComm->depth;
-    pI915XvMC->attrib = tmpComm->initAttrs;
 
     /* Must free the private data we were passed from X */
     free(priv_data);
@@ -2047,11 +2006,9 @@ Status XvMCCreateContext(Display *display, XvPortID port,
     }
 
     /* Initialize private context values */
-    setupAttribDesc(display, port, &pI915XvMC->attrib, pI915XvMC->attribDesc);
     pI915XvMC->yStride = STRIDE(width);
     pI915XvMC->uvStride = STRIDE(width >> 1);
     pI915XvMC->haveXv = 0;
-    pI915XvMC->attribChanged = 1;
     pI915XvMC->dual_prime = 0;
     pI915XvMC->last_flip = 0;
     pI915XvMC->locked = 0;
@@ -2582,7 +2539,6 @@ Status XvMCPutSurface(Display *display,XvMCSurface *surface,
     buf.srfNo = pI915Surface->srfNo;
     pI915SubPic = pI915Surface->privSubPic;
     buf.subPicNo = (!pI915SubPic ? 0 : pI915SubPic->srfNo);
-    buf.attrib = pI915XvMC->attrib;
     buf.real_id = FOURCC_YV12;
 
     XLockDisplay(display);
@@ -2598,7 +2554,6 @@ Status XvMCPutSurface(Display *display,XvMCSurface *surface,
 
     XSync(display, 0);
     XUnlockDisplay(display);
-    pI915XvMC->attribChanged = 0;
     PPTHREAD_MUTEX_UNLOCK(pI915XvMC);
 
     return Success;
@@ -3302,29 +3257,9 @@ Status XvMCGetSubpictureStatus(Display *display, XvMCSubpicture *subpicture,
 XvAttribute *XvMCQueryAttributes(Display *display, XvMCContext *context,
                                  int *number) 
 {
-    i915XvMCContext *pI915XvMC;
-    XvAttribute *attributes;
-
-    if (!number)
-        return NULL;
-
+    /* now XvMC has no extra attribs than Xv */
     *number = 0;
-
-    if (!display || !context)
-        return NULL;
-
-    if (!(pI915XvMC = context->privData))
-        return NULL;
-
-    PPTHREAD_MUTEX_LOCK(pI915XvMC);
-    if (NULL != (attributes = (XvAttribute *)
-                 malloc(I915_NUM_XVMC_ATTRIBUTES * sizeof(XvAttribute)))) {
-        memcpy(attributes, pI915XvMC->attribDesc, I915_NUM_XVMC_ATTRIBUTES);
-        *number = I915_NUM_XVMC_ATTRIBUTES;
-    }
-    PPTHREAD_MUTEX_UNLOCK(pI915XvMC);
-
-    return attributes;
+    return NULL;
 }
 
 /***************************************************************************
@@ -3343,52 +3278,6 @@ XvAttribute *XvMCQueryAttributes(Display *display, XvMCContext *context,
 Status XvMCSetAttribute(Display *display, XvMCContext *context,
                         Atom attribute, int value)
 {
-    i915XvMCContext *pI915XvMC;
-    I915XvMCCommandBuffer buf;
-    int found = 0;
-    unsigned i;
-
-    if (!display)
-        return BadValue;
-
-    if (!context || !(pI915XvMC = context->privData))
-        return (error_base + XvMCBadContext);
-
-    PPTHREAD_MUTEX_LOCK(pI915XvMC);
-    for (i = 0; i < pI915XvMC->attrib.numAttr; ++i) {
-        if (attribute == pI915XvMC->attrib.attributes[i].attribute) {
-            if ((!(pI915XvMC->attribDesc[i].flags & XvSettable)) ||
-                value < pI915XvMC->attribDesc[i].min_value ||
-                value > pI915XvMC->attribDesc[i].max_value) {
-                PPTHREAD_MUTEX_UNLOCK(pI915XvMC);
-                return BadValue;
-            }
-
-            pI915XvMC->attrib.attributes[i].value = value;
-            found = 1;
-            pI915XvMC->attribChanged = 1;
-            break;
-        }
-    }
-
-    if (!found) {
-        PPTHREAD_MUTEX_UNLOCK(pI915XvMC);
-        return BadMatch;
-    }
-
-    if (pI915XvMC->haveXv) {
-        buf.command = I915_XVMC_COMMAND_ATTRIBUTES;
-        pI915XvMC->xvImage->data = (char *)&buf;
-        buf.ctxNo = pI915XvMC->ctxno | I915_XVMC_VALID;
-        buf.attrib = pI915XvMC->attrib;
-        XLockDisplay(display);
-        pI915XvMC->attribChanged =
-            XvPutImage(display, pI915XvMC->port, pI915XvMC->draw,
-                       pI915XvMC->gc, pI915XvMC->xvImage, 0, 0, 1, 1, 0, 0, 1, 1);
-        XUnlockDisplay(display);
-    }
-
-    PPTHREAD_MUTEX_UNLOCK(pI915XvMC);
     return Success;
 }
 
@@ -3410,30 +3299,5 @@ Status XvMCSetAttribute(Display *display, XvMCContext *context,
 Status XvMCGetAttribute(Display *display, XvMCContext *context,
                         Atom attribute, int *value) 
 {
-    i915XvMCContext *pI915XvMC;
-    int found = 0;
-    unsigned i;
-
-    if (!display || !value)
-        return BadValue;
-
-    if (!context || !(pI915XvMC = context->privData))
-        return (error_base + XvMCBadContext);
-
-    PPTHREAD_MUTEX_LOCK(pI915XvMC);
-    for (i = 0; i < pI915XvMC->attrib.numAttr; ++i) {
-        if (attribute == pI915XvMC->attrib.attributes[i].attribute) {
-            if (pI915XvMC->attribDesc[i].flags & XvGettable) {
-                *value = pI915XvMC->attrib.attributes[i].value;
-                found = 1;
-                break;
-            }
-        }
-    }
-    PPTHREAD_MUTEX_UNLOCK(pI915XvMC);
-
-    if (!found)
-        return BadMatch;
-    
     return Success;
 }
