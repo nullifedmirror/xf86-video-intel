@@ -539,9 +539,15 @@ I830DRIScreenInit(ScreenPtr pScreen)
    } else {
       pDRIInfo->busIdString = xalloc(64);
       sprintf(pDRIInfo->busIdString, "PCI:%d:%d:%d",
+#if XSERVER_LIBPCIACCESS
+	      ((pI830->PciInfo->domain << 8) | pI830->PciInfo->bus),
+	      pI830->PciInfo->dev, pI830->PciInfo->func
+#else
 	      ((pciConfigPtr) pI830->PciInfo->thisCard)->busnum,
 	      ((pciConfigPtr) pI830->PciInfo->thisCard)->devnum,
-	      ((pciConfigPtr) pI830->PciInfo->thisCard)->funcnum);
+	      ((pciConfigPtr) pI830->PciInfo->thisCard)->funcnum
+#endif
+	      );
    }
    pDRIInfo->ddxDriverMajorVersion = I830_MAJOR_VERSION;
    pDRIInfo->ddxDriverMinorVersion = I830_MINOR_VERSION;
@@ -602,6 +608,7 @@ I830DRIScreenInit(ScreenPtr pScreen)
 #endif
 #if DRIINFO_MAJOR_VERSION > 5 || \
     (DRIINFO_MAJOR_VERSION == 5 && DRIINFO_MINOR_VERSION >= 3)
+      if (pI830->useEXA)
 	 pDRIInfo->texOffsetStart = I830TexOffsetStart;
 #endif
 
@@ -977,13 +984,13 @@ I830DRIDoMappings(ScreenPtr pScreen)
       return FALSE;
    }
 
-   if (pI830->PciInfo->chipType != PCI_CHIP_845_G &&
-       pI830->PciInfo->chipType != PCI_CHIP_I830_M) {
+   if (DEVICE_ID(pI830->PciInfo) != PCI_CHIP_845_G &&
+       DEVICE_ID(pI830->PciInfo) != PCI_CHIP_I830_M) {
       I830SetParam(pScrn, I830_SETPARAM_USE_MI_BATCHBUFFER_START, 1 );
    }
 
    pI830DRI = (I830DRIPtr) pI830->pDRIInfo->devPrivate;
-   pI830DRI->deviceID = pI830->PciInfo->chipType;
+   pI830DRI->deviceID = DEVICE_ID(pI830->PciInfo);
    pI830DRI->width = pScrn->virtualX;
    pI830DRI->height = pScrn->virtualY;
    pI830DRI->mem = pScrn->videoRam * 1024;
@@ -1019,12 +1026,20 @@ I830DRIResume(ScreenPtr pScreen)
 
    {
       pI830DRI->irq = drmGetInterruptFromBusID(pI830->drmSubFD,
+#if XSERVER_LIBPCIACCESS
+					       ((pI830->PciInfo->domain << 8) |
+						pI830->PciInfo->bus),
+					       pI830->PciInfo->dev,
+					       pI830->PciInfo->func
+#else
 					       ((pciConfigPtr) pI830->
 						PciInfo->thisCard)->busnum,
 					       ((pciConfigPtr) pI830->
 						PciInfo->thisCard)->devnum,
 					       ((pciConfigPtr) pI830->
-						PciInfo->thisCard)->funcnum);
+						PciInfo->thisCard)->funcnum
+#endif
+					       );
 
       if (drmCtlInstHandler(pI830->drmSubFD, pI830DRI->irq)) {
 	 xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
@@ -1107,12 +1122,20 @@ I830DRIFinishScreenInit(ScreenPtr pScreen)
       I830DRIPtr pI830DRI = (I830DRIPtr) pI830->pDRIInfo->devPrivate;
 
       pI830DRI->irq = drmGetInterruptFromBusID(pI830->drmSubFD,
+#if XSERVER_LIBPCIACCESS
+					       ((pI830->PciInfo->domain << 8) |
+						pI830->PciInfo->bus),
+					       pI830->PciInfo->dev,
+					       pI830->PciInfo->func
+#else
 					       ((pciConfigPtr) pI830->
 						PciInfo->thisCard)->busnum,
 					       ((pciConfigPtr) pI830->
 						PciInfo->thisCard)->devnum,
 					       ((pciConfigPtr) pI830->
-						PciInfo->thisCard)->funcnum);
+						PciInfo->thisCard)->funcnum
+#endif
+					       );
 
       if (drmCtlInstHandler(pI830->drmSubFD, pI830DRI->irq)) {
 	 xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
@@ -1658,10 +1681,13 @@ I830UpdateDRIBuffers(ScrnInfoPtr pScrn, drmI830Sarea *sarea)
 
    I830DRIUnmapScreenRegions(pScrn, sarea);
 
-   sarea->front_tiled = pI830->front_tiled;
-   sarea->back_tiled = pI830->back_tiled;
-   sarea->third_tiled = pI830->third_tiled;
-   sarea->depth_tiled = pI830->depth_tiled;
+   sarea->front_tiled = (pI830->front_buffer->tiling != TILE_NONE);
+   sarea->back_tiled = (pI830->back_buffer->tiling != TILE_NONE);
+   if (pI830->third_buffer != NULL)
+       sarea->third_tiled = (pI830->third_buffer->tiling != TILE_NONE);
+   else
+       sarea->third_tiled = FALSE;
+   sarea->depth_tiled = (pI830->depth_buffer->tiling != TILE_NONE);
    sarea->rotated_tiled = FALSE;
 
    sarea->front_offset = pI830->front_buffer->offset;
