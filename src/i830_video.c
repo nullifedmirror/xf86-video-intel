@@ -2396,7 +2396,7 @@ I830PutImage(ScrnInfoPtr pScrn,
     }
 
 #ifdef I830_USE_EXA
-    if (pI830->useEXA) {
+    if (pI830->AccelMethod == USE_EXA) {
 	/* Force the pixmap into framebuffer so we can draw to it. */
 	exaMoveInPixmap(pPixmap);
     }
