@@ -271,30 +271,38 @@ i830_sdvo_read_response(xf86OutputPtr output, void *response, int response_len)
     I830OutputPrivatePtr    intel_output = output->driver_private;
     int			    i;
     CARD8		    status;
+    CARD8		    retry = 50;
 
-    /* Read the command response */
-    for (i = 0; i < response_len; i++) {
-	i830_sdvo_read_byte(output, SDVO_I2C_RETURN_0 + i,
+    while (retry--) {
+    	/* Read the command response */
+    	for (i = 0; i < response_len; i++) {
+	    i830_sdvo_read_byte(output, SDVO_I2C_RETURN_0 + i,
 			    &((CARD8 *)response)[i]);
-    }
+    	}
 
-    /* Read the return status */
-    i830_sdvo_read_byte(output, SDVO_I2C_CMD_STATUS, &status);
+    	/* Read the return status */
+    	i830_sdvo_read_byte(output, SDVO_I2C_CMD_STATUS, &status);
 
-    /* Write the SDVO command logging */
-    if (pI830->debug_modes) {
-	xf86DrvMsg(intel_output->pI2CBus->scrnIndex, X_INFO,
+    	/* Write the SDVO command logging */
+    	if (pI830->debug_modes) {
+	    xf86DrvMsg(intel_output->pI2CBus->scrnIndex, X_INFO,
 		   "%s: R: ", SDVO_NAME(SDVO_PRIV(intel_output)));
-	for (i = 0; i < response_len; i++)
-	    LogWrite(1, "%02X ", ((CARD8 *)response)[i]);
-	for (; i < 8; i++)
-	    LogWrite(1, "   ");
-	if (status <= SDVO_CMD_STATUS_SCALING_NOT_SUPP) {
-	    LogWrite(1, "(%s)", cmd_status_names[status]);
-	} else {
-	    LogWrite(1, "(??? %d)", status);
-	}
-	LogWrite(1, "\n");
+	    for (i = 0; i < response_len; i++)
+	    	LogWrite(1, "%02X ", ((CARD8 *)response)[i]);
+	    for (; i < 8; i++)
+	    	LogWrite(1, "   ");
+	    if (status <= SDVO_CMD_STATUS_SCALING_NOT_SUPP) {
+	    	LogWrite(1, "(%s)", cmd_status_names[status]);
+	    } else {
+	    	LogWrite(1, "(??? %d)", status);
+	    }
+	    LogWrite(1, "\n");
+    	}
+
+	if (status != SDVO_CMD_STATUS_PENDING)
+	    return status;
+
+        intel_output->pI2CBus->I2CUDelay(intel_output->pI2CBus, 50);
     }
 
     return status;
@@ -739,7 +747,7 @@ i830_sdvo_mode_set(xf86OutputPtr output, DisplayModePtr mode,
     sdvo_pixel_multiply = i830_sdvo_get_pixel_multiplier(mode);
     if (IS_I965G(pI830)) {
 	/* done in crtc_mode_set as the dpll_md reg must be written early */
-    } else if (IS_I945G(pI830) || IS_I945GM(pI830)) {
+    } else if (IS_I945G(pI830) || IS_I945GM(pI830) || IS_G33CLASS(pI830)) {
 	/* done in crtc_mode_set as it lives inside the dpll register */
     } else {
 	sdvox |= (sdvo_pixel_multiply - 1) << SDVO_PORT_MULTIPLY_SHIFT;
@@ -1171,6 +1179,8 @@ i830_sdvo_init(ScrnInfoPtr pScrn, int output_device)
     
     dev_priv = (struct i830_sdvo_priv *) (intel_output + 1);
     intel_output->type = I830_OUTPUT_SDVO;
+    intel_output->pipe_mask = ((1 << 0) | (1 << 1));
+    intel_output->clone_mask = (1 << I830_OUTPUT_SDVO);
 
     /* While it's the same bus, we just initialize a new copy to avoid trouble
      * with tracking refcounting ourselves, since the XFree86 DDX bits don't.
@@ -1270,6 +1280,18 @@ i830_sdvo_init(ScrnInfoPtr pScrn, int output_device)
         output->subpixel_order = SubPixelHorizontalRGB;
 	name_prefix="TMDS";
     }
+    else if (dev_priv->caps.output_flags & SDVO_OUTPUT_RGB0)
+    {
+	dev_priv->active_outputs = SDVO_OUTPUT_RGB0;
+        output->subpixel_order = SubPixelHorizontalRGB;
+	name_prefix="VGA";
+    }
+    else if (dev_priv->caps.output_flags & SDVO_OUTPUT_RGB1)
+    {
+	dev_priv->active_outputs = SDVO_OUTPUT_RGB1;
+        output->subpixel_order = SubPixelHorizontalRGB;
+	name_prefix="VGA";
+    }
     else
     {
 	unsigned char	bytes[2];
@@ -1308,6 +1330,6 @@ i830_sdvo_init(ScrnInfoPtr pScrn, int output_device)
 	       dev_priv->pixel_clock_max / 1000.0,
 	       (dev_priv->caps.sdvo_inputs_mask & 0x1) ? 'Y' : 'N',
 	       (dev_priv->caps.sdvo_inputs_mask & 0x2) ? 'Y' : 'N',
-	       dev_priv->caps.output_flags & SDVO_OUTPUT_TMDS0 ? 'Y' : 'N',
-	       dev_priv->caps.output_flags & SDVO_OUTPUT_TMDS1 ? 'Y' : 'N');
+	       dev_priv->caps.output_flags & (SDVO_OUTPUT_RGB0 | SDVO_OUTPUT_TMDS0) ? 'Y' : 'N',
+	       dev_priv->caps.output_flags & (SDVO_OUTPUT_RGB1 | SDVO_OUTPUT_TMDS1) ? 'Y' : 'N');
 }

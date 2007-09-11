@@ -172,6 +172,7 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
     struct brw_instruction *ps_kernel;
     struct brw_instruction *sip_kernel;
     float *vb;
+    float src_scale_x, src_scale_y;
     CARD32 *binding_table;
     Bool first_output = TRUE;
     int dest_surf_offset, src_surf_offset, src_sampler_offset, vs_offset;
@@ -199,20 +200,8 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
 
     assert((id == FOURCC_UYVY) || (id == FOURCC_YUY2));
 
-    /* Tell the rotation code that we have stomped its invariant state by
-     * setting a high bit.  We don't use any invariant 3D state for video, so
-     * we don't have to worry about it ourselves.
-     */
-    *pI830->used3D |= 1 << 30;
-
-#ifdef XF86DRI
-    /* Tell the DRI that we're smashing its state. */
-    if (pI830->directRenderingEnabled) {
-	drmI830Sarea *pSAREAPriv = DRIGetSAREAPrivate(pScrn->pScreen);
-
-	pSAREAPriv->ctxOwner = DRIGetContext(pScrn->pScreen);
-    }
-#endif /* XF86DRI */
+    IntelEmitInvarientState(pScrn);
+    *pI830->last_3d = LAST_3D_VIDEO;
 
     next_offset = 0;
 
@@ -389,6 +378,8 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
     dest_surf_state->ss2.mip_count = 0;
     dest_surf_state->ss2.render_target_rotation = 0;
     dest_surf_state->ss3.pitch = pPixmap->devKind - 1;
+    dest_surf_state->ss3.tiled_surface = i830_pixmap_tiled(pPixmap);
+    dest_surf_state->ss3.tile_walk = 0; /* TileX */
 
     /* Set up the source surface state buffer */
     memset(src_surf_state, 0, sizeof(*src_surf_state));
@@ -419,6 +410,7 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
     src_surf_state->ss2.mip_count = 0;
     src_surf_state->ss2.render_target_rotation = 0;
     src_surf_state->ss3.pitch = video_pitch - 1;
+    /* FIXME: account for tiling if we ever do it */
 
     /* Set up a binding table for our two surfaces.  Only the PS will use it */
     /* XXX: are these offset from the right place? */
@@ -672,6 +664,10 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
     dxo = dstRegion->extents.x1;
     dyo = dstRegion->extents.y1;
 
+    /* Use normalized texture coordinates */
+    src_scale_x = ((float)src_w / width) / (float)drw_w;
+    src_scale_y = ((float)src_h / height) / (float)drw_h;
+
     pbox = REGION_RECTS(dstRegion);
     nbox = REGION_NUM_RECTS(dstRegion);
     while (nbox--) {
@@ -680,7 +676,6 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
 	int box_x2 = pbox->x2;
 	int box_y2 = pbox->y2;
 	int i;
-	float src_scale_x, src_scale_y;
 
 	if (!first_output) {
 	    /* Since we use the same little vertex buffer over and over, sync
@@ -690,10 +685,6 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
 	}
 
 	pbox++;
-
-	/* Use normalized texture coordinates */
-	src_scale_x = (float)1.0 / (float)drw_w;
-	src_scale_y = (float)1.0 / (float)drw_h;
 
 	i = 0;
 	vb[i++] = (box_x2 - dxo) * src_scale_x;

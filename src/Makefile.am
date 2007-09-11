@@ -18,11 +18,11 @@
 #  IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 #  CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-if HAVE_PCIACCESS
+if XSERVER_LIBPCIACCESS
 REGDUMPER = reg_dumper
 endif
 
-SUBDIRS = xvmc bios_reader ch7017 ch7xxx ivch sil164 $(REGDUMPER)
+SUBDIRS = xvmc bios_reader ch7017 ch7xxx ivch sil164 tfp410 $(REGDUMPER)
 
 # this is obnoxious:
 # -module lets us name the module exactly how we want
@@ -90,6 +90,7 @@ intel_drv_la_SOURCES = \
 	 i830_debug.h \
 	 i830_display.c \
 	 i830_display.h \
+         i830_quirks.c \
          i830_driver.c \
 	 i830_dvo.c \
          i830.h \

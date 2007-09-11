@@ -31,6 +31,7 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 #ifndef _I830_COMMON_H_
 #define _I830_COMMON_H_
 
+#include <stdint.h>
 
 #define I830_NR_TEX_REGIONS 255	/* maximum due to use of chars for next/prev */
 #define I830_LOG_MIN_TEX_REGION_SIZE 14
@@ -54,6 +55,7 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define DRM_I830_DESTROY_HEAP             0x0c
 #define DRM_I830_SET_VBLANK_PIPE	  0x0d
 #define DRM_I830_GET_VBLANK_PIPE	  0x0e
+#define DRM_I830_HWS_PAGE_ADDR		  0x11
 
 
 typedef struct {
@@ -122,14 +124,17 @@ typedef struct {
         unsigned int rotated_tiled;
         unsigned int rotated2_tiled;
 
-	int pipeA_x;
-	int pipeA_y;
-	int pipeA_w;
-	int pipeA_h;
-	int pipeB_x;
-	int pipeB_y;
-	int pipeB_w;
-	int pipeB_h;
+	int planeA_x;
+	int planeA_y;
+	int planeA_w;
+	int planeA_h;
+	int planeB_x;
+	int planeB_y;
+	int planeB_w;
+	int planeB_h;
+
+	int planeA_pipe;
+	int planeB_pipe;
 
 	/* Triple buffering */
 	drm_handle_t third_handle;
@@ -223,5 +228,9 @@ typedef struct {
 typedef struct {
 	int pipe;
 } drmI830VBlankPipe;
+
+typedef struct {
+	uint64_t addr;
+} drmI830HWS;
 
 #endif /* _I830_DRM_H_ */
