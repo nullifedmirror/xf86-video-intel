@@ -608,7 +608,7 @@ I830DRIScreenInit(ScreenPtr pScreen)
 #endif
 #if DRIINFO_MAJOR_VERSION > 5 || \
     (DRIINFO_MAJOR_VERSION == 5 && DRIINFO_MINOR_VERSION >= 3)
-      if (pI830->useEXA)
+      if (pI830->AccelMethod == USE_EXA)
 	 pDRIInfo->texOffsetStart = I830TexOffsetStart;
 #endif
 
