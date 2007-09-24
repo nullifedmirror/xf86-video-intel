@@ -112,9 +112,7 @@ i830_pixmap_tiled(PixmapPtr pPixmap)
     I830Ptr pI830 = I830PTR(pScrn);
     unsigned long offset;
 
-    /* Don't use exaGetPixmapOffset becuase we might be called from XAA code. */
-    offset = (long)pPixmap->devPrivate.ptr -
-	(long)pI830->FbBase;
+    offset = intel_get_pixmap_offset(pPixmap);
     if (offset == pI830->front_buffer->offset &&
 	pI830->front_buffer->tiling != TILE_NONE)
     {
@@ -484,9 +482,14 @@ I830EXAInit(ScreenPtr pScreen)
 	       "performance may suffer\n");
 #endif
     pI830->EXADriverPtr->memoryBase = pI830->FbBase;
-    pI830->EXADriverPtr->offScreenBase = pI830->exa_offscreen->offset;
-    pI830->EXADriverPtr->memorySize = pI830->exa_offscreen->offset +
+    if (pI830->exa_offscreen) {
+	pI830->EXADriverPtr->offScreenBase = pI830->exa_offscreen->offset;
+	pI830->EXADriverPtr->memorySize = pI830->exa_offscreen->offset +
 	pI830->exa_offscreen->size;
+    } else {
+	pI830->EXADriverPtr->offScreenBase = pI830->FbMapSize;
+	pI830->EXADriverPtr->memorySize = pI830->FbMapSize;
+    }
     pI830->EXADriverPtr->flags = EXA_OFFSCREEN_PIXMAPS;
 
     DPRINTF(PFX, "EXA Mem: memoryBase 0x%x, end 0x%x, offscreen base 0x%x, "
