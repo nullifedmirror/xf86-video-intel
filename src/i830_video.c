@@ -2402,7 +2402,7 @@ I830PutImage(ScrnInfoPtr pScrn,
     }
 #endif
 
-    if (!pI830->useEXA &&
+    if (!pI830->AccelMethod == USE_EXA &&
 	    (((char *)pPixmap->devPrivate.ptr < (char *)pI830->FbBase) ||
 	     ((char *)pPixmap->devPrivate.ptr >= (char *)pI830->FbBase +
 	      pI830->FbMapSize))) {
