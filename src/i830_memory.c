@@ -1154,7 +1154,7 @@ i830_allocate_framebuffer(ScrnInfoPtr pScrn, I830Ptr pI830, BoxPtr FbMemBox,
      * acceleration operations (non-XY COLOR_BLT) can't be done to tiled
      * buffers.
      */
-    if (!(pI830->AccelMethod == USE_EXA) && IS_I965G(pI830))
+    if ((pI830->AccelMethod != USE_EXA) && IS_I965G(pI830))
 	tiling = FALSE;
     else
 	tiling = pI830->tiling;
