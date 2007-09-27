@@ -419,7 +419,7 @@ i965_state_buffer_setup(I830Ptr pI830)
     next_offset = sf_kernel_offset[1] + sizeof(sf_kernel_static_mask);
 
     sf_kernel_offset[2] = ALIGN(next_offset, 64);
-    next_offset = sf_kernel_offset[1] + sizeof(sf_kernel_static_rotation);
+    next_offset = sf_kernel_offset[2] + sizeof(sf_kernel_static_rotation);
 
     ps_kernel_offset[0] = ALIGN(next_offset, 64);
     next_offset = ps_kernel_offset[0] + sizeof (ps_kernel_static_nomask);
