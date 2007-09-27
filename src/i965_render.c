@@ -267,8 +267,8 @@ static struct brw_wm_unit_state *wm_state, wm_state_local;
 static struct brw_cc_unit_state *cc_state, cc_state_local;
 static struct brw_cc_viewport *cc_viewport;
 
-static struct brw_instruction *sf_kernel;
-static struct brw_instruction *ps_kernel;
+static struct brw_instruction *sf_kernel[3];
+static struct brw_instruction *ps_kernel[5];
 static struct brw_instruction *sip_kernel;
 
 static CARD32 *binding_table;
@@ -277,7 +277,9 @@ static int binding_table_entries;
 static int dest_surf_offset, src_surf_offset, mask_surf_offset;
 static int src_sampler_offset, mask_sampler_offset,vs_offset;
 static int sf_offset, wm_offset, cc_offset, vb_offset, cc_viewport_offset;
-static int sf_kernel_offset, ps_kernel_offset, sip_kernel_offset;
+static int sf_kernel_offset[3];
+static int ps_kernel_offset[5];
+static int sip_kernel_offset;
 static int wm_scratch_offset;
 static int binding_table_offset;
 static int default_color_offset;
@@ -340,16 +342,16 @@ static const CARD32 ps_kernel_static_nomask [][4] = {
 #include "exa_wm_nomask_prog.h"
 };
 
+static const CARD32 ps_kernel_static_masknoca [][4] = {
+#include "exa_wm_masknoca_prog.h"
+};
+
 static const CARD32 ps_kernel_static_maskca [][4] = {
 #include "exa_wm_maskca_prog.h"
 };
 
 static const CARD32 ps_kernel_static_maskca_srcalpha [][4] = {
 #include "exa_wm_maskca_srcalpha_prog.h"
-};
-
-static const CARD32 ps_kernel_static_masknoca [][4] = {
-#include "exa_wm_masknoca_prog.h"
 };
 
 static const CARD32 ps_kernel_static_rotation [][4] = {
@@ -385,67 +387,11 @@ i965_check_rotation_transform(PictTransformPtr t)
 	return FALSE;
 }
 
-Bool
-i965_prepare_composite(int op, PicturePtr pSrcPicture,
-		       PicturePtr pMaskPicture, PicturePtr pDstPicture,
-		       PixmapPtr pSrc, PixmapPtr pMask, PixmapPtr pDst)
+static void
+i965_state_buffer_setup(I830Ptr pI830)
 {
-    ScrnInfoPtr pScrn = xf86Screens[pSrcPicture->pDrawable->pScreen->myNum];
-    I830Ptr pI830 = I830PTR(pScrn);
-    CARD32 src_offset, src_pitch, src_tile_format = 0, src_tiled = 0;
-    CARD32 mask_offset = 0, mask_pitch = 0, mask_tile_format = 0,
-	mask_tiled = 0;
-    CARD32 dst_format, dst_offset, dst_pitch, dst_tile_format = 0,
-	dst_tiled = 0;
-    Bool rotation_program = FALSE;
-
-    IntelEmitInvarientState(pScrn);
-    *pI830->last_3d = LAST_3D_RENDER;
-
-    src_offset = intel_get_pixmap_offset(pSrc);
-    src_pitch = intel_get_pixmap_pitch(pSrc);
-    if (i830_pixmap_tiled(pSrc)) {
-	src_tiled = 1;
-	src_tile_format = 0; /* Tiled X */
-    }
-    dst_offset = intel_get_pixmap_offset(pDst);
-    dst_pitch = intel_get_pixmap_pitch(pDst);
-    if (i830_pixmap_tiled(pDst)) {
-	dst_tiled = 1;
-	dst_tile_format = 0; /* Tiled X */
-    }
-    if (pMask) {
-	mask_offset = intel_get_pixmap_offset(pMask);
-	mask_pitch = intel_get_pixmap_pitch(pMask);
-	if (i830_pixmap_tiled(pMask)) {
-	    mask_tiled = 1;
-	    mask_tile_format = 0; /* Tiled X */
-	}
-    }
-    pI830->scale_units[0][0] = pSrc->drawable.width;
-    pI830->scale_units[0][1] = pSrc->drawable.height;
-
-    pI830->transform[0] = pSrcPicture->transform;
-
-    if (!pMask) {
-	pI830->transform[1] = NULL;
-	pI830->scale_units[1][0] = -1;
-	pI830->scale_units[1][1] = -1;
-	if (pI830->transform[0] && 
-		i965_check_rotation_transform(pI830->transform[0]))
-	    rotation_program = TRUE;
-    } else {
-	pI830->transform[1] = pMaskPicture->transform;
-	if (pI830->transform[1])
-	    I830FALLBACK("i965 mask transform not implemented!\n");
-	pI830->scale_units[1][0] = pMask->drawable.width;
-	pI830->scale_units[1][1] = pMask->drawable.height;
-    }
-
-    /* setup 3d pipeline state */
-
-    binding_table_entries = 2; /* default no mask */
-
+    int i;
+    ErrorF("zhen: state buffer setup\n");
     /* Set up our layout of state in framebuffer.  First the general state: */
     next_offset = 0;
     vs_offset = ALIGN(next_offset, 64);
@@ -466,33 +412,29 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     /* keep current sf_kernel, which will send one setup urb entry to
      * PS kernel
      */
-    sf_kernel_offset = ALIGN(next_offset, 64);
-    if (pMask)
-	next_offset = sf_kernel_offset + sizeof (sf_kernel_static_mask);
-    else if (rotation_program)
-	next_offset = sf_kernel_offset + sizeof (sf_kernel_static_rotation);
-    else 
-	next_offset = sf_kernel_offset + sizeof (sf_kernel_static);
+    sf_kernel_offset[0] = ALIGN(next_offset, 64);
+    next_offset = sf_kernel_offset[0] + sizeof(sf_kernel_static);
 
-    ps_kernel_offset = ALIGN(next_offset, 64);
-    if (pMask) {
-	if (pMaskPicture->componentAlpha && 
-                PICT_FORMAT_RGB(pMaskPicture->format)) {
-            if (i965_blend_op[op].src_alpha) {
-                next_offset = ps_kernel_offset + 
-                    sizeof(ps_kernel_static_maskca_srcalpha);
-            } else {
-                next_offset = ps_kernel_offset + 
-                    sizeof(ps_kernel_static_maskca);
-            }
-        } else
-	    next_offset = ps_kernel_offset + 
-                          sizeof(ps_kernel_static_masknoca);
-    } else if (rotation_program) {
-   	next_offset = ps_kernel_offset + sizeof (ps_kernel_static_rotation);
-    } else {
-   	next_offset = ps_kernel_offset + sizeof (ps_kernel_static_nomask);
-    }
+    sf_kernel_offset[1] = ALIGN(next_offset, 64);
+    next_offset = sf_kernel_offset[1] + sizeof(sf_kernel_static_mask);
+
+    sf_kernel_offset[2] = ALIGN(next_offset, 64);
+    next_offset = sf_kernel_offset[1] + sizeof(sf_kernel_static_rotation);
+
+    ps_kernel_offset[0] = ALIGN(next_offset, 64);
+    next_offset = ps_kernel_offset[0] + sizeof (ps_kernel_static_nomask);
+
+    ps_kernel_offset[1] = ALIGN(next_offset, 64);
+    next_offset = ps_kernel_offset[1] + sizeof(ps_kernel_static_masknoca);
+
+    ps_kernel_offset[2] = ALIGN(next_offset, 64);
+    next_offset = ps_kernel_offset[2] + sizeof(ps_kernel_static_maskca);
+
+    ps_kernel_offset[3] = ALIGN(next_offset, 64);
+    next_offset = ps_kernel_offset[3] + sizeof(ps_kernel_static_maskca_srcalpha);
+
+    ps_kernel_offset[4] = ALIGN(next_offset, 64);
+    next_offset = ps_kernel_offset[4] + sizeof (ps_kernel_static_rotation);
 
     sip_kernel_offset = ALIGN(next_offset, 64);
     next_offset = sip_kernel_offset + sizeof (sip_kernel_static);
@@ -505,10 +447,9 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     src_sampler_offset = ALIGN(next_offset, 32);
     next_offset = src_sampler_offset + sizeof(*src_sampler_state);
 
-    if (pMask) {
-   	mask_sampler_offset = ALIGN(next_offset, 32);
-   	next_offset = mask_sampler_offset + sizeof(*mask_sampler_state);
-    }
+    mask_sampler_offset = ALIGN(next_offset, 32);
+    next_offset = mask_sampler_offset + sizeof(*mask_sampler_state);
+
     /* Align VB to native size of elements, for safety */
     vb_offset = ALIGN(next_offset, 32);
     next_offset = vb_offset + vb_size;
@@ -520,11 +461,10 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     src_surf_offset = ALIGN(next_offset, 32);
     next_offset = src_surf_offset + sizeof(*src_surf_state);
 
-    if (pMask) {
-   	mask_surf_offset = ALIGN(next_offset, 32);
-   	next_offset = mask_surf_offset + sizeof(*mask_surf_state);
-	binding_table_entries = 3;
-    }
+    mask_surf_offset = ALIGN(next_offset, 32);
+    next_offset = mask_surf_offset + sizeof(*mask_surf_state);
+
+    binding_table_entries = 3;
 
     binding_table_offset = ALIGN(next_offset, 32);
     next_offset = binding_table_offset + (binding_table_entries * 4);
@@ -534,13 +474,22 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
 
     total_state_size = next_offset;
     assert(total_state_size < pI830->exa_965_state->size);
+    if (total_state_size > pI830->exa_965_state->size) {
+	ErrorF("zhen: increase exa state buffer size!\n");
+	return;
+    }
 
     state_base_offset = pI830->exa_965_state->offset;
     state_base_offset = ALIGN(state_base_offset, 64);
     state_base = (char *)(pI830->FbBase + state_base_offset);
 
-    sf_kernel = (void *)(state_base + sf_kernel_offset);
-    ps_kernel = (void *)(state_base + ps_kernel_offset);
+    memset(state_base, 0, total_state_size);
+
+    for (i = 0; i < 3; i++)
+	sf_kernel[i] = (void *)(state_base + sf_kernel_offset[i]);
+    for (i = 0; i < 5; i++)
+	ps_kernel[i] = (void *)(state_base + ps_kernel_offset[i]);
+
     sip_kernel = (void *)(state_base + sip_kernel_offset);
 
     cc_viewport = (void *)(state_base + cc_viewport_offset);
@@ -580,11 +529,6 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     urb_cs_start = urb_sf_start + urb_sf_size;
     urb_cs_size = URB_CS_ENTRIES * URB_CS_ENTRY_SIZE;
 
-    /* Because we only have a single static buffer for our state currently,
-     * we have to sync before updating it every time.
-     */
-    i830WaitSync(pScrn);
-
     memset (cc_viewport, 0, sizeof (*cc_viewport));
     cc_viewport->min_depth = -1.e35;
     cc_viewport->max_depth = 1.e35;
@@ -595,7 +539,7 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     cc_state->cc0.stencil_enable = 0;   /* disable stencil */
     cc_state->cc2.depth_test = 0;       /* disable depth test */
     cc_state->cc2.logicop_enable = 0;   /* disable logic op */
-    cc_state->cc3.ia_blend_enable = 1;  /* blend alpha just like colors */
+//    cc_state->cc3.ia_blend_enable = 1;  /* blend alpha just like colors */
     cc_state->cc3.blend_enable = 1;     /* enable color blend */
     cc_state->cc3.alpha_test = 0;       /* disable alpha test */
     cc_state->cc4.cc_viewport_state_offset = (state_base_offset +
@@ -603,17 +547,19 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     cc_state->cc5.dither_enable = 0;    /* disable dither */
     cc_state->cc5.logicop_func = 0xc;   /* COPY */
     cc_state->cc5.statistics_enable = 1;
-    cc_state->cc5.ia_blend_function = BRW_BLENDFUNCTION_ADD;
-    i965_get_blend_cntl(op, pMaskPicture, pDstPicture->format,
-			&src_blend, &dst_blend);
+ //   cc_state->cc5.ia_blend_function = BRW_BLENDFUNCTION_ADD;
+ //   XXX
+ //   i965_get_blend_cntl(op, pMaskPicture, pDstPicture->format,
+//			&src_blend, &dst_blend);
     /* XXX: alpha blend factor should be same as color, but check
      * for CA case in future
      */
-    cc_state->cc5.ia_src_blend_factor = src_blend;
-    cc_state->cc5.ia_dest_blend_factor = dst_blend;
+  //  cc_state->cc5.ia_src_blend_factor = src_blend;
+  //  cc_state->cc5.ia_dest_blend_factor = dst_blend;
     cc_state->cc6.blend_function = BRW_BLENDFUNCTION_ADD;
-    cc_state->cc6.src_blend_factor = src_blend;
-    cc_state->cc6.dest_blend_factor = dst_blend;
+    /* default not care much */
+//    cc_state->cc6.src_blend_factor = src_blend;
+//   cc_state->cc6.dest_blend_factor = dst_blend;
     cc_state->cc6.clamp_post_alpha_blend = 1;
     cc_state->cc6.clamp_pre_alpha_blend = 1;
     cc_state->cc6.clamp_range = 0;  /* clamp range [0,1] */
@@ -622,35 +568,24 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     memcpy (cc_state, &cc_state_local, sizeof (cc_state_local));
 
     /* Upload system kernel */
-    memcpy (sip_kernel, sip_kernel_static, sizeof (sip_kernel_static));
+    memcpy(sip_kernel, sip_kernel_static, sizeof (sip_kernel_static));
+
+    memcpy(sf_kernel[0], sf_kernel_static, sizeof(sf_kernel_static));
+    memcpy(sf_kernel[1], sf_kernel_static_mask, sizeof(sf_kernel_static_mask));
+    memcpy(sf_kernel[2], sf_kernel_static_rotation, sizeof(sf_kernel_static_rotation));
+
+    memcpy(ps_kernel[0], ps_kernel_static_nomask, sizeof(ps_kernel_static_nomask));
+    memcpy(ps_kernel[1], ps_kernel_static_masknoca, sizeof(ps_kernel_static_masknoca));
+    memcpy(ps_kernel[2], ps_kernel_static_maskca, sizeof(ps_kernel_static_maskca));
+    memcpy(ps_kernel[3], ps_kernel_static_maskca_srcalpha, sizeof(ps_kernel_static_maskca_srcalpha));
+    memcpy(ps_kernel[4], ps_kernel_static_rotation, sizeof(ps_kernel_static_rotation));
 
     /* Set up the state buffer for the destination surface */
     dest_surf_state = &dest_surf_state_local;
     memset(dest_surf_state, 0, sizeof(*dest_surf_state));
     dest_surf_state->ss0.surface_type = BRW_SURFACE_2D;
     dest_surf_state->ss0.data_return_format = BRW_SURFACERETURNFORMAT_FLOAT32;
-    i965_get_dest_format(pDstPicture, &dst_format);
-    dest_surf_state->ss0.surface_format = dst_format;
-
-    dest_surf_state->ss0.writedisable_alpha = 0;
-    dest_surf_state->ss0.writedisable_red = 0;
-    dest_surf_state->ss0.writedisable_green = 0;
-    dest_surf_state->ss0.writedisable_blue = 0;
     dest_surf_state->ss0.color_blend = 1;
-    dest_surf_state->ss0.vert_line_stride = 0;
-    dest_surf_state->ss0.vert_line_stride_ofs = 0;
-    dest_surf_state->ss0.mipmap_layout_mode = 0;
-    dest_surf_state->ss0.render_cache_read_mode = 0;
-
-    dest_surf_state->ss1.base_addr = dst_offset;
-    dest_surf_state->ss2.height = pDst->drawable.height - 1;
-    dest_surf_state->ss2.width = pDst->drawable.width - 1;
-    dest_surf_state->ss2.mip_count = 0;
-    dest_surf_state->ss2.render_target_rotation = 0;
-    dest_surf_state->ss3.pitch = dst_pitch - 1;
-    dest_surf_state->ss3.tile_walk = dst_tile_format;
-    dest_surf_state->ss3.tiled_surface = dst_tiled;
-
     dest_surf_state = (void *)(state_base + dest_surf_offset);
     memcpy (dest_surf_state, &dest_surf_state_local, sizeof (dest_surf_state_local));
 
@@ -658,83 +593,22 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     src_surf_state = &src_surf_state_local;
     memset(src_surf_state, 0, sizeof(*src_surf_state));
     src_surf_state->ss0.surface_type = BRW_SURFACE_2D;
-    src_surf_state->ss0.surface_format = i965_get_card_format(pSrcPicture);
-
-    src_surf_state->ss0.writedisable_alpha = 0;
-    src_surf_state->ss0.writedisable_red = 0;
-    src_surf_state->ss0.writedisable_green = 0;
-    src_surf_state->ss0.writedisable_blue = 0;
     src_surf_state->ss0.color_blend = 1;
-    src_surf_state->ss0.vert_line_stride = 0;
-    src_surf_state->ss0.vert_line_stride_ofs = 0;
-    src_surf_state->ss0.mipmap_layout_mode = 0;
-    src_surf_state->ss0.render_cache_read_mode = 0;
-
-    src_surf_state->ss1.base_addr = src_offset;
-    src_surf_state->ss2.width = pSrc->drawable.width - 1;
-    src_surf_state->ss2.height = pSrc->drawable.height - 1;
-    src_surf_state->ss2.mip_count = 0;
-    src_surf_state->ss2.render_target_rotation = 0;
-    src_surf_state->ss3.pitch = src_pitch - 1;
-    src_surf_state->ss3.tile_walk = src_tile_format;
-    src_surf_state->ss3.tiled_surface = src_tiled;
-
     src_surf_state = (void *)(state_base + src_surf_offset);
     memcpy (src_surf_state, &src_surf_state_local, sizeof (src_surf_state_local));
 
     /* setup mask surface */
-    if (pMask) {
-	mask_surf_state = &mask_surf_state_local;
-   	memset(mask_surf_state, 0, sizeof(*mask_surf_state));
-	mask_surf_state->ss0.surface_type = BRW_SURFACE_2D;
-   	mask_surf_state->ss0.surface_format =
-	    i965_get_card_format(pMaskPicture);
-
-   	mask_surf_state->ss0.writedisable_alpha = 0;
-   	mask_surf_state->ss0.writedisable_red = 0;
-   	mask_surf_state->ss0.writedisable_green = 0;
-   	mask_surf_state->ss0.writedisable_blue = 0;
-   	mask_surf_state->ss0.color_blend = 1;
-   	mask_surf_state->ss0.vert_line_stride = 0;
-   	mask_surf_state->ss0.vert_line_stride_ofs = 0;
-   	mask_surf_state->ss0.mipmap_layout_mode = 0;
-   	mask_surf_state->ss0.render_cache_read_mode = 0;
-
-   	mask_surf_state->ss1.base_addr = mask_offset;
-   	mask_surf_state->ss2.width = pMask->drawable.width - 1;
-   	mask_surf_state->ss2.height = pMask->drawable.height - 1;
-   	mask_surf_state->ss2.mip_count = 0;
-   	mask_surf_state->ss2.render_target_rotation = 0;
-   	mask_surf_state->ss3.pitch = mask_pitch - 1;
-	mask_surf_state->ss3.tile_walk = mask_tile_format;
-	mask_surf_state->ss3.tiled_surface = mask_tiled;
-
-	mask_surf_state = (void *)(state_base + mask_surf_offset);
-	memcpy (mask_surf_state, &mask_surf_state_local, sizeof (mask_surf_state_local));
-    }
+    mask_surf_state = &mask_surf_state_local;
+    memset(mask_surf_state, 0, sizeof(*mask_surf_state));
+    mask_surf_state->ss0.surface_type = BRW_SURFACE_2D;
+    mask_surf_state->ss0.color_blend = 1;
+    mask_surf_state = (void *)(state_base + mask_surf_offset);
+    memcpy (mask_surf_state, &mask_surf_state_local, sizeof (mask_surf_state_local));
 
     /* Set up a binding table for our surfaces.  Only the PS will use it */
     binding_table[0] = state_base_offset + dest_surf_offset;
     binding_table[1] = state_base_offset + src_surf_offset;
-    if (pMask)
-   	binding_table[2] = state_base_offset + mask_surf_offset;
-
-    /* PS kernel use this sampler */
-    src_sampler_state = &src_sampler_state_local;
-    memset(src_sampler_state, 0, sizeof(*src_sampler_state));
-    src_sampler_state->ss0.lod_preclamp = 1; /* GL mode */
-    switch(pSrcPicture->filter) {
-    case PictFilterNearest:
-   	src_sampler_state->ss0.min_filter = BRW_MAPFILTER_NEAREST;
-   	src_sampler_state->ss0.mag_filter = BRW_MAPFILTER_NEAREST;
-	break;
-    case PictFilterBilinear:
-	src_sampler_state->ss0.min_filter = BRW_MAPFILTER_LINEAR;
-   	src_sampler_state->ss0.mag_filter = BRW_MAPFILTER_LINEAR;
-	break;
-    default:
-	I830FALLBACK("Bad filter 0x%x\n", pSrcPicture->filter);
-    }
+    binding_table[2] = state_base_offset + mask_surf_offset;
 
     memset(default_color_state, 0, sizeof(*default_color_state));
     default_color_state->color[0] = 0.0; /* R */
@@ -742,60 +616,23 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     default_color_state->color[2] = 0.0; /* B */
     default_color_state->color[3] = 0.0; /* A */
 
+    /* PS kernel use this sampler */
+    src_sampler_state = &src_sampler_state_local;
+    memset(src_sampler_state, 0, sizeof(*src_sampler_state));
+    src_sampler_state->ss0.lod_preclamp = 1; /* GL mode */
     src_sampler_state->ss0.default_color_mode = 0; /* GL mode */
-
-    if (!pSrcPicture->repeat) {
-   	src_sampler_state->ss1.r_wrap_mode = BRW_TEXCOORDMODE_CLAMP_BORDER;
-   	src_sampler_state->ss1.s_wrap_mode = BRW_TEXCOORDMODE_CLAMP_BORDER;
-   	src_sampler_state->ss1.t_wrap_mode = BRW_TEXCOORDMODE_CLAMP_BORDER;
-	src_sampler_state->ss2.default_color_pointer =
-	    (state_base_offset + default_color_offset) >> 5;
-    } else {
-   	src_sampler_state->ss1.r_wrap_mode = BRW_TEXCOORDMODE_WRAP;
-   	src_sampler_state->ss1.s_wrap_mode = BRW_TEXCOORDMODE_WRAP;
-   	src_sampler_state->ss1.t_wrap_mode = BRW_TEXCOORDMODE_WRAP;
-    }
-    src_sampler_state->ss3.chroma_key_enable = 0; /* disable chromakey */
-
+    src_sampler_state->ss2.default_color_pointer =
+	(state_base_offset + default_color_offset) >> 5;
     src_sampler_state = (void *)(state_base + src_sampler_offset);
     memcpy (src_sampler_state, &src_sampler_state_local, sizeof (src_sampler_state_local));
 
-    if (pMask) {
-	mask_sampler_state = &mask_sampler_state_local;
-   	memset(mask_sampler_state, 0, sizeof(*mask_sampler_state));
-   	mask_sampler_state->ss0.lod_preclamp = 1; /* GL mode */
-   	switch(pMaskPicture->filter) {
-   	case PictFilterNearest:
-   	    mask_sampler_state->ss0.min_filter = BRW_MAPFILTER_NEAREST;
-   	    mask_sampler_state->ss0.mag_filter = BRW_MAPFILTER_NEAREST;
-	    break;
-   	case PictFilterBilinear:
-   	    mask_sampler_state->ss0.min_filter = BRW_MAPFILTER_LINEAR;
-   	    mask_sampler_state->ss0.mag_filter = BRW_MAPFILTER_LINEAR;
-	    break;
-   	default:
-	    I830FALLBACK("Bad filter 0x%x\n", pMaskPicture->filter);
-   	}
-
-   	if (!pMaskPicture->repeat) {
-   	    mask_sampler_state->ss1.r_wrap_mode =
-		BRW_TEXCOORDMODE_CLAMP_BORDER;
-   	    mask_sampler_state->ss1.s_wrap_mode =
-		BRW_TEXCOORDMODE_CLAMP_BORDER;
-   	    mask_sampler_state->ss1.t_wrap_mode =
-		BRW_TEXCOORDMODE_CLAMP_BORDER;
-            mask_sampler_state->ss2.default_color_pointer =
-		(state_base_offset + default_color_offset)>>5;
-   	} else {
-   	    mask_sampler_state->ss1.r_wrap_mode = BRW_TEXCOORDMODE_WRAP;
-   	    mask_sampler_state->ss1.s_wrap_mode = BRW_TEXCOORDMODE_WRAP;
-   	    mask_sampler_state->ss1.t_wrap_mode = BRW_TEXCOORDMODE_WRAP;
-    	}
-   	mask_sampler_state->ss3.chroma_key_enable = 0; /* disable chromakey */
-
-	mask_sampler_state = (void *)(state_base + mask_sampler_offset);
-	memcpy (mask_sampler_state, &mask_sampler_state_local, sizeof (mask_sampler_state_local));
-    }
+    mask_sampler_state = &mask_sampler_state_local;
+    memset(mask_sampler_state, 0, sizeof(*mask_sampler_state));
+    mask_sampler_state->ss0.lod_preclamp = 1; /* GL mode */
+    mask_sampler_state->ss2.default_color_pointer =
+	(state_base_offset + default_color_offset)>>5;
+    mask_sampler_state = (void *)(state_base + mask_sampler_offset);
+    memcpy (mask_sampler_state, &mask_sampler_state_local, sizeof (mask_sampler_state_local));
 
     /* Set up the vertex shader to be disabled (passthrough) */
     vs_state = &vs_state_local;
@@ -804,27 +641,13 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     vs_state->thread4.urb_entry_allocation_size = URB_VS_ENTRY_SIZE - 1;
     vs_state->vs6.vs_enable = 0;
     vs_state->vs6.vert_cache_disable = 1;
-
     vs_state = (void *)(state_base + vs_offset);
     memcpy (vs_state, &vs_state_local, sizeof (vs_state_local));
 
-    /* Set up the SF kernel to do coord interp: for each attribute,
-     * calculate dA/dx and dA/dy.  Hand these interpolation coefficients
-     * back to SF which then hands pixels off to WM.
-     */
-    if (pMask)
-	memcpy(sf_kernel, sf_kernel_static_mask,
-		sizeof (sf_kernel_static_mask));
-    else if (rotation_program)
-	memcpy(sf_kernel, sf_kernel_static_rotation, 
-		sizeof (sf_kernel_static_rotation));
-    else
-	memcpy(sf_kernel, sf_kernel_static, sizeof (sf_kernel_static));
-
     sf_state = &sf_state_local;
     memset(sf_state, 0, sizeof(*sf_state));
-    sf_state->thread0.kernel_start_pointer =
-	(state_base_offset + sf_kernel_offset) >> 6;
+    //sf_state->thread0.kernel_start_pointer =
+//	(state_base_offset + sf_kernel_offset) >> 6;
     sf_state->thread0.grf_reg_count = BRW_GRF_BLOCKS(SF_KERNEL_NUM_GRF);
     sf_state->sf1.single_program_flow = 1;
     sf_state->sf1.binding_table_entry_count = 0;
@@ -845,64 +668,32 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     sf_state->thread4.max_threads = SF_MAX_THREADS - 1;
     sf_state->thread4.urb_entry_allocation_size = URB_SF_ENTRY_SIZE - 1;
     sf_state->thread4.nr_urb_entries = URB_SF_ENTRIES;
-    sf_state->thread4.stats_enable = 1;
+   // sf_state->thread4.stats_enable = 1;
     sf_state->sf5.viewport_transform = FALSE; /* skip viewport */
     sf_state->sf6.cull_mode = BRW_CULLMODE_NONE;
     sf_state->sf6.scissor = 0;
     sf_state->sf7.trifan_pv = 2;
     sf_state->sf6.dest_org_vbias = 0x8;
     sf_state->sf6.dest_org_hbias = 0x8;
-
     sf_state = (void *)(state_base + sf_offset);
     memcpy (sf_state, &sf_state_local, sizeof (sf_state_local));
 
-   /* Set up the PS kernel (dispatched by WM) */
-    if (pMask) {
-	if (pMaskPicture->componentAlpha && 
-                PICT_FORMAT_RGB(pMaskPicture->format)) {
-            if (i965_blend_op[op].src_alpha) 
-                memcpy(ps_kernel, ps_kernel_static_maskca_srcalpha,
-                        sizeof (ps_kernel_static_maskca_srcalpha));
-            else
-                memcpy(ps_kernel, ps_kernel_static_maskca,
-                        sizeof (ps_kernel_static_maskca));
-        } else
-   	    memcpy(ps_kernel, ps_kernel_static_masknoca,
-		   sizeof (ps_kernel_static_masknoca));
-    } else if (rotation_program) {
-   	memcpy(ps_kernel, ps_kernel_static_rotation,
-	       sizeof (ps_kernel_static_rotation));
-    } else {
-   	memcpy(ps_kernel, ps_kernel_static_nomask,
-	       sizeof (ps_kernel_static_nomask));
-    }
-
     wm_state = &wm_state_local;
     memset(wm_state, 0, sizeof (*wm_state));
-    wm_state->thread0.kernel_start_pointer =
-	(state_base_offset + ps_kernel_offset) >> 6;
+ //   wm_state->thread0.kernel_start_pointer =
+//	(state_base_offset + ps_kernel_offset) >> 6;
     wm_state->thread0.grf_reg_count = BRW_GRF_BLOCKS(PS_KERNEL_NUM_GRF);
     wm_state->thread1.single_program_flow = 1;
-    if (!pMask)
-	wm_state->thread1.binding_table_entry_count = 2; /* 1 tex and fb */
-    else
-	wm_state->thread1.binding_table_entry_count = 3; /* 2 tex and fb */
-
     wm_state->thread2.scratch_space_base_pointer = (state_base_offset +
 						    wm_scratch_offset)>>10;
     wm_state->thread2.per_thread_scratch_space = 0;
     wm_state->thread3.const_urb_entry_read_length = 0;
     wm_state->thread3.const_urb_entry_read_offset = 0;
-    /* Each pair of attributes (src/mask coords) is one URB entry */
-    if (pMask)
-	wm_state->thread3.urb_entry_read_length = 2;
-    else
-	wm_state->thread3.urb_entry_read_length = 1;
     wm_state->thread3.urb_entry_read_offset = 0;
     /* wm kernel use urb from 3, see wm_program in compiler module */
     wm_state->thread3.dispatch_grf_start_reg = 3; /* must match kernel */
-
-    wm_state->wm4.stats_enable = 1;  /* statistic */
+    //wm_state->wm4.stats_enable = 1;  /* statistic */
+    /* src_sampler_offset is where all sampler states starts */
     wm_state->wm4.sampler_state_pointer = (state_base_offset +
 					   src_sampler_offset) >> 5;
     wm_state->wm4.sampler_count = 1; /* 1-4 samplers used */
@@ -914,9 +705,264 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     wm_state->wm5.enable_16_pix = 1;
     wm_state->wm5.enable_8_pix = 0;
     wm_state->wm5.early_depth_test = 1;
-
     wm_state = (void *)(state_base + wm_offset);
     memcpy (wm_state, &wm_state_local, sizeof (wm_state_local));
+
+    /* ok we have updated with default states, then we just need
+     * to fill some variable fields for composite objects and ops */
+
+}
+
+Bool
+i965_prepare_composite(int op, PicturePtr pSrcPicture,
+		       PicturePtr pMaskPicture, PicturePtr pDstPicture,
+		       PixmapPtr pSrc, PixmapPtr pMask, PixmapPtr pDst)
+{
+    ScrnInfoPtr pScrn = xf86Screens[pSrcPicture->pDrawable->pScreen->myNum];
+    I830Ptr pI830 = I830PTR(pScrn);
+    CARD32 src_offset, src_pitch, src_tile_format = 0, src_tiled = 0;
+    CARD32 mask_offset = 0, mask_pitch = 0, mask_tile_format = 0,
+	mask_tiled = 0;
+    CARD32 dst_format, dst_offset, dst_pitch, dst_tile_format = 0,
+	dst_tiled = 0;
+    Bool rotation_program = FALSE;
+    static int firsttime = 1;
+    int sf_kernel_num, ps_kernel_num;
+
+    IntelEmitInvarientState(pScrn);
+    *pI830->last_3d = LAST_3D_RENDER;
+
+    /* we want to setup only once for all state offset */
+    if (firsttime) {
+	i965_state_buffer_setup(pI830);
+	firsttime = 0;
+	ErrorF("zhen: first time\n");
+    }
+
+    src_offset = intel_get_pixmap_offset(pSrc);
+    src_pitch = intel_get_pixmap_pitch(pSrc);
+    if (i830_pixmap_tiled(pSrc)) {
+	src_tiled = 1;
+	src_tile_format = 0; /* Tiled X */
+    }
+    dst_offset = intel_get_pixmap_offset(pDst);
+    dst_pitch = intel_get_pixmap_pitch(pDst);
+    if (i830_pixmap_tiled(pDst)) {
+	dst_tiled = 1;
+	dst_tile_format = 0; /* Tiled X */
+    }
+    if (pMask) {
+	ErrorF("zhen: mask\n");
+	mask_offset = intel_get_pixmap_offset(pMask);
+	mask_pitch = intel_get_pixmap_pitch(pMask);
+	if (i830_pixmap_tiled(pMask)) {
+	    mask_tiled = 1;
+	    mask_tile_format = 0; /* Tiled X */
+	}
+    }
+    pI830->scale_units[0][0] = pSrc->drawable.width;
+    pI830->scale_units[0][1] = pSrc->drawable.height;
+
+    pI830->transform[0] = pSrcPicture->transform;
+
+    if (!pMask) {
+	pI830->transform[1] = NULL;
+	pI830->scale_units[1][0] = -1;
+	pI830->scale_units[1][1] = -1;
+	if (pI830->transform[0] && 
+		i965_check_rotation_transform(pI830->transform[0]))
+	    rotation_program = TRUE;
+    } else {
+	pI830->transform[1] = pMaskPicture->transform;
+	if (pI830->transform[1])
+	    I830FALLBACK("i965 mask transform not implemented!\n");
+	pI830->scale_units[1][0] = pMask->drawable.width;
+	pI830->scale_units[1][1] = pMask->drawable.height;
+    }
+
+
+    /* Because we only have a single static buffer for our state currently,
+     * we have to sync before updating it every time.
+     */
+//    i830WaitSync(pScrn);
+
+    /* Color calculator state */
+//    cc_state = &cc_state_local;
+
+//    cc_state->cc3.ia_blend_enable = 1;  /* blend alpha just like colors */
+ //   cc_state->cc5.ia_blend_function = BRW_BLENDFUNCTION_ADD;
+ //   XXX
+    i965_get_blend_cntl(op, pMaskPicture, pDstPicture->format,
+			&src_blend, &dst_blend);
+    /* XXX: alpha blend factor should be same as color, but check
+     * for CA case in future
+     */
+  //  cc_state->cc5.ia_src_blend_factor = src_blend;
+  //  cc_state->cc5.ia_dest_blend_factor = dst_blend;
+    cc_state->cc6.src_blend_factor = src_blend;
+    cc_state->cc6.dest_blend_factor = dst_blend;
+
+ //   cc_state = (void *)(state_base + cc_offset);
+ //   memcpy (cc_state, &cc_state_local, sizeof (cc_state_local));
+
+    /* Set up the state buffer for the destination surface */
+   // dest_surf_state = &dest_surf_state_local;
+    i965_get_dest_format(pDstPicture, &dst_format);
+    dest_surf_state->ss0.surface_format = dst_format;
+
+    dest_surf_state->ss1.base_addr = dst_offset;
+    dest_surf_state->ss2.height = pDst->drawable.height - 1;
+    dest_surf_state->ss2.width = pDst->drawable.width - 1;
+    dest_surf_state->ss3.pitch = dst_pitch - 1;
+    dest_surf_state->ss3.tile_walk = dst_tile_format;
+    dest_surf_state->ss3.tiled_surface = dst_tiled;
+
+    //dest_surf_state = (void *)(state_base + dest_surf_offset);
+    //memcpy (dest_surf_state, &dest_surf_state_local, sizeof (dest_surf_state_local));
+
+    /* Set up the source surface state buffer */
+    //src_surf_state = &src_surf_state_local;
+    //memset(src_surf_state, 0, sizeof(*src_surf_state));
+    src_surf_state->ss0.surface_format = i965_get_card_format(pSrcPicture);
+
+    src_surf_state->ss1.base_addr = src_offset;
+    src_surf_state->ss2.width = pSrc->drawable.width - 1;
+    src_surf_state->ss2.height = pSrc->drawable.height - 1;
+    src_surf_state->ss3.pitch = src_pitch - 1;
+    src_surf_state->ss3.tile_walk = src_tile_format;
+    src_surf_state->ss3.tiled_surface = src_tiled;
+
+    //src_surf_state = (void *)(state_base + src_surf_offset);
+    //memcpy (src_surf_state, &src_surf_state_local, sizeof (src_surf_state_local));
+
+    /* setup mask surface */
+    if (pMask) {
+	//mask_surf_state = &mask_surf_state_local;
+   	//memset(mask_surf_state, 0, sizeof(*mask_surf_state));
+   	mask_surf_state->ss0.surface_format =
+	    i965_get_card_format(pMaskPicture);
+
+   	mask_surf_state->ss1.base_addr = mask_offset;
+   	mask_surf_state->ss2.width = pMask->drawable.width - 1;
+   	mask_surf_state->ss2.height = pMask->drawable.height - 1;
+   	mask_surf_state->ss3.pitch = mask_pitch - 1;
+	mask_surf_state->ss3.tile_walk = mask_tile_format;
+	mask_surf_state->ss3.tiled_surface = mask_tiled;
+
+	//mask_surf_state = (void *)(state_base + mask_surf_offset);
+	//memcpy (mask_surf_state, &mask_surf_state_local, sizeof (mask_surf_state_local));
+    }
+
+    /* PS kernel use this sampler */
+    //src_sampler_state = &src_sampler_state_local;
+    //memset(src_sampler_state, 0, sizeof(*src_sampler_state));
+    switch(pSrcPicture->filter) {
+    case PictFilterNearest:
+   	src_sampler_state->ss0.min_filter = BRW_MAPFILTER_NEAREST;
+   	src_sampler_state->ss0.mag_filter = BRW_MAPFILTER_NEAREST;
+	break;
+    case PictFilterBilinear:
+	src_sampler_state->ss0.min_filter = BRW_MAPFILTER_LINEAR;
+   	src_sampler_state->ss0.mag_filter = BRW_MAPFILTER_LINEAR;
+	break;
+    default:
+	I830FALLBACK("Bad filter 0x%x\n", pSrcPicture->filter);
+    }
+
+    if (!pSrcPicture->repeat) {
+   	src_sampler_state->ss1.r_wrap_mode = BRW_TEXCOORDMODE_CLAMP_BORDER;
+   	src_sampler_state->ss1.s_wrap_mode = BRW_TEXCOORDMODE_CLAMP_BORDER;
+   	src_sampler_state->ss1.t_wrap_mode = BRW_TEXCOORDMODE_CLAMP_BORDER;
+    } else {
+   	src_sampler_state->ss1.r_wrap_mode = BRW_TEXCOORDMODE_WRAP;
+   	src_sampler_state->ss1.s_wrap_mode = BRW_TEXCOORDMODE_WRAP;
+   	src_sampler_state->ss1.t_wrap_mode = BRW_TEXCOORDMODE_WRAP;
+    }
+
+//    src_sampler_state = (void *)(state_base + src_sampler_offset);
+//    memcpy (src_sampler_state, &src_sampler_state_local, sizeof (src_sampler_state_local));
+
+    if (pMask) {
+//	mask_sampler_state = &mask_sampler_state_local;
+ //  	memset(mask_sampler_state, 0, sizeof(*mask_sampler_state));
+   	switch(pMaskPicture->filter) {
+   	case PictFilterNearest:
+   	    mask_sampler_state->ss0.min_filter = BRW_MAPFILTER_NEAREST;
+   	    mask_sampler_state->ss0.mag_filter = BRW_MAPFILTER_NEAREST;
+	    break;
+   	case PictFilterBilinear:
+   	    mask_sampler_state->ss0.min_filter = BRW_MAPFILTER_LINEAR;
+   	    mask_sampler_state->ss0.mag_filter = BRW_MAPFILTER_LINEAR;
+	    break;
+   	default:
+	    I830FALLBACK("Bad filter 0x%x\n", pMaskPicture->filter);
+   	}
+
+   	if (!pMaskPicture->repeat) {
+   	    mask_sampler_state->ss1.r_wrap_mode =
+		BRW_TEXCOORDMODE_CLAMP_BORDER;
+   	    mask_sampler_state->ss1.s_wrap_mode =
+		BRW_TEXCOORDMODE_CLAMP_BORDER;
+   	    mask_sampler_state->ss1.t_wrap_mode =
+		BRW_TEXCOORDMODE_CLAMP_BORDER;
+   	} else {
+   	    mask_sampler_state->ss1.r_wrap_mode = BRW_TEXCOORDMODE_WRAP;
+   	    mask_sampler_state->ss1.s_wrap_mode = BRW_TEXCOORDMODE_WRAP;
+   	    mask_sampler_state->ss1.t_wrap_mode = BRW_TEXCOORDMODE_WRAP;
+    	}
+
+//	mask_sampler_state = (void *)(state_base + mask_sampler_offset);
+//	memcpy (mask_sampler_state, &mask_sampler_state_local, sizeof (mask_sampler_state_local));
+    }
+
+    /* Set up the SF kernel to do coord interp: for each attribute,
+     * calculate dA/dx and dA/dy.  Hand these interpolation coefficients
+     * back to SF which then hands pixels off to WM.
+     */
+    if (pMask)
+	sf_kernel_num = 1;
+    else if (rotation_program)
+	sf_kernel_num = 2;
+    else
+	sf_kernel_num = 0;
+
+    //sf_state = &sf_state_local;
+    //memset(sf_state, 0, sizeof(*sf_state));
+    ErrorF("zhen: sf_kernel %d\n", sf_kernel_num);
+    sf_state->thread0.kernel_start_pointer =
+	(state_base_offset + sf_kernel_offset[sf_kernel_num]) >> 6;
+
+   /* Set up the PS kernel (dispatched by WM) */
+    if (pMask) {
+	if (pMaskPicture->componentAlpha && 
+                PICT_FORMAT_RGB(pMaskPicture->format)) {
+            if (i965_blend_op[op].src_alpha) 
+		ps_kernel_num = 3;
+            else
+		ps_kernel_num = 2;
+        } else
+	    ps_kernel_num = 1;
+    } else if (rotation_program)
+	ps_kernel_num = 4;
+    else
+	ps_kernel_num = 0;
+
+    ErrorF("zhen: ps_kernel_num %d\n", ps_kernel_num);
+    //wm_state = &wm_state_local;
+    //memset(wm_state, 0, sizeof (*wm_state));
+    wm_state->thread0.kernel_start_pointer =
+	(state_base_offset + ps_kernel_offset[ps_kernel_num]) >> 6;
+    if (!pMask)
+	wm_state->thread1.binding_table_entry_count = 2; /* 1 tex and fb */
+    else
+	wm_state->thread1.binding_table_entry_count = 3; /* 2 tex and fb */
+    /* Each pair of attributes (src/mask coords) is one URB entry */
+    if (pMask)
+	wm_state->thread3.urb_entry_read_length = 2;
+    else
+	wm_state->thread3.urb_entry_read_length = 1;
+    //wm_state = (void *)(state_base + wm_offset);
+    //memcpy (wm_state, &wm_state_local, sizeof (wm_state_local));
 
     /* Begin the long sequence of commands needed to set up the 3D
      * rendering pipe
@@ -1169,6 +1215,7 @@ i965_composite(PixmapPtr pDst, int srcX, int srcY, int maskX, int maskY,
 #endif
     /* we must be sure that the pipeline is flushed before next exa draw,
        because that will be new state, binding state and instructions*/
+#if 0
     {
 	BEGIN_LP_RING(4);
    	OUT_RING(BRW_PIPE_CONTROL |
@@ -1182,6 +1229,7 @@ i965_composite(PixmapPtr pDst, int srcX, int srcY, int maskX, int maskY,
    	OUT_RING(0); /* Immediate data high DW */
 	ADVANCE_LP_RING();
     }
+#endif
 
     /* Mark sync so we can wait for it before setting up the VB on the next
      * rectangle.
