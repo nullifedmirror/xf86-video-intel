@@ -664,8 +664,7 @@ i965_state_buffer_setup(I830Ptr pI830)
     wm_state = &wm_state_local;
     memset(wm_state, 0, sizeof (*wm_state));
     wm_state->thread0.grf_reg_count = BRW_GRF_BLOCKS(PS_KERNEL_NUM_GRF);
-    //XXX
-    wm_state->thread1.single_program_flow = 1;
+    wm_state->thread1.single_program_flow = 0;
     wm_state->thread2.scratch_space_base_pointer = (state_base_offset +
 						    wm_scratch_offset)>>10;
     wm_state->thread2.per_thread_scratch_space = 0;
@@ -767,116 +766,98 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     i830WaitSync(pScrn);
 
     /* Color calculator state */
-//    cc_state = &cc_state_local;
-
     i965_get_blend_cntl(op, pMaskPicture, pDstPicture->format,
 			&src_blend, &dst_blend);
-    cc_state->cc6.src_blend_factor = src_blend;
-    cc_state->cc6.dest_blend_factor = dst_blend;
-
- //   cc_state = (void *)(state_base + cc_offset);
- //   memcpy (cc_state, &cc_state_local, sizeof (cc_state_local));
+    cc_state_local.cc6.src_blend_factor = src_blend;
+    cc_state_local.cc6.dest_blend_factor = dst_blend;
+    memcpy (&cc_state->cc6, &cc_state_local.cc6, sizeof (cc_state_local.cc6));
 
     /* Set up the state buffer for the destination surface */
-   // dest_surf_state = &dest_surf_state_local;
     i965_get_dest_format(pDstPicture, &dst_format);
-    dest_surf_state->ss0.surface_format = dst_format;
-    dest_surf_state->ss1.base_addr = dst_offset;
-    dest_surf_state->ss2.height = pDst->drawable.height - 1;
-    dest_surf_state->ss2.width = pDst->drawable.width - 1;
-    dest_surf_state->ss3.pitch = dst_pitch - 1;
-    dest_surf_state->ss3.tile_walk = dst_tile_format;
-    dest_surf_state->ss3.tiled_surface = dst_tiled;
-    //dest_surf_state = (void *)(state_base + dest_surf_offset);
-    //memcpy (dest_surf_state, &dest_surf_state_local, sizeof (dest_surf_state_local));
+    dest_surf_state_local.ss0.surface_format = dst_format;
+    dest_surf_state_local.ss1.base_addr = dst_offset;
+    dest_surf_state_local.ss2.height = pDst->drawable.height - 1;
+    dest_surf_state_local.ss2.width = pDst->drawable.width - 1;
+    dest_surf_state_local.ss3.pitch = dst_pitch - 1;
+    dest_surf_state_local.ss3.tile_walk = dst_tile_format;
+    dest_surf_state_local.ss3.tiled_surface = dst_tiled;
+    memcpy (dest_surf_state, &dest_surf_state_local, sizeof (dest_surf_state_local));
 
     /* Set up the source surface state buffer */
-    //src_surf_state = &src_surf_state_local;
-    //memset(src_surf_state, 0, sizeof(*src_surf_state));
-    src_surf_state->ss0.surface_format = i965_get_card_format(pSrcPicture);
-    src_surf_state->ss1.base_addr = src_offset;
-    src_surf_state->ss2.width = pSrc->drawable.width - 1;
-    src_surf_state->ss2.height = pSrc->drawable.height - 1;
-    src_surf_state->ss3.pitch = src_pitch - 1;
-    src_surf_state->ss3.tile_walk = src_tile_format;
-    src_surf_state->ss3.tiled_surface = src_tiled;
-    //src_surf_state = (void *)(state_base + src_surf_offset);
-    //memcpy (src_surf_state, &src_surf_state_local, sizeof (src_surf_state_local));
+    src_surf_state_local.ss0.surface_format = i965_get_card_format(pSrcPicture);
+    src_surf_state_local.ss1.base_addr = src_offset;
+    src_surf_state_local.ss2.width = pSrc->drawable.width - 1;
+    src_surf_state_local.ss2.height = pSrc->drawable.height - 1;
+    src_surf_state_local.ss3.pitch = src_pitch - 1;
+    src_surf_state_local.ss3.tile_walk = src_tile_format;
+    src_surf_state_local.ss3.tiled_surface = src_tiled;
+    memcpy (src_surf_state, &src_surf_state_local, sizeof (src_surf_state_local));
 
     /* setup mask surface */
     if (pMask) {
-	//mask_surf_state = &mask_surf_state_local;
-   	//memset(mask_surf_state, 0, sizeof(*mask_surf_state));
-   	mask_surf_state->ss0.surface_format =
+	mask_surf_state_local.ss0.surface_format =
 	    i965_get_card_format(pMaskPicture);
-   	mask_surf_state->ss1.base_addr = mask_offset;
-   	mask_surf_state->ss2.width = pMask->drawable.width - 1;
-   	mask_surf_state->ss2.height = pMask->drawable.height - 1;
-   	mask_surf_state->ss3.pitch = mask_pitch - 1;
-	mask_surf_state->ss3.tile_walk = mask_tile_format;
-	mask_surf_state->ss3.tiled_surface = mask_tiled;
-	//mask_surf_state = (void *)(state_base + mask_surf_offset);
-	//memcpy (mask_surf_state, &mask_surf_state_local, sizeof (mask_surf_state_local));
+	mask_surf_state_local.ss1.base_addr = mask_offset;
+	mask_surf_state_local.ss2.width = pMask->drawable.width - 1;
+	mask_surf_state_local.ss2.height = pMask->drawable.height - 1;
+	mask_surf_state_local.ss3.pitch = mask_pitch - 1;
+	mask_surf_state_local.ss3.tile_walk = mask_tile_format;
+	mask_surf_state_local.ss3.tiled_surface = mask_tiled;
+	memcpy (mask_surf_state, &mask_surf_state_local, sizeof (mask_surf_state_local));
     }
 
     /* PS kernel use this sampler */
-    //src_sampler_state = &src_sampler_state_local;
-    //memset(src_sampler_state, 0, sizeof(*src_sampler_state));
     switch(pSrcPicture->filter) {
     case PictFilterNearest:
-   	src_sampler_state->ss0.min_filter = BRW_MAPFILTER_NEAREST;
-   	src_sampler_state->ss0.mag_filter = BRW_MAPFILTER_NEAREST;
+	src_sampler_state_local.ss0.min_filter = BRW_MAPFILTER_NEAREST;
+	src_sampler_state_local.ss0.mag_filter = BRW_MAPFILTER_NEAREST;
 	break;
     case PictFilterBilinear:
-	src_sampler_state->ss0.min_filter = BRW_MAPFILTER_LINEAR;
-   	src_sampler_state->ss0.mag_filter = BRW_MAPFILTER_LINEAR;
+	src_sampler_state_local.ss0.min_filter = BRW_MAPFILTER_LINEAR;
+	src_sampler_state_local.ss0.mag_filter = BRW_MAPFILTER_LINEAR;
 	break;
     default:
 	I830FALLBACK("Bad filter 0x%x\n", pSrcPicture->filter);
     }
 
     if (!pSrcPicture->repeat) {
-   	src_sampler_state->ss1.r_wrap_mode = BRW_TEXCOORDMODE_CLAMP_BORDER;
-   	src_sampler_state->ss1.s_wrap_mode = BRW_TEXCOORDMODE_CLAMP_BORDER;
-   	src_sampler_state->ss1.t_wrap_mode = BRW_TEXCOORDMODE_CLAMP_BORDER;
+	src_sampler_state_local.ss1.r_wrap_mode = BRW_TEXCOORDMODE_CLAMP_BORDER;
+	src_sampler_state_local.ss1.s_wrap_mode = BRW_TEXCOORDMODE_CLAMP_BORDER;
+	src_sampler_state_local.ss1.t_wrap_mode = BRW_TEXCOORDMODE_CLAMP_BORDER;
     } else {
-   	src_sampler_state->ss1.r_wrap_mode = BRW_TEXCOORDMODE_WRAP;
-   	src_sampler_state->ss1.s_wrap_mode = BRW_TEXCOORDMODE_WRAP;
-   	src_sampler_state->ss1.t_wrap_mode = BRW_TEXCOORDMODE_WRAP;
+	src_sampler_state_local.ss1.r_wrap_mode = BRW_TEXCOORDMODE_WRAP;
+	src_sampler_state_local.ss1.s_wrap_mode = BRW_TEXCOORDMODE_WRAP;
+	src_sampler_state_local.ss1.t_wrap_mode = BRW_TEXCOORDMODE_WRAP;
     }
-//    src_sampler_state = (void *)(state_base + src_sampler_offset);
-//    memcpy (src_sampler_state, &src_sampler_state_local, sizeof (src_sampler_state_local));
+    memcpy (src_sampler_state, &src_sampler_state_local, sizeof (src_sampler_state_local));
 
     if (pMask) {
-//	mask_sampler_state = &mask_sampler_state_local;
- //  	memset(mask_sampler_state, 0, sizeof(*mask_sampler_state));
-   	switch(pMaskPicture->filter) {
-   	case PictFilterNearest:
-   	    mask_sampler_state->ss0.min_filter = BRW_MAPFILTER_NEAREST;
-   	    mask_sampler_state->ss0.mag_filter = BRW_MAPFILTER_NEAREST;
-	    break;
-   	case PictFilterBilinear:
-   	    mask_sampler_state->ss0.min_filter = BRW_MAPFILTER_LINEAR;
-   	    mask_sampler_state->ss0.mag_filter = BRW_MAPFILTER_LINEAR;
-	    break;
-   	default:
-	    I830FALLBACK("Bad filter 0x%x\n", pMaskPicture->filter);
-   	}
+	switch(pMaskPicture->filter) {
+	    case PictFilterNearest:
+		mask_sampler_state_local.ss0.min_filter = BRW_MAPFILTER_NEAREST;
+		mask_sampler_state_local.ss0.mag_filter = BRW_MAPFILTER_NEAREST;
+		break;
+	    case PictFilterBilinear:
+		mask_sampler_state_local.ss0.min_filter = BRW_MAPFILTER_LINEAR;
+		mask_sampler_state_local.ss0.mag_filter = BRW_MAPFILTER_LINEAR;
+		break;
+	    default:
+		I830FALLBACK("Bad filter 0x%x\n", pMaskPicture->filter);
+	}
 
-   	if (!pMaskPicture->repeat) {
-   	    mask_sampler_state->ss1.r_wrap_mode =
+	if (!pMaskPicture->repeat) {
+	    mask_sampler_state_local.ss1.r_wrap_mode =
 		BRW_TEXCOORDMODE_CLAMP_BORDER;
-   	    mask_sampler_state->ss1.s_wrap_mode =
+	    mask_sampler_state_local.ss1.s_wrap_mode =
 		BRW_TEXCOORDMODE_CLAMP_BORDER;
-   	    mask_sampler_state->ss1.t_wrap_mode =
+	    mask_sampler_state_local.ss1.t_wrap_mode =
 		BRW_TEXCOORDMODE_CLAMP_BORDER;
-   	} else {
-   	    mask_sampler_state->ss1.r_wrap_mode = BRW_TEXCOORDMODE_WRAP;
-   	    mask_sampler_state->ss1.s_wrap_mode = BRW_TEXCOORDMODE_WRAP;
-   	    mask_sampler_state->ss1.t_wrap_mode = BRW_TEXCOORDMODE_WRAP;
-    	}
-//	mask_sampler_state = (void *)(state_base + mask_sampler_offset);
-//	memcpy (mask_sampler_state, &mask_sampler_state_local, sizeof (mask_sampler_state_local));
+	} else {
+	    mask_sampler_state_local.ss1.r_wrap_mode = BRW_TEXCOORDMODE_WRAP;
+	    mask_sampler_state_local.ss1.s_wrap_mode = BRW_TEXCOORDMODE_WRAP;
+	    mask_sampler_state_local.ss1.t_wrap_mode = BRW_TEXCOORDMODE_WRAP;
+	}
+	memcpy (mask_sampler_state, &mask_sampler_state_local, sizeof (mask_sampler_state_local));
     }
 
     /* Set up the SF kernel to do coord interp: for each attribute,
@@ -890,16 +871,15 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     else
 	sf_kernel_num = 0;
 
-    //sf_state = &sf_state_local;
-    //memset(sf_state, 0, sizeof(*sf_state));
-    sf_state->thread0.kernel_start_pointer =
+    sf_state_local.thread0.kernel_start_pointer =
 	(state_base_offset + sf_kernel_offset[sf_kernel_num]) >> 6;
+    memcpy(&sf_state->thread0, &sf_state_local.thread0, sizeof(sf_state_local.thread0));
 
    /* Set up the PS kernel (dispatched by WM) */
     if (pMask) {
-	if (pMaskPicture->componentAlpha && 
+	if (pMaskPicture->componentAlpha &&
                 PICT_FORMAT_RGB(pMaskPicture->format)) {
-            if (i965_blend_op[op].src_alpha) 
+            if (i965_blend_op[op].src_alpha)
 		ps_kernel_num = 3;
             else
 		ps_kernel_num = 2;
@@ -910,34 +890,22 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     else
 	ps_kernel_num = 0;
 
-    //wm_state = &wm_state_local;
-    //memset(wm_state, 0, sizeof (*wm_state));
-    wm_state->thread0.kernel_start_pointer =
+    wm_state_local.thread0.kernel_start_pointer =
 	(state_base_offset + ps_kernel_offset[ps_kernel_num]) >> 6;
     if (!pMask)
-	wm_state->thread1.binding_table_entry_count = 2; /* 1 tex and fb */
+	wm_state_local.thread1.binding_table_entry_count = 2; /* 1 tex and fb */
     else
-	wm_state->thread1.binding_table_entry_count = 3; /* 2 tex and fb */
+	wm_state_local.thread1.binding_table_entry_count = 3; /* 2 tex and fb */
     /* Each pair of attributes (src/mask coords) is one URB entry */
     if (pMask)
-	wm_state->thread3.urb_entry_read_length = 2;
+	wm_state_local.thread3.urb_entry_read_length = 2;
     else
-	wm_state->thread3.urb_entry_read_length = 1;
-    //wm_state = (void *)(state_base + wm_offset);
-    //memcpy (wm_state, &wm_state_local, sizeof (wm_state_local));
+	wm_state_local.thread3.urb_entry_read_length = 1;
+    memcpy (wm_state, &wm_state_local, sizeof (wm_state_local));
 
     /* Begin the long sequence of commands needed to set up the 3D
      * rendering pipe
      */
-    // EXA render state tracker
-    {
-	BEGIN_LP_RING(2);
-   	OUT_RING(MI_FLUSH |
-		 MI_STATE_INSTRUCTION_CACHE_FLUSH |
-		 BRW_MI_GLOBAL_SNAPSHOT_RESET);
-	OUT_RING(MI_NOOP);
-	ADVANCE_LP_RING();
-    }
     {
         BEGIN_LP_RING(12);
 
@@ -966,16 +934,9 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
 	OUT_RING(MI_NOOP);
 	ADVANCE_LP_RING();
     }
+
     {
-	BEGIN_LP_RING(26);
-	/* Pipe control */
-   	OUT_RING(BRW_PIPE_CONTROL |
-		 BRW_PIPE_CONTROL_NOWRITE |
-		 BRW_PIPE_CONTROL_IS_FLUSH |
-		 2);
-   	OUT_RING(0);			       /* Destination address */
-   	OUT_RING(0);			       /* Immediate data low DW */
-   	OUT_RING(0);			       /* Immediate data high DW */
+	BEGIN_LP_RING(22);
 
 	/* Binding table pointers */
    	OUT_RING(BRW_3DSTATE_BINDING_TABLE_POINTERS | 4);
@@ -985,15 +946,6 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
    	OUT_RING(0); /* sf */
 	/* Only the PS uses the binding table */
    	OUT_RING(state_base_offset + binding_table_offset); /* ps */
-
-	/* The drawing rectangle clipping is always on.  Set it to values that
-	 * shouldn't do any clipping.
-	 */
-   	OUT_RING(BRW_3DSTATE_DRAWING_RECTANGLE | 2); /* XXX 3 for BLC or CTG */
-   	OUT_RING(0x00000000);	/* ymin, xmin */
-	OUT_RING(DRAW_YMAX(pDst->drawable.height - 1) |
-		 DRAW_XMAX(pDst->drawable.width - 1)); /* ymax, xmax */
-   	OUT_RING(0x00000000);	/* yorigin, xorigin */
 
 	/* skip the depth buffer */
 	/* skip the polygon stipple */
@@ -1027,8 +979,18 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
    	OUT_RING(BRW_CS_URB_STATE | 0);
    	OUT_RING(((URB_CS_ENTRY_SIZE - 1) << 4) |
 	    	 (URB_CS_ENTRIES << 0));
+
+	/* The drawing rectangle clipping is always on.  Set it to values that
+	 * shouldn't do any clipping.
+	 */
+   	OUT_RING(BRW_3DSTATE_DRAWING_RECTANGLE | 2); /* XXX 3 for BLC or CTG */
+   	OUT_RING(0x00000000);	/* ymin, xmin */
+	OUT_RING(DRAW_YMAX(pDst->drawable.height - 1) |
+		 DRAW_XMAX(pDst->drawable.width - 1)); /* ymax, xmax */
+   	OUT_RING(0x00000000);	/* yorigin, xorigin */
 	ADVANCE_LP_RING();
     }
+
     {
         int nelem = pMask ? 3: 2;
    	BEGIN_LP_RING(pMask?12:10);
@@ -1176,24 +1138,6 @@ i965_composite(PixmapPtr pDst, int srcX, int srcY, int maskX, int maskY,
     ErrorF("sync after 3dprimitive");
     I830Sync(pScrn);
 #endif
-    /* we must be sure that the pipeline is flushed before next exa draw,
-       because that will be new state, binding state and instructions*/
-#if 0
-    {
-	BEGIN_LP_RING(4);
-   	OUT_RING(BRW_PIPE_CONTROL |
-	    BRW_PIPE_CONTROL_NOWRITE |
-	    BRW_PIPE_CONTROL_WC_FLUSH |
-	    BRW_PIPE_CONTROL_IS_FLUSH |
-	    (1 << 10) |  /* XXX texture cache flush for BLC/CTG */
-	    2);
-   	OUT_RING(0); /* Destination address */
-   	OUT_RING(0); /* Immediate data low DW */
-   	OUT_RING(0); /* Immediate data high DW */
-	ADVANCE_LP_RING();
-    }
-#endif
-
     /* Mark sync so we can wait for it before setting up the VB on the next
      * rectangle.
      */
