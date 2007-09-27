@@ -391,7 +391,6 @@ static void
 i965_state_buffer_setup(I830Ptr pI830)
 {
     int i;
-    ErrorF("zhen: state buffer setup\n");
     /* Set up our layout of state in framebuffer.  First the general state: */
     next_offset = 0;
     vs_offset = ALIGN(next_offset, 64);
@@ -474,10 +473,6 @@ i965_state_buffer_setup(I830Ptr pI830)
 
     total_state_size = next_offset;
     assert(total_state_size < pI830->exa_965_state->size);
-    if (total_state_size > pI830->exa_965_state->size) {
-	ErrorF("zhen: increase exa state buffer size!\n");
-	return;
-    }
 
     state_base_offset = pI830->exa_965_state->offset;
     state_base_offset = ALIGN(state_base_offset, 64);
@@ -539,7 +534,7 @@ i965_state_buffer_setup(I830Ptr pI830)
     cc_state->cc0.stencil_enable = 0;   /* disable stencil */
     cc_state->cc2.depth_test = 0;       /* disable depth test */
     cc_state->cc2.logicop_enable = 0;   /* disable logic op */
-//    cc_state->cc3.ia_blend_enable = 1;  /* blend alpha just like colors */
+    cc_state->cc3.ia_blend_enable = 0;  /* blend alpha just like colors */
     cc_state->cc3.blend_enable = 1;     /* enable color blend */
     cc_state->cc3.alpha_test = 0;       /* disable alpha test */
     cc_state->cc4.cc_viewport_state_offset = (state_base_offset +
@@ -547,19 +542,7 @@ i965_state_buffer_setup(I830Ptr pI830)
     cc_state->cc5.dither_enable = 0;    /* disable dither */
     cc_state->cc5.logicop_func = 0xc;   /* COPY */
     cc_state->cc5.statistics_enable = 1;
- //   cc_state->cc5.ia_blend_function = BRW_BLENDFUNCTION_ADD;
- //   XXX
- //   i965_get_blend_cntl(op, pMaskPicture, pDstPicture->format,
-//			&src_blend, &dst_blend);
-    /* XXX: alpha blend factor should be same as color, but check
-     * for CA case in future
-     */
-  //  cc_state->cc5.ia_src_blend_factor = src_blend;
-  //  cc_state->cc5.ia_dest_blend_factor = dst_blend;
     cc_state->cc6.blend_function = BRW_BLENDFUNCTION_ADD;
-    /* default not care much */
-//    cc_state->cc6.src_blend_factor = src_blend;
-//   cc_state->cc6.dest_blend_factor = dst_blend;
     cc_state->cc6.clamp_post_alpha_blend = 1;
     cc_state->cc6.clamp_pre_alpha_blend = 1;
     cc_state->cc6.clamp_range = 0;  /* clamp range [0,1] */
@@ -593,6 +576,7 @@ i965_state_buffer_setup(I830Ptr pI830)
     src_surf_state = &src_surf_state_local;
     memset(src_surf_state, 0, sizeof(*src_surf_state));
     src_surf_state->ss0.surface_type = BRW_SURFACE_2D;
+    src_surf_state->ss0.data_return_format = BRW_SURFACERETURNFORMAT_FLOAT32;
     src_surf_state->ss0.color_blend = 1;
     src_surf_state = (void *)(state_base + src_surf_offset);
     memcpy (src_surf_state, &src_surf_state_local, sizeof (src_surf_state_local));
@@ -601,7 +585,8 @@ i965_state_buffer_setup(I830Ptr pI830)
     mask_surf_state = &mask_surf_state_local;
     memset(mask_surf_state, 0, sizeof(*mask_surf_state));
     mask_surf_state->ss0.surface_type = BRW_SURFACE_2D;
-    mask_surf_state->ss0.color_blend = 1;
+    mask_surf_state->ss0.data_return_format = BRW_SURFACERETURNFORMAT_FLOAT32;
+    mask_surf_state->ss0.color_blend = 0;
     mask_surf_state = (void *)(state_base + mask_surf_offset);
     memcpy (mask_surf_state, &mask_surf_state_local, sizeof (mask_surf_state_local));
 
@@ -646,8 +631,6 @@ i965_state_buffer_setup(I830Ptr pI830)
 
     sf_state = &sf_state_local;
     memset(sf_state, 0, sizeof(*sf_state));
-    //sf_state->thread0.kernel_start_pointer =
-//	(state_base_offset + sf_kernel_offset) >> 6;
     sf_state->thread0.grf_reg_count = BRW_GRF_BLOCKS(SF_KERNEL_NUM_GRF);
     sf_state->sf1.single_program_flow = 1;
     sf_state->sf1.binding_table_entry_count = 0;
@@ -668,7 +651,7 @@ i965_state_buffer_setup(I830Ptr pI830)
     sf_state->thread4.max_threads = SF_MAX_THREADS - 1;
     sf_state->thread4.urb_entry_allocation_size = URB_SF_ENTRY_SIZE - 1;
     sf_state->thread4.nr_urb_entries = URB_SF_ENTRIES;
-   // sf_state->thread4.stats_enable = 1;
+    sf_state->thread4.stats_enable = 0;
     sf_state->sf5.viewport_transform = FALSE; /* skip viewport */
     sf_state->sf6.cull_mode = BRW_CULLMODE_NONE;
     sf_state->sf6.scissor = 0;
@@ -680,9 +663,8 @@ i965_state_buffer_setup(I830Ptr pI830)
 
     wm_state = &wm_state_local;
     memset(wm_state, 0, sizeof (*wm_state));
- //   wm_state->thread0.kernel_start_pointer =
-//	(state_base_offset + ps_kernel_offset) >> 6;
     wm_state->thread0.grf_reg_count = BRW_GRF_BLOCKS(PS_KERNEL_NUM_GRF);
+    //XXX
     wm_state->thread1.single_program_flow = 1;
     wm_state->thread2.scratch_space_base_pointer = (state_base_offset +
 						    wm_scratch_offset)>>10;
@@ -692,7 +674,7 @@ i965_state_buffer_setup(I830Ptr pI830)
     wm_state->thread3.urb_entry_read_offset = 0;
     /* wm kernel use urb from 3, see wm_program in compiler module */
     wm_state->thread3.dispatch_grf_start_reg = 3; /* must match kernel */
-    //wm_state->wm4.stats_enable = 1;  /* statistic */
+    wm_state->wm4.stats_enable = 0;  /* statistic */
     /* src_sampler_offset is where all sampler states starts */
     wm_state->wm4.sampler_state_pointer = (state_base_offset +
 					   src_sampler_offset) >> 5;
@@ -736,7 +718,6 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     if (firsttime) {
 	i965_state_buffer_setup(pI830);
 	firsttime = 0;
-	ErrorF("zhen: first time\n");
     }
 
     src_offset = intel_get_pixmap_offset(pSrc);
@@ -752,7 +733,6 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
 	dst_tile_format = 0; /* Tiled X */
     }
     if (pMask) {
-	ErrorF("zhen: mask\n");
 	mask_offset = intel_get_pixmap_offset(pMask);
 	mask_pitch = intel_get_pixmap_pitch(pMask);
 	if (i830_pixmap_tiled(pMask)) {
@@ -784,21 +764,13 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     /* Because we only have a single static buffer for our state currently,
      * we have to sync before updating it every time.
      */
-//    i830WaitSync(pScrn);
+    i830WaitSync(pScrn);
 
     /* Color calculator state */
 //    cc_state = &cc_state_local;
 
-//    cc_state->cc3.ia_blend_enable = 1;  /* blend alpha just like colors */
- //   cc_state->cc5.ia_blend_function = BRW_BLENDFUNCTION_ADD;
- //   XXX
     i965_get_blend_cntl(op, pMaskPicture, pDstPicture->format,
 			&src_blend, &dst_blend);
-    /* XXX: alpha blend factor should be same as color, but check
-     * for CA case in future
-     */
-  //  cc_state->cc5.ia_src_blend_factor = src_blend;
-  //  cc_state->cc5.ia_dest_blend_factor = dst_blend;
     cc_state->cc6.src_blend_factor = src_blend;
     cc_state->cc6.dest_blend_factor = dst_blend;
 
@@ -809,14 +781,12 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
    // dest_surf_state = &dest_surf_state_local;
     i965_get_dest_format(pDstPicture, &dst_format);
     dest_surf_state->ss0.surface_format = dst_format;
-
     dest_surf_state->ss1.base_addr = dst_offset;
     dest_surf_state->ss2.height = pDst->drawable.height - 1;
     dest_surf_state->ss2.width = pDst->drawable.width - 1;
     dest_surf_state->ss3.pitch = dst_pitch - 1;
     dest_surf_state->ss3.tile_walk = dst_tile_format;
     dest_surf_state->ss3.tiled_surface = dst_tiled;
-
     //dest_surf_state = (void *)(state_base + dest_surf_offset);
     //memcpy (dest_surf_state, &dest_surf_state_local, sizeof (dest_surf_state_local));
 
@@ -824,14 +794,12 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     //src_surf_state = &src_surf_state_local;
     //memset(src_surf_state, 0, sizeof(*src_surf_state));
     src_surf_state->ss0.surface_format = i965_get_card_format(pSrcPicture);
-
     src_surf_state->ss1.base_addr = src_offset;
     src_surf_state->ss2.width = pSrc->drawable.width - 1;
     src_surf_state->ss2.height = pSrc->drawable.height - 1;
     src_surf_state->ss3.pitch = src_pitch - 1;
     src_surf_state->ss3.tile_walk = src_tile_format;
     src_surf_state->ss3.tiled_surface = src_tiled;
-
     //src_surf_state = (void *)(state_base + src_surf_offset);
     //memcpy (src_surf_state, &src_surf_state_local, sizeof (src_surf_state_local));
 
@@ -841,14 +809,12 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
    	//memset(mask_surf_state, 0, sizeof(*mask_surf_state));
    	mask_surf_state->ss0.surface_format =
 	    i965_get_card_format(pMaskPicture);
-
    	mask_surf_state->ss1.base_addr = mask_offset;
    	mask_surf_state->ss2.width = pMask->drawable.width - 1;
    	mask_surf_state->ss2.height = pMask->drawable.height - 1;
    	mask_surf_state->ss3.pitch = mask_pitch - 1;
 	mask_surf_state->ss3.tile_walk = mask_tile_format;
 	mask_surf_state->ss3.tiled_surface = mask_tiled;
-
 	//mask_surf_state = (void *)(state_base + mask_surf_offset);
 	//memcpy (mask_surf_state, &mask_surf_state_local, sizeof (mask_surf_state_local));
     }
@@ -878,7 +844,6 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
    	src_sampler_state->ss1.s_wrap_mode = BRW_TEXCOORDMODE_WRAP;
    	src_sampler_state->ss1.t_wrap_mode = BRW_TEXCOORDMODE_WRAP;
     }
-
 //    src_sampler_state = (void *)(state_base + src_sampler_offset);
 //    memcpy (src_sampler_state, &src_sampler_state_local, sizeof (src_sampler_state_local));
 
@@ -910,7 +875,6 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
    	    mask_sampler_state->ss1.s_wrap_mode = BRW_TEXCOORDMODE_WRAP;
    	    mask_sampler_state->ss1.t_wrap_mode = BRW_TEXCOORDMODE_WRAP;
     	}
-
 //	mask_sampler_state = (void *)(state_base + mask_sampler_offset);
 //	memcpy (mask_sampler_state, &mask_sampler_state_local, sizeof (mask_sampler_state_local));
     }
@@ -928,7 +892,6 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
 
     //sf_state = &sf_state_local;
     //memset(sf_state, 0, sizeof(*sf_state));
-    ErrorF("zhen: sf_kernel %d\n", sf_kernel_num);
     sf_state->thread0.kernel_start_pointer =
 	(state_base_offset + sf_kernel_offset[sf_kernel_num]) >> 6;
 
@@ -947,7 +910,6 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     else
 	ps_kernel_num = 0;
 
-    ErrorF("zhen: ps_kernel_num %d\n", ps_kernel_num);
     //wm_state = &wm_state_local;
     //memset(wm_state, 0, sizeof (*wm_state));
     wm_state->thread0.kernel_start_pointer =
@@ -967,6 +929,7 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     /* Begin the long sequence of commands needed to set up the 3D
      * rendering pipe
      */
+    // EXA render state tracker
     {
 	BEGIN_LP_RING(2);
    	OUT_RING(MI_FLUSH |
