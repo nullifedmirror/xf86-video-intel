@@ -387,9 +387,11 @@ i965_check_rotation_transform(PictTransformPtr t)
 	return FALSE;
 }
 
-static void
-i965_state_buffer_setup(I830Ptr pI830)
+/* Setup i965 state buffer static for once */
+void
+i965_setup_state_static(ScrnInfoPtr pScrn)
 {
+    I830Ptr pI830 = I830PTR(pScrn);
     int i;
     /* Set up our layout of state in framebuffer.  First the general state: */
     next_offset = 0;
@@ -707,17 +709,10 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     CARD32 dst_format, dst_offset, dst_pitch, dst_tile_format = 0,
 	dst_tiled = 0;
     Bool rotation_program = FALSE;
-    static int firsttime = 1;
     int sf_kernel_num, ps_kernel_num;
 
     IntelEmitInvarientState(pScrn);
     *pI830->last_3d = LAST_3D_RENDER;
-
-    /* we want to setup only once for all state offset */
-    if (firsttime) {
-	i965_state_buffer_setup(pI830);
-	firsttime = 0;
-    }
 
     src_offset = intel_get_pixmap_offset(pSrc);
     src_pitch = intel_get_pixmap_pitch(pSrc);

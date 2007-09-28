@@ -2767,7 +2767,11 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
       }
    }
 
-    if (pScrn->virtualX > pScrn->displayWidth)
+   /* i965 static state buffer */
+   if (IS_I965G(pI830) && pI830->useEXA)
+       i965_setup_state_static(pScrn);
+
+   if (pScrn->virtualX > pScrn->displayWidth)
 	pScrn->displayWidth = pScrn->virtualX;
 
    DPRINTF(PFX, "assert( if(!fbScreenInit(pScreen, ...) )\n");

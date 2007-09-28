@@ -83,6 +83,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 Bool I830EXAInit(ScreenPtr pScreen);
 #define EXA_LINEAR_EXTRA	(64*1024)
 unsigned long long I830TexOffsetStart(PixmapPtr pPix);
+void i965_setup_state_static(ScrnInfoPtr);
 #endif
 
 #ifdef I830_USE_XAA
