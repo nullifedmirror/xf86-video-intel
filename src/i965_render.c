@@ -1078,6 +1078,11 @@ i965_composite(PixmapPtr pDst, int srcX, int srcY, int maskX, int maskY,
 					 &mask_x[2], &mask_y[2]);
     }
 
+    /* Wait for any existing composite rectangles to land before we overwrite
+     * the VB with the next one.
+     */
+    i830WaitSync(pScrn);
+
     i = 0;
     /* rect (x2,y2) */
     vb[i++] = (float)(dstX + w);
