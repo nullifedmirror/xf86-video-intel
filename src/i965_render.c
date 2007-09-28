@@ -765,7 +765,7 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
 			&src_blend, &dst_blend);
     cc_state_local.cc6.src_blend_factor = src_blend;
     cc_state_local.cc6.dest_blend_factor = dst_blend;
-    memcpy (&cc_state->cc6, &cc_state_local.cc6, sizeof (cc_state_local.cc6));
+    cc_state->cc6 = cc_state_local.cc6;
 
     /* Set up the state buffer for the destination surface */
     i965_get_dest_format(pDstPicture, &dst_format);
@@ -866,9 +866,8 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     else
 	sf_kernel_num = 0;
 
-    sf_state_local.thread0.kernel_start_pointer =
+    sf_state->thread0.kernel_start_pointer =
 	(state_base_offset + sf_kernel_offset[sf_kernel_num]) >> 6;
-    memcpy(&sf_state->thread0, &sf_state_local.thread0, sizeof(sf_state_local.thread0));
 
    /* Set up the PS kernel (dispatched by WM) */
     if (pMask) {
