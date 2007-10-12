@@ -454,6 +454,7 @@ typedef struct _I830Rec {
    /* i915 EXA render state */
    CARD32 mapstate[6];
    CARD32 samplerstate[6];
+   PixmapPtr texture_pixmaps[2];
 
    Bool directRenderingDisabled;	/* DRI disabled in PreInit. */
    Bool directRenderingEnabled;		/* DRI enabled this generation. */
@@ -777,5 +778,7 @@ extern const int I830CopyROP[16];
 #define QUIRK_IGNORE_LVDS		0x00000002
 #define QUIRK_IGNORE_MACMINI_LVDS 	0x00000004
 extern void i830_fixup_devices(ScrnInfoPtr);
+
+#include "i830_batchbuffer.h"
 
 #endif /* _I830_H_ */
