@@ -433,7 +433,7 @@ i830_allocator_init(ScrnInfoPtr pScrn, unsigned long offset, unsigned long size)
 	mmsize = size;
 
 	/* EXA area is fixed. */
-	if (pI830->useEXA) {
+	if (pI830->AccelMethod == USE_EXA) {
 	    mmsize -= ROUND_TO_PAGE(3 * pScrn->displayWidth * pI830->cpp *
 				    pScrn->virtualY);
 	}
