@@ -527,7 +527,7 @@ I830InitBufMgr(ScreenPtr pScreen)
 
    if (!pI830->bufmgr)
 	return;
-
+   pI830->batch = intel_batchbuffer_alloc(pScrn);
    pI830->use_ttm_batch = TRUE;
 }
 
