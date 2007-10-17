@@ -576,6 +576,7 @@ typedef struct _I830Rec {
    struct intel_batchbuffer *batch;
    dri_bufmgr *bufmgr;
    unsigned int maxBatchSize;
+   Bool use_ttm_batch;
 } I830Rec;
 
 #define I830PTR(p) ((I830Ptr)((p)->driverPrivate))

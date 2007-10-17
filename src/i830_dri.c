@@ -83,6 +83,8 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "i915_drm.h"
 
+#include "intel_bufmgr_ttm.h"
+
 /* This block and the corresponding configure test can be removed when
  * libdrm >= 2.3.1 is required.
  */
@@ -510,6 +512,25 @@ I830CheckDRIAvailable(ScrnInfoPtr pScrn)
    return TRUE;
 }
 
+static void
+I830InitBufMgr(ScreenPtr pScreen)
+{
+   ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+   I830Ptr pI830 = I830PTR(pScrn);
+
+   if (pI830->drmMinor < 11)
+	return;
+
+   pI830->bufmgr = intel_bufmgr_ttm_init(pI830->drmSubFD, DRM_FENCE_TYPE_EXE,
+			DRM_FENCE_TYPE_EXE | DRM_I915_FENCE_TYPE_RW,
+			BATCH_SZ);
+
+   if (!pI830->bufmgr)
+	return;
+
+   pI830->use_ttm_batch = TRUE;
+}
+
 Bool
 I830DRIScreenInit(ScreenPtr pScreen)
 {
@@ -740,6 +761,7 @@ I830DRIScreenInit(ScreenPtr pScreen)
       }
    }
 
+   I830InitBufMgr(pScreen);
    return TRUE;
 }
 
