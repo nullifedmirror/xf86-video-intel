@@ -115,7 +115,11 @@ intel_drv_la_SOURCES = \
 	 i830_xaa.c \
 	 i830_render.c \
 	 i915_render.c \
-	 i965_render.c
+	 i965_render.c \
+	 dri_bufmgr.c \
+         dri_bufmgr.h \
+         intel_bufmgr_ttm.c \
+         intel_batchbuffer.c
 
 INTEL_G4A =				\
 	packed_yuv_sf.g4a		\

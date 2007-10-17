@@ -70,6 +70,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "xf86drm.h"
 #ifdef XF86DRI_MM
 #include "xf86mm.h"
+#include "dri_bufmgr.h"
 #endif
 #include "sarea.h"
 #define _XF86DRI_SERVER_
@@ -130,6 +131,8 @@ enum tile_format {
     TILE_XMAJOR,
     TILE_YMAJOR
 };
+
+struct intel_batchbuffer;
 
 /** Record of a linear allocation in the aperture. */
 typedef struct _i830_memory i830_memory;
@@ -568,6 +571,11 @@ typedef struct _I830Rec {
    /** Enables logging of debug output related to mode switching. */
    Bool debug_modes;
    unsigned int quirk_flag;
+
+   /* batchbuffer support */
+   struct intel_batchbuffer *batch;
+   dri_bufmgr *bufmgr;
+   unsigned int maxBatchSize;
 } I830Rec;
 
 #define I830PTR(p) ((I830Ptr)((p)->driverPrivate))
@@ -779,6 +787,6 @@ extern const int I830CopyROP[16];
 #define QUIRK_IGNORE_MACMINI_LVDS 	0x00000004
 extern void i830_fixup_devices(ScrnInfoPtr);
 
-#include "i830_batchbuffer.h"
+#include "intel_batchbuffer.h"
 
 #endif /* _I830_H_ */

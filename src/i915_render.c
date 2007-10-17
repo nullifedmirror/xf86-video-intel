@@ -343,7 +343,7 @@ i915_prepare_composite(int op, PicturePtr pSrcPicture,
 	OUT_BATCH(_3DSTATE_MAP_STATE | 3);
 	OUT_BATCH(0x00000001); /* map 0 */
 	OUT_PIXMAP_RELOC(pI830->texture_pixmaps[0],
-			 RM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
+			 DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
 			 DRM_BO_MASK_MEM | DRM_BO_FLAG_READ, 0);
 	OUT_BATCH(pI830->mapstate[1]);
 	OUT_BATCH(pI830->mapstate[2]);
@@ -359,12 +359,12 @@ i915_prepare_composite(int op, PicturePtr pSrcPicture,
 	OUT_BATCH(_3DSTATE_MAP_STATE | 6);
 	OUT_BATCH(0x00000003); /* map 0,1 */
 	OUT_PIXMAP_RELOC(pI830->texture_pixmaps[0],
-			 RM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
+			 DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
 			 DRM_BO_MASK_MEM | DRM_BO_FLAG_READ, 0);
 	OUT_BATCH(pI830->mapstate[1]);
 	OUT_BATCH(pI830->mapstate[2]);
 	OUT_PIXMAP_RELOC(pI830->texture_pixmaps[1],
-			 RM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
+			 DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
 			 DRM_BO_MASK_MEM | DRM_BO_FLAG_READ, 0);
 	OUT_BATCH(pI830->mapstate[4]);
 	OUT_BATCH(pI830->mapstate[5]);
