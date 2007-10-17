@@ -197,6 +197,7 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "i830_display.h"
 #include "i830_debug.h"
 #include "i830_bios.h"
+#include "i830_video.h"
 
 #ifdef XF86DRI
 #include "dri.h"
@@ -2271,6 +2272,23 @@ IntelEmitInvarientState(ScrnInfoPtr pScrn)
    }
 }
 
+static void
+I830BlockHandler(int i,
+		 pointer blockData, pointer pTimeout, pointer pReadmask)
+{
+    ScreenPtr pScreen = screenInfo.screens[i];
+    ScrnInfoPtr pScrn = xf86Screens[i];
+    I830Ptr pI830 = I830PTR(pScrn);
+
+    pScreen->BlockHandler = pI830->BlockHandler;
+
+    (*pScreen->BlockHandler) (i, blockData, pTimeout, pReadmask);
+
+    pScreen->BlockHandler = I830BlockHandler;
+
+    I830VideoBlockHandler(i, blockData, pTimeout, pReadmask);
+}
+
 static Bool
 I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
 {
@@ -2880,6 +2898,9 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
 #else
    xf86DrvMsg(pScrn->scrnIndex, X_INFO, "direct rendering: Not available\n");
 #endif
+
+   pI830->BlockHandler = pScreen->BlockHandler;
+   pScreen->BlockHandler = I830BlockHandler;
 
    pScreen->SaveScreen = xf86SaveScreen;
    pI830->CloseScreen = pScreen->CloseScreen;
