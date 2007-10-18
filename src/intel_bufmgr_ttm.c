@@ -647,7 +647,7 @@ dri_ttm_fence_unreference(dri_fence *fence)
       return;
 
 #if BUFMGR_DEBUG
-   fprintf(stderr, "fence_unreference: %p (%s)\n", &fence_ttm->fence,
+   fprintf(stderr, "fence_unreference: %d %p (%s)\n", fence_ttm->refcount, &fence_ttm->fence,
 	   fence_ttm->name);
 #endif
    if (--fence_ttm->refcount == 0) {
