@@ -5,7 +5,7 @@
 
 struct intel_context;
 
-#define BATCH_SZ 8192
+#define BATCH_SZ 16384
 #define BATCH_RESERVED 16
 
 struct intel_batchbuffer
@@ -120,7 +120,9 @@ pI830->batch->ptr += 4;
 #endif
 
 #define OUT_PIXMAP_RELOC(pixmap, flags, mask, delta) if (pI830->use_ttm_batch) { \
-    OUT_BATCH(intel_get_pixmap_offset(pixmap) + delta);			\
+    intel_batchbuffer_emit_pixmap((pixmap), (flags), (mask),             \
+                                 pI830->batch->buf, (pI830->batch->ptr - pI830->batch->map), (delta)); \
+    pI830->batch->ptr += 4;						\
   } else {								\
     OUT_RING(intel_get_pixmap_offset(pixmap) + delta);			\
   }

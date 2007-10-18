@@ -139,7 +139,6 @@ intel_exec_ioctl(ScrnInfoPtr pScrn,
    if (*fence) {
      dri_fence_unreference(*fence);
    }
-
    memset(&execbuf, 0, sizeof(execbuf));
 
    execbuf.num_buffers = count;
@@ -150,7 +149,7 @@ intel_exec_ioctl(ScrnInfoPtr pScrn,
    execbuf.batch.DR4 = 0;
 
    execbuf.ops_list = (unsigned)start;
-   execbuf.fence_arg.flags = DRM_FENCE_FLAG_SHAREABLE | DRM_I915_FENCE_FLAG_FLUSHED;
+   execbuf.fence_arg.flags = DRM_I915_FENCE_FLAG_FLUSHED;
 
    if (drmCommandWriteRead(pI830->drmSubFD, DRM_I915_EXECBUFFER, &execbuf,
                        sizeof(execbuf))) {
@@ -270,7 +269,12 @@ intel_batchbuffer_emit_pixmap(PixmapPtr pPixmap, unsigned int flags,
     ScreenPtr pScreen = pPixmap->drawable.pScreen;
     ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
     I830Ptr pI830 = I830PTR(pScrn);
-    //   OUT_BATCH(intel_get_pixmap_offset(pPixmap) + delta);
+    struct i830_exa_pixmap_priv *driver_priv = exaGetPixmapDriverPrivate(pPixmap);
 
+    if (driver_priv->flags & I830_EXA_PIXMAP_IS_MAPPED) {
+	dri_bo_unmap(driver_priv->bo);
+	driver_priv->flags &= ~I830_EXA_PIXMAP_IS_MAPPED;
+    }
+    dri_emit_reloc(reloc_buf, flags, delta, offset, driver_priv->bo);
     return TRUE;
 }
