@@ -260,3 +260,16 @@ intel_batchbuffer_data(struct intel_batchbuffer *batch,
    memcpy(batch->ptr, data, bytes);
    batch->ptr += bytes;
 }
+
+Bool
+intel_batchbuffer_emit_pixmap(PixmapPtr pPixmap, unsigned int flags,
+			      unsigned int mask, dri_bo *reloc_buf,
+			      unsigned int offset, unsigned int delta)
+{
+    ScreenPtr pScreen = pPixmap->drawable.pScreen;
+    ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+    I830Ptr pI830 = I830PTR(pScrn);
+    //   OUT_BATCH(intel_get_pixmap_offset(pPixmap) + delta);
+
+    return TRUE;
+}

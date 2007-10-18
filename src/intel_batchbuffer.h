@@ -84,7 +84,7 @@ intel_batchbuffer_require_space(struct intel_batchbuffer *batch,
    batch->flags |= flags;
 }
 
-extern Bool i830_batchbuffer_emit_pixmap(PixmapPtr pPixmap, unsigned int flags,
+extern Bool intel_batchbuffer_emit_pixmap(PixmapPtr pPixmap, unsigned int flags,
 					 unsigned int mask,
 					 dri_bo *reloc_buf,
 					 unsigned int offset,
@@ -116,13 +116,17 @@ extern Bool i830_batchbuffer_emit_pixmap(PixmapPtr pPixmap, unsigned int flags,
    intel_batchbuffer_emit_reloc(pI830->batch, buf, flags, delta);	\
 } while (0)
 
-#define OUT_PIXMAP_RELOC(pixmap, flags, mask, delta) if (pI830->use_ttm_batch) {               \
+#if 0
     i830_batchbuffer_emit_pixmap((pixmap), (flags), (mask),             \
                                  pI830->batch->buf, (pI830->batch->ptr - pI830->batch->map), (delta)); \
-    pI830->batch->ptr += 4;                                                 \
-    } else {					   \
-	OUT_RING(intel_get_pixmap_offset(pixmap)); \
-    }
+pI830->batch->ptr += 4;							
+#endif
+
+#define OUT_PIXMAP_RELOC(pixmap, flags, mask, delta) if (pI830->use_ttm_batch) { \
+    OUT_BATCH(intel_get_pixmap_offset(pixmap) + delta);			\
+  } else {								\
+    OUT_RING(intel_get_pixmap_offset(pixmap) + delta);			\
+  }
 
 #define ADVANCE_BATCH() if (!pI830->use_ttm_batch) { ADVANCE_LP_RING(); }
 
