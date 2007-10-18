@@ -518,8 +518,10 @@ I830InitBufMgr(ScreenPtr pScreen)
    ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
    I830Ptr pI830 = I830PTR(pScrn);
 
-   if (pI830->drmMinor < 11)
+   if (pI830->drmMinor < 11) {
+   	pI830->use_ttm_batch = FALSE;
 	return;
+   }
 
    pI830->bufmgr = intel_bufmgr_ttm_init(pI830->drmSubFD, DRM_FENCE_TYPE_EXE,
 			DRM_FENCE_TYPE_EXE | DRM_I915_FENCE_TYPE_RW,

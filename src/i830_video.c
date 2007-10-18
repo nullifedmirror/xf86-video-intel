@@ -423,10 +423,11 @@ i830_overlay_on(ScrnInfoPtr pScrn)
     OUT_BATCH(MI_FLUSH | MI_WRITE_DIRTY_STATE);
     OUT_BATCH(MI_NOOP);
     OUT_BATCH(MI_OVERLAY_FLIP | MI_OVERLAY_FLIP_ON);
-    if (OVERLAY_NOPHYSICAL(pI830))
+    if (OVERLAY_NOPHYSICAL(pI830)) {
 	OUT_BATCH(pI830->overlay_regs->offset | OFC_UPDATE);
-    else
+    } else {
 	OUT_BATCH(pI830->overlay_regs->bus_addr | OFC_UPDATE);
+    }
     /* Wait for the overlay to light up before attempting to use it */
     OUT_BATCH(MI_WAIT_FOR_EVENT | MI_WAIT_FOR_OVERLAY_FLIP);
     OUT_BATCH(MI_NOOP);
@@ -508,10 +509,11 @@ i830_overlay_off(ScrnInfoPtr pScrn)
 	OUT_BATCH(MI_FLUSH | MI_WRITE_DIRTY_STATE);
 	OUT_BATCH(MI_NOOP);
 	OUT_BATCH(MI_OVERLAY_FLIP | MI_OVERLAY_FLIP_CONTINUE);
-	if (OVERLAY_NOPHYSICAL(pI830))
+	if (OVERLAY_NOPHYSICAL(pI830)) {
 	    OUT_BATCH(pI830->overlay_regs->offset);
-	else
+	} else {
 	    OUT_BATCH(pI830->overlay_regs->bus_addr);
+	}
 	OUT_BATCH(MI_WAIT_FOR_EVENT | MI_WAIT_FOR_OVERLAY_FLIP);
 	OUT_BATCH(MI_NOOP);
 	ADVANCE_BATCH();

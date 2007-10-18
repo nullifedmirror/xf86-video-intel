@@ -209,11 +209,13 @@ union intfloat {
    } while (_head != _tail);						\
 } while( 0)
 
-
-#define BEGIN_LP_RING(n)						\
+#define RING_LOCALS \
    unsigned int outring, ringmask, ringused = 0;			\
    volatile unsigned char *virt;					\
    int needed;								\
+
+
+#define DO_LP_RING(n)						\
    if ((n) & 1)								\
       ErrorF("BEGIN_LP_RING called with odd argument: %d\n", n);	\
    if ((n) > 2 && (I810_DEBUG&DEBUG_ALWAYS_SYNC))			\
@@ -228,6 +230,9 @@ union intfloat {
       ErrorF( "BEGIN_LP_RING %d in %s\n", n, FUNCTION_NAME);
 
 
+#define BEGIN_LP_RING(n)						\
+	RING_LOCALS							\
+	DO_LP_RING(n)							\
 
 /* Memory mapped register access macros */
 #define INREG8(addr)        *(volatile CARD8  *)(RecPtr->MMIOBase + (addr))

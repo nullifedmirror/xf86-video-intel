@@ -442,7 +442,8 @@ do {									\
 	     (_cur_shader_commands * 3 - 1));				\
     for (_i = 0; _i < _cur_shader_commands * 3; _i++)			\
 	OUT_BATCH(_shader_buf[_i]);					\
-    if (_pad != 0)							\
+    if (_pad != 0) {							\
 	OUT_BATCH(MI_NOOP);						\
+    }									\
     ADVANCE_BATCH();							\
 } while (0);
