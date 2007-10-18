@@ -183,21 +183,26 @@ I830Sync(ScrnInfoPtr pScrn)
 
    if (pI830->entityPrivate && !pI830->entityPrivate->RingRunning) return;
 
-   if (IS_I965G(pI830))
-      flags = 0;
-
-   /* Send a flush instruction and then wait till the ring is empty.
-    * This is stronger than waiting for the blitter to finish as it also
-    * flushes the internal graphics caches.
-    */
-   
-   {
-      BEGIN_LP_RING(2);
-      OUT_RING(MI_FLUSH | flags);
-      OUT_RING(MI_NOOP);		/* pad to quadword */
-      ADVANCE_LP_RING();
+   if (pI830->use_ttm_batch) {
+     intel_batchbuffer_flush(pI830->batch);
    }
 
+   {
+     if (IS_I965G(pI830))
+       flags = 0;
+
+     /* Send a flush instruction and then wait till the ring is empty.
+      * This is stronger than waiting for the blitter to finish as it also
+      * flushes the internal graphics caches.
+      */
+     
+     {
+       BEGIN_LP_RING(2);
+       OUT_RING(MI_FLUSH | flags);
+       OUT_RING(MI_NOOP);		/* pad to quadword */
+       ADVANCE_LP_RING();
+     }
+   }
    I830WaitLpRing(pScrn, pI830->LpRing->mem->size - 8, 0);
 
    pI830->LpRing->space = pI830->LpRing->mem->size - 8;
