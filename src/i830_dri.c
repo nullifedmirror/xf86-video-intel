@@ -523,6 +523,7 @@ I830InitBufMgr(ScreenPtr pScreen)
 	return;
    }
 
+   pI830->maxBatchSize = BATCH_SZ;
    pI830->bufmgr = intel_bufmgr_ttm_init(pI830->drmSubFD, DRM_FENCE_TYPE_EXE,
 			DRM_FENCE_TYPE_EXE | DRM_I915_FENCE_TYPE_RW,
 			BATCH_SZ);
