@@ -5,11 +5,8 @@
 
 struct intel_context;
 
-#define BATCH_SZ 16384
+#define BATCH_SZ 8192
 #define BATCH_RESERVED 16
-
-#define INTEL_BATCH_NO_CLIPRECTS 0x1
-#define INTEL_BATCH_CLIPRECTS    0x2
 
 struct intel_batchbuffer
 {
