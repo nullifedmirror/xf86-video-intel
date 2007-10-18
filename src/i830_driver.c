@@ -2270,6 +2270,8 @@ I830BlockHandler(int i,
 
     pScreen->BlockHandler = I830BlockHandler;
 
+    if (pI830->batch)
+    	intel_batchbuffer_flush(pI830->batch);
     I830VideoBlockHandler(i, blockData, pTimeout, pReadmask);
 }
 
