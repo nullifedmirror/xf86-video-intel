@@ -36,7 +36,7 @@
 #include "i915_drm.h"
 #include "intel_bufmgr_ttm.h"
 
-#define MI_BATCH_BUFFER_END                  0x0A
+#define MI_BATCH_BUFFER_END                  (0x0A<<23)
 
 /* Relocations in kernel space:
  *    - pass dma buffer seperately
@@ -193,6 +193,7 @@ do_flush_locked(struct intel_batchbuffer *batch,
       
    dri_post_submit(batch->buf, &batch->last_fence);
 
+   I830RefreshRing(batch->pScrn);
 }
 
 void
