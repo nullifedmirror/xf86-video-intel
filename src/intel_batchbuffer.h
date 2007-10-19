@@ -95,8 +95,8 @@ extern Bool intel_batchbuffer_emit_pixmap(PixmapPtr pPixmap, unsigned int flags,
 	RING_LOCALS 								\
 	if (pI830->use_ttm_batch)						\
    		intel_batchbuffer_require_space(pI830->batch, (n)*4, 0);	\
-	 else \
-   DO_LP_RING(n) ;
+	 else { \
+   DO_LP_RING(n) ; }
 
 #define OUT_BATCH(d) \
 	 if (pI830->use_ttm_batch) \
