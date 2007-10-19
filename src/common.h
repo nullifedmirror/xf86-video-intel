@@ -210,9 +210,9 @@ union intfloat {
 } while( 0)
 
 #define RING_LOCALS \
-   unsigned int outring, ringmask, ringused = 0;			\
-   volatile unsigned char *virt;					\
-   int needed;								\
+   unsigned int outring = 0, ringmask = 0, ringused = 0;		\
+   volatile unsigned char *virt = NULL;					\
+   int needed = 0;							\
 
 
 #define DO_LP_RING(n)						\
