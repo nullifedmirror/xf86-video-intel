@@ -808,14 +808,15 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     i965_get_dest_format(pDstPicture, &dst_format);
     dest_surf_state->ss0.surface_format = dst_format;
 
-#ifdef I830_USE_BB
-    i830_batchbuffer_emit_pixmap(pDst,
-				 DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_WRITE,
-				 DRM_BO_MASK_MEM | DRM_BO_FLAG_WRITE | DRM_BO_FLAG_CACHED,
-				 exa_buf->bo.handle, dest_surf_offset + 4, 0);
-#else
-    dest_surf_state->ss1.base_addr = intel_get_pixmap_offset(pDst);
-#endif
+    if (pI830->use_ttm_batch) {
+    	intel_batchbuffer_emit_pixmap(pDst,
+				     DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_WRITE,
+				     DRM_BO_MASK_MEM | DRM_BO_FLAG_WRITE | DRM_BO_FLAG_CACHED,
+				     pI830->exa965->buf, dest_surf_offset + 4, 0);
+    } else {
+        dest_surf_state->ss1.base_addr = intel_get_pixmap_offset(pDst);
+    }
+
     dest_surf_state->ss2.height = pDst->drawable.height - 1;
     dest_surf_state->ss2.width = pDst->drawable.width - 1;
     dest_surf_state->ss3.pitch = dst_pitch - 1;
@@ -826,14 +827,14 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     src_surf_state = (void *)(start_base + src_surf_offset);
     src_surf_state->ss0.surface_format = i965_get_card_format(pSrcPicture);
 
-#ifdef I830_USE_BB
-    i830_batchbuffer_emit_pixmap(pSrc,
+    if (pI830->use_ttm_batch) {
+        intel_batchbuffer_emit_pixmap(pSrc,
 				 DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
 				 DRM_BO_MASK_MEM | DRM_BO_FLAG_READ | DRM_BO_FLAG_CACHED,
-				 exa_buf->bo.handle, src_surf_offset + 4, 0);
-#else
-    src_surf_state->ss1.base_addr = intel_get_pixmap_offset(pSrc);
-#endif
+				 pI830->exa965->buf, src_surf_offset + 4, 0);
+    } else {
+        src_surf_state->ss1.base_addr = intel_get_pixmap_offset(pSrc);
+    }
     src_surf_state->ss2.width = pSrc->drawable.width - 1;
     src_surf_state->ss2.height = pSrc->drawable.height - 1;
     src_surf_state->ss3.pitch = src_pitch - 1;
@@ -844,14 +845,14 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     if (pMask) {
 	mask_surf_state = (void *)(start_base + mask_surf_offset);
    	mask_surf_state->ss0.surface_format = i965_get_card_format(pMaskPicture);
-#ifdef I830_USE_BB
-	i830_batchbuffer_emit_pixmap(pMask, 
+        if (pI830->use_ttm_batch) {
+	   intel_batchbuffer_emit_pixmap(pMask, 
 				     DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
 				     DRM_BO_MASK_MEM | DRM_BO_FLAG_READ | DRM_BO_FLAG_CACHED,
-				     exa_buf->bo.handle, mask_surf_offset + 4, 0);
-#else
-	mask_surf_state->ss1.base_addr = intel_get_pixmap_offset(pMask);
-#endif
+				     pI830->exa965->buf, mask_surf_offset + 4, 0);
+        } else {
+	    mask_surf_state->ss1.base_addr = intel_get_pixmap_offset(pMask);
+	}
    	mask_surf_state->ss2.width = pMask->drawable.width - 1;
    	mask_surf_state->ss2.height = pMask->drawable.height - 1;
    	mask_surf_state->ss3.pitch = mask_pitch - 1;
