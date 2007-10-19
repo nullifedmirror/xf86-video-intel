@@ -113,12 +113,6 @@ extern Bool intel_batchbuffer_emit_pixmap(PixmapPtr pPixmap, unsigned int flags,
    intel_batchbuffer_emit_reloc(pI830->batch, buf, flags, delta);	\
 } while (0)
 
-#if 0
-    i830_batchbuffer_emit_pixmap((pixmap), (flags), (mask),             \
-                                 pI830->batch->buf, (pI830->batch->ptr - pI830->batch->map), (delta)); \
-pI830->batch->ptr += 4;							
-#endif
-
 #define OUT_PIXMAP_RELOC(pixmap, flags, mask, delta) if (pI830->use_ttm_batch) { \
     intel_batchbuffer_emit_pixmap((pixmap), (flags), (mask),             \
                                  pI830->batch->buf, (pI830->batch->ptr - pI830->batch->map), (delta)); \
