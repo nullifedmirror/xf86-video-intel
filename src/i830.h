@@ -573,6 +573,7 @@ typedef struct _I830Rec {
    unsigned int quirk_flag;
 
    /* batchbuffer support */
+   struct i965_exastate_buffer *exa965;
    struct intel_batchbuffer *batch;
    dri_bufmgr *bufmgr;
    unsigned int maxBatchSize;
@@ -759,7 +760,8 @@ Bool i965_prepare_composite(int op, PicturePtr pSrc, PicturePtr pMask,
 			    PixmapPtr pMaskPixmap, PixmapPtr pDstPixmap);
 void i965_composite(PixmapPtr pDst, int srcX, int srcY,
 		    int maskX, int maskY, int dstX, int dstY, int w, int h);
-
+void i965_done_composite(PixmapPtr pDst);
+int i965_init_exa_state(ScrnInfoPtr pScrn);
 void
 i830_get_transformed_coordinates(int x, int y, PictTransformPtr transform,
 				 float *x_out, float *y_out);

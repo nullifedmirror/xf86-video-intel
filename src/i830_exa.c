@@ -626,7 +626,7 @@ I830EXAInit(ScreenPtr pScreen)
  	pI830->EXADriverPtr->CheckComposite = i965_check_composite;
  	pI830->EXADriverPtr->PrepareComposite = i965_prepare_composite;
  	pI830->EXADriverPtr->Composite = i965_composite;
- 	pI830->EXADriverPtr->DoneComposite = i830_done_composite;
+ 	pI830->EXADriverPtr->DoneComposite = i965_done_composite;
     }
 #if EXA_VERSION_MINOR >= 4
     if (pI830->use_ttm_batch) {

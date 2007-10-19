@@ -6,6 +6,7 @@
 struct intel_context;
 
 #define BATCH_SZ 16384
+#define EXASTATE_SZ 48000
 #define BATCH_RESERVED 16
 
 struct intel_batchbuffer
@@ -20,6 +21,13 @@ struct intel_batchbuffer
    unsigned char *ptr;
 
    uint32_t size;
+};
+
+struct i965_exastate_buffer {
+   dri_bo *buf;
+   dri_fence *last_fence;
+   ScrnInfoPtr pScrn;
+   unsigned char *map;
 };
 
 struct intel_batchbuffer *intel_batchbuffer_alloc(ScrnInfoPtr pScrn);
@@ -109,7 +117,7 @@ extern Bool intel_batchbuffer_emit_pixmap(PixmapPtr pPixmap, unsigned int flags,
         OUT_BATCH(tmp.ui);                      \
 } while(0)
 
-#define OUT_RELOC(buf, flags, delta) do { 				\
+#define OUT_RELOC(buf, flags, delta) do {	\
    intel_batchbuffer_emit_reloc(pI830->batch, buf, flags, delta);	\
 } while (0)
 
