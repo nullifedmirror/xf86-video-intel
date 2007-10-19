@@ -723,9 +723,9 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
 {
     ScrnInfoPtr pScrn = xf86Screens[pSrcPicture->pDrawable->pScreen->myNum];
     I830Ptr pI830 = I830PTR(pScrn);
-    CARD32 src_pitch, src_tile_format, src_tiled;
+    CARD32 src_pitch, src_tile_format = 0, src_tiled = 0;
     CARD32 mask_pitch = 0, mask_tile_format = 0, mask_tiled = 0;
-    CARD32 dst_format, dst_pitch, dst_tile_format, dst_tiled;
+    CARD32 dst_format, dst_pitch, dst_tile_format = 0, dst_tiled = 0;
     Bool rotation_program = FALSE;
     struct brw_cc_unit_state *cc_state;
     int need_ps_kernel, need_sf_kernel;
