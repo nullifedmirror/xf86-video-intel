@@ -2787,6 +2787,9 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
     if (pScrn->virtualX > pScrn->displayWidth)
 	pScrn->displayWidth = pScrn->virtualX;
 
+   if (IS_I965G(pI830))
+     i965_init_exa_state(pScrn);
+
    DPRINTF(PFX, "assert( if(!fbScreenInit(pScreen, ...) )\n");
    if (!fbScreenInit(pScreen, pI830->FbBase + pScrn->fbOffset, 
                      pScrn->virtualX, pScrn->virtualY,

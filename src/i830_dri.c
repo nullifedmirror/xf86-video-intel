@@ -533,8 +533,6 @@ I830InitBufMgr(ScreenPtr pScreen)
    pI830->batch = intel_batchbuffer_alloc(pScrn);
    pI830->use_ttm_batch = TRUE;
 
-   if (IS_I965G(pI830))
-     i965_init_exa_state(pScrn);
 }
 
 Bool
