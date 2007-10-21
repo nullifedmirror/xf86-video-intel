@@ -186,7 +186,7 @@ I830Sync(ScrnInfoPtr pScrn)
    if (pI830->use_ttm_batch) {
      intel_batchbuffer_flush(pI830->batch);
    }
-
+   else
    {
      if (IS_I965G(pI830))
        flags = 0;
