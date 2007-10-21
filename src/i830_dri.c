@@ -1065,16 +1065,16 @@ I830DRIDoRefreshArea (ScrnInfoPtr pScrn, int num, BoxPtr pbox, CARD32 dst)
    }
 
    for (i = 0 ; i < num ; i++, pbox++) {
-      BEGIN_LP_RING(8);
-      OUT_RING(cmd);
-      OUT_RING(br13);
-      OUT_RING((pbox->y1 << 16) | pbox->x1);
-      OUT_RING((pbox->y2 << 16) | pbox->x2);
-      OUT_RING(dst);
-      OUT_RING((pbox->y1 << 16) | pbox->x1);
-      OUT_RING(br13 & 0xffff);
-      OUT_RING(pI830->front_buffer->offset);
-      ADVANCE_LP_RING();
+      BEGIN_BATCH(8);
+      OUT_BATCH(cmd);
+      OUT_BATCH(br13);
+      OUT_BATCH((pbox->y1 << 16) | pbox->x1);
+      OUT_BATCH((pbox->y2 << 16) | pbox->x2);
+      OUT_BATCH(dst);
+      OUT_BATCH((pbox->y1 << 16) | pbox->x1);
+      OUT_BATCH(br13 & 0xffff);
+      OUT_BATCH(pI830->front_buffer->offset);
+      ADVANCE_BATCH();
    }
 }
 
@@ -1090,12 +1090,17 @@ I830DRIRefreshArea (ScrnInfoPtr pScrn, int num, BoxPtr pbox)
    if (!pSAREAPriv->pf_active && pSAREAPriv->pf_current_page == 0)
       return;
 
+   if (pI830->use_ttm_batch)
+       intel_batchbuffer_flush(pI830->batch);
+
    I830DRIDoRefreshArea(pScrn, num, pbox, pI830->back_buffer->offset);
 
    if (pI830->third_buffer) {
       I830DRIDoRefreshArea(pScrn, num, pbox, pI830->third_buffer->offset);
    }
 
+   if (pI830->use_ttm_batch)
+       intel_batchbuffer_finish(pI830->batch);
    DamageEmpty(pI830->pDamage);
 }
 #endif
