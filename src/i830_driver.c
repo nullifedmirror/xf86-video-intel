@@ -172,6 +172,7 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <stdlib.h>
 #include <stdio.h>
 #include <sys/mman.h>
+#include <errno.h>
 
 #include "xf86.h"
 #include "xf86_OSproc.h"
@@ -202,7 +203,6 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 #ifdef XF86DRI
 #include "dri.h"
 #include <sys/ioctl.h>
-#include <errno.h>
 #ifdef XF86DRI_MM
 #include "xf86mm.h"
 #endif
@@ -3009,8 +3009,8 @@ I830LeaveVT(int scrnIndex, int flags)
     */
 #ifdef XF86DRI_MM
    if (pI830->directRenderingOpen) {
-      if (pI830->memory_manager != NULL) {
-	 drmMMLock(pI830->drmSubFD, DRM_BO_MEM_TT);
+      if (pI830->memory_manager != NULL && pScrn->vtSema) {
+	 drmMMLock(pI830->drmSubFD, DRM_BO_MEM_TT, 1, 0);
       }
    }
 #endif /* XF86DRI_MM */
@@ -3048,8 +3048,8 @@ I830EnterVT(int scrnIndex, int flags)
       /* Unlock the memory manager first of all so that we can pin our
        * buffer objects
        */
-      if (pI830->memory_manager != NULL) {
-	 drmMMUnlock(pI830->drmSubFD, DRM_BO_MEM_TT);
+      if (pI830->memory_manager != NULL && pScrn->vtSema) {
+	 drmMMUnlock(pI830->drmSubFD, DRM_BO_MEM_TT, 1);
       }
    }
 #endif /* XF86DRI_MM */
@@ -3162,6 +3162,14 @@ I830CloseScreen(int scrnIndex, ScreenPtr pScreen)
 
    if (pScrn->vtSema == TRUE) {
       I830LeaveVT(scrnIndex, 0);
+#ifdef XF86DRI_MM
+      if (pI830->directRenderingEnabled) {
+ 	 if (pI830->memory_manager != NULL) {
+	    drmMMUnlock(pI830->drmSubFD, DRM_BO_MEM_TT, 1);
+	 }
+      }
+#endif /* XF86DRI_MM */
+
    }
 
    if (pI830->devicesTimer)

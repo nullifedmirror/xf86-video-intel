@@ -224,9 +224,9 @@ static void i9xx_clock(int refclk, intel_clock_t *clock)
 static void intel_clock(I830Ptr pI830, int refclk, intel_clock_t *clock)
 {
     if (IS_I9XX(pI830))
-	return i9xx_clock (refclk, clock);
+	i9xx_clock (refclk, clock);
     else
-	return i8xx_clock (refclk, clock);
+	i8xx_clock (refclk, clock);
 }
 
 static void
@@ -1024,6 +1024,14 @@ i830_crtc_mode_set(xf86CrtcPtr crtc, DisplayModePtr mode,
     ok = i830FindBestPLL(crtc, adjusted_mode->Clock, refclk, &clock);
     if (!ok)
 	FatalError("Couldn't find PLL settings for mode!\n");
+
+    if (fabs(adjusted_mode->Clock - clock.dot) / clock.dot > .02) {
+	xf86DrvMsg(pScrn->scrnIndex, X_WARNING,
+		   "Chosen PLL clock of %.1f Mhz more than 2%% away from "
+		   "desired %.1f Mhz\n",
+		   (float)clock.dot / 1000,
+		   (float)adjusted_mode->Clock / 1000);
+    }
 
     fp = clock.n << 16 | clock.m1 << 8 | clock.m2;
 
