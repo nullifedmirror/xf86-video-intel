@@ -400,7 +400,7 @@ static void *I830EXACreatePixmap(ScreenPtr pScreen, int size, int align)
 	return new_priv;
 
     new_priv->bo = dri_bo_alloc(pI830->bufmgr, "pixmap",
-				size, 4096, DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_MEM_LOCAL);
+				size, 4096, DRM_BO_FLAG_MEM_LOCAL | DRM_BO_FLAG_CACHED | DRM_BO_FLAG_CACHED_MAPPED);
 
     return new_priv;
 }
