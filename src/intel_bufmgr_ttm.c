@@ -87,8 +87,8 @@ struct intel_bo_list {
     void (*destroy)(void *node);
 };
 
-typedef struct _dri_bufmgr_ttm {
-   dri_bufmgr bufmgr;
+typedef struct _ddx_bufmgr_ttm {
+   ddx_bufmgr bufmgr;
 
    int fd;
    unsigned int fence_type;
@@ -99,15 +99,15 @@ typedef struct _dri_bufmgr_ttm {
    struct intel_bo_list list;
    struct intel_bo_list reloc_list;
 
-} dri_bufmgr_ttm;
+} ddx_bufmgr_ttm;
 
-typedef struct _dri_bo_ttm {
-   dri_bo bo;
+typedef struct _ddx_bo_ttm {
+   ddx_bo bo;
 
    int refcount;		/* Protected by bufmgr->mutex */
    drmBO drm_bo;
    const char *name;
-} dri_bo_ttm;
+} ddx_bo_ttm;
 
 typedef struct _dri_fence_ttm
 {
@@ -238,14 +238,14 @@ static void intel_free_reloc_list(int fd, struct intel_bo_list *reloc_list)
     }
 }
 
-static int intel_add_validate_buffer(struct intel_bo_list *list, dri_bo *buf, unsigned flags,
+static int intel_add_validate_buffer(struct intel_bo_list *list, ddx_bo *buf, unsigned flags,
 				     unsigned mask, int *itemLoc, void (*destroy_cb)(void *))
 {
     struct intel_bo_node *node, *cur;
     drmMMListHead *l;
     int count = 0;
     int ret = 0;
-    drmBO *buf_bo = &((dri_bo_ttm *)buf)->drm_bo;
+    drmBO *buf_bo = &((ddx_bo_ttm *)buf)->drm_bo;
     cur = NULL;
 
     for (l = list->list.next; l != &list->list; l = l->next) {
@@ -412,18 +412,18 @@ driFenceSignaled(DriFenceObject * fence, unsigned type)
 }
 #endif
 
-static dri_bo *
-dri_ttm_alloc(dri_bufmgr *bufmgr, const char *name,
+static ddx_bo *
+dri_ttm_alloc(ddx_bufmgr *bufmgr, const char *name,
 	      unsigned long size, unsigned int alignment,
 	      unsigned int location_mask)
 {
-   dri_bufmgr_ttm *ttm_bufmgr;
-   dri_bo_ttm *ttm_buf;
+   ddx_bufmgr_ttm *ttm_bufmgr;
+   ddx_bo_ttm *ttm_buf;
    unsigned int pageSize = getpagesize();
    int ret;
    unsigned int flags, hint;
 
-   ttm_bufmgr = (dri_bufmgr_ttm *)bufmgr;
+   ttm_bufmgr = (ddx_bufmgr_ttm *)bufmgr;
 
    ttm_buf = malloc(sizeof(*ttm_buf));
    if (!ttm_buf)
@@ -462,28 +462,28 @@ dri_ttm_alloc(dri_bufmgr *bufmgr, const char *name,
  * privelege for the non-fake case, and the lock in the fake case where we were
  * working around the X Server not creating buffers and passing handles to us.
  */
-static dri_bo *
-dri_ttm_alloc_static(dri_bufmgr *bufmgr, const char *name,
+static ddx_bo *
+dri_ttm_alloc_static(ddx_bufmgr *bufmgr, const char *name,
 		     unsigned long offset, unsigned long size, void *virtual,
 		     unsigned int location_mask)
 {
    return NULL;
 }
 
-/** Returns a dri_bo wrapping the given buffer object handle.
+/** Returns a ddx_bo wrapping the given buffer object handle.
  *
  * This can be used when one application needs to pass a buffer object
  * to another.
  */
-dri_bo *
-intel_ttm_bo_create_from_handle(dri_bufmgr *bufmgr, const char *name,
+ddx_bo *
+intelddx_ttm_bo_create_from_handle(ddx_bufmgr *bufmgr, const char *name,
 			      unsigned int handle)
 {
-   dri_bufmgr_ttm *ttm_bufmgr;
-   dri_bo_ttm *ttm_buf;
+   ddx_bufmgr_ttm *ttm_bufmgr;
+   ddx_bo_ttm *ttm_buf;
    int ret;
 
-   ttm_bufmgr = (dri_bufmgr_ttm *)bufmgr;
+   ttm_bufmgr = (ddx_bufmgr_ttm *)bufmgr;
 
    ttm_buf = malloc(sizeof(*ttm_buf));
    if (!ttm_buf)
@@ -510,18 +510,18 @@ intel_ttm_bo_create_from_handle(dri_bufmgr *bufmgr, const char *name,
 }
 
 static void
-dri_ttm_bo_reference(dri_bo *buf)
+dri_ttm_bo_reference(ddx_bo *buf)
 {
-   dri_bo_ttm *ttm_buf = (dri_bo_ttm *)buf;
+   ddx_bo_ttm *ttm_buf = (ddx_bo_ttm *)buf;
 
    ttm_buf->refcount++;
 }
 
 static void
-dri_ttm_bo_unreference(dri_bo *buf)
+dri_ttm_bo_unreference(ddx_bo *buf)
 {
-   dri_bufmgr_ttm *bufmgr_ttm = (dri_bufmgr_ttm *)buf->bufmgr;
-   dri_bo_ttm *ttm_buf = (dri_bo_ttm *)buf;
+   ddx_bufmgr_ttm *bufmgr_ttm = (ddx_bufmgr_ttm *)buf->bufmgr;
+   ddx_bo_ttm *ttm_buf = (ddx_bo_ttm *)buf;
 
    if (!buf)
       return;
@@ -544,13 +544,13 @@ dri_ttm_bo_unreference(dri_bo *buf)
 }
 
 static int
-dri_ttm_bo_map(dri_bo *buf, Bool write_enable)
+dri_ttm_bo_map(ddx_bo *buf, Bool write_enable)
 {
-   dri_bufmgr_ttm *bufmgr_ttm;
-   dri_bo_ttm *ttm_buf = (dri_bo_ttm *)buf;
+   ddx_bufmgr_ttm *bufmgr_ttm;
+   ddx_bo_ttm *ttm_buf = (ddx_bo_ttm *)buf;
    unsigned int flags;
 
-   bufmgr_ttm = (dri_bufmgr_ttm *)buf->bufmgr;
+   bufmgr_ttm = (ddx_bufmgr_ttm *)buf->bufmgr;
 
    flags = DRM_BO_FLAG_READ;
    if (write_enable)
@@ -566,15 +566,15 @@ dri_ttm_bo_map(dri_bo *buf, Bool write_enable)
 }
 
 static int
-dri_ttm_bo_unmap(dri_bo *buf)
+dri_ttm_bo_unmap(ddx_bo *buf)
 {
-   dri_bufmgr_ttm *bufmgr_ttm;
-   dri_bo_ttm *ttm_buf = (dri_bo_ttm *)buf;
+   ddx_bufmgr_ttm *bufmgr_ttm;
+   ddx_bo_ttm *ttm_buf = (ddx_bo_ttm *)buf;
 
    if (buf == NULL)
       return 0;
 
-   bufmgr_ttm = (dri_bufmgr_ttm *)buf->bufmgr;
+   bufmgr_ttm = (ddx_bufmgr_ttm *)buf->bufmgr;
 
    assert(buf->virtual != NULL);
 
@@ -587,19 +587,19 @@ dri_ttm_bo_unmap(dri_bo *buf)
    return drmBOUnmap(bufmgr_ttm->fd, &ttm_buf->drm_bo);
 }
 
-/* Returns a dri_bo wrapping the given buffer object handle.
+/* Returns a ddx_bo wrapping the given buffer object handle.
  *
  * This can be used when one application needs to pass a buffer object
  * to another.
  */
 dri_fence *
-intel_ttm_fence_create_from_arg(dri_bufmgr *bufmgr, const char *name,
+intelddx_ttm_fence_create_from_arg(ddx_bufmgr *bufmgr, const char *name,
 				drm_fence_arg_t *arg)
 {
-   dri_bufmgr_ttm *ttm_bufmgr;
+   ddx_bufmgr_ttm *ttm_bufmgr;
    dri_fence_ttm *ttm_fence;
 
-   ttm_bufmgr = (dri_bufmgr_ttm *)bufmgr;
+   ttm_bufmgr = (ddx_bufmgr_ttm *)bufmgr;
 
    ttm_fence = malloc(sizeof(*ttm_fence));
    if (!ttm_fence)
@@ -641,7 +641,7 @@ static void
 dri_ttm_fence_unreference(dri_fence *fence)
 {
    dri_fence_ttm *fence_ttm = (dri_fence_ttm *)fence;
-   dri_bufmgr_ttm *bufmgr_ttm = (dri_bufmgr_ttm *)fence->bufmgr;
+   ddx_bufmgr_ttm *bufmgr_ttm = (ddx_bufmgr_ttm *)fence->bufmgr;
 
    if (!fence)
       return;
@@ -668,7 +668,7 @@ static void
 dri_ttm_fence_wait(dri_fence *fence)
 {
    dri_fence_ttm *fence_ttm = (dri_fence_ttm *)fence;
-   dri_bufmgr_ttm *bufmgr_ttm = (dri_bufmgr_ttm *)fence->bufmgr;
+   ddx_bufmgr_ttm *bufmgr_ttm = (ddx_bufmgr_ttm *)fence->bufmgr;
    int ret;
 
    ret = drmFenceWait(bufmgr_ttm->fd, 0, &fence_ttm->drm_fence, 0);
@@ -685,9 +685,9 @@ dri_ttm_fence_wait(dri_fence *fence)
 }
 
 static void
-dri_bufmgr_ttm_destroy(dri_bufmgr *bufmgr)
+ddx_bufmgr_ttm_destroy(ddx_bufmgr *bufmgr)
 {
-   dri_bufmgr_ttm *bufmgr_ttm = (dri_bufmgr_ttm *)bufmgr;
+   ddx_bufmgr_ttm *bufmgr_ttm = (ddx_bufmgr_ttm *)bufmgr;
 
    intel_bo_free_list(&bufmgr_ttm->list);
    intel_bo_free_list(&bufmgr_ttm->reloc_list);
@@ -698,19 +698,19 @@ dri_bufmgr_ttm_destroy(dri_bufmgr *bufmgr)
 
 static void intel_dribo_destroy_callback(void *priv)
 {
-   dri_bo *dribo = priv;
+   ddx_bo *dribo = priv;
    
    if (dribo) {
-     dri_bo_unreference(dribo);
+     ddx_bo_unreference(dribo);
    }
 }
 
 static void
-dri_ttm_emit_reloc(dri_bo *batch_buf, uint32_t flags, uint32_t delta, uint32_t offset,
-		    dri_bo *relocatee)
+dri_ttm_emit_reloc(ddx_bo *batch_buf, uint32_t flags, uint32_t delta, uint32_t offset,
+		    ddx_bo *relocatee)
 {
-   dri_bo_ttm *ttm_buf = (dri_bo_ttm *)batch_buf;
-   dri_bufmgr_ttm *bufmgr_ttm = (dri_bufmgr_ttm *)batch_buf->bufmgr;
+   ddx_bo_ttm *ttm_buf = (ddx_bo_ttm *)batch_buf;
+   ddx_bufmgr_ttm *bufmgr_ttm = (ddx_bufmgr_ttm *)batch_buf->bufmgr;
    int newItem;
    struct intel_reloc_info reloc;
    int mask;
@@ -724,7 +724,7 @@ dri_ttm_emit_reloc(dri_bo *batch_buf, uint32_t flags, uint32_t delta, uint32_t o
      return;
 
    if (ret == 1) {
-      dri_bo_reference(relocatee);
+      ddx_bo_reference(relocatee);
    }
 
    reloc.type = I915_RELOC_TYPE_0;
@@ -739,13 +739,13 @@ dri_ttm_emit_reloc(dri_bo *batch_buf, uint32_t flags, uint32_t delta, uint32_t o
 
 
 static void *
-dri_ttm_process_reloc(dri_bo *batch_buf, uint32_t *count)
+dri_ttm_process_reloc(ddx_bo *batch_buf, uint32_t *count)
 {
-   dri_bufmgr_ttm *bufmgr_ttm = (dri_bufmgr_ttm *)batch_buf->bufmgr;
+   ddx_bufmgr_ttm *bufmgr_ttm = (ddx_bufmgr_ttm *)batch_buf->bufmgr;
    void *ptr;
    int itemLoc;
 
-   dri_bo_unmap(batch_buf);
+   ddx_bo_unmap(batch_buf);
 
    intel_add_validate_buffer(&bufmgr_ttm->list, batch_buf, DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_EXE,
 			     DRM_BO_MASK_MEM | DRM_BO_FLAG_EXE, &itemLoc, NULL);
@@ -756,9 +756,9 @@ dri_ttm_process_reloc(dri_bo *batch_buf, uint32_t *count)
 }
 
 static void
-dri_ttm_post_submit(dri_bo *batch_buf, dri_fence **last_fence)
+dri_ttm_post_submit(ddx_bo *batch_buf, dri_fence **last_fence)
 {
-   dri_bufmgr_ttm *bufmgr_ttm = (dri_bufmgr_ttm *)batch_buf->bufmgr;
+   ddx_bufmgr_ttm *bufmgr_ttm = (ddx_bufmgr_ttm *)batch_buf->bufmgr;
 
    intel_free_validate_list(bufmgr_ttm->fd, &bufmgr_ttm->list);
    intel_free_reloc_list(bufmgr_ttm->fd, &bufmgr_ttm->reloc_list);
@@ -775,11 +775,11 @@ dri_ttm_post_submit(dri_bo *batch_buf, dri_fence **last_fence)
  * \param fence_type_flush Driver-specific fence type used for fences with a
  *	  flush.
  */
-dri_bufmgr *
-intel_bufmgr_ttm_init(int fd, unsigned int fence_type,
+ddx_bufmgr *
+intelddx_bufmgr_ttm_init(int fd, unsigned int fence_type,
 		      unsigned int fence_type_flush, int batch_size)
 {
-   dri_bufmgr_ttm *bufmgr_ttm;
+   ddx_bufmgr_ttm *bufmgr_ttm;
 
    bufmgr_ttm = malloc(sizeof(*bufmgr_ttm));
    bufmgr_ttm->fd = fd;
@@ -801,7 +801,7 @@ intel_bufmgr_ttm_init(int fd, unsigned int fence_type,
    bufmgr_ttm->bufmgr.fence_reference = dri_ttm_fence_reference;
    bufmgr_ttm->bufmgr.fence_unreference = dri_ttm_fence_unreference;
    bufmgr_ttm->bufmgr.fence_wait = dri_ttm_fence_wait;
-   bufmgr_ttm->bufmgr.destroy = dri_bufmgr_ttm_destroy;
+   bufmgr_ttm->bufmgr.destroy = ddx_bufmgr_ttm_destroy;
    bufmgr_ttm->bufmgr.emit_reloc = dri_ttm_emit_reloc;
    bufmgr_ttm->bufmgr.process_relocs = dri_ttm_process_reloc;
    bufmgr_ttm->bufmgr.post_submit = dri_ttm_post_submit;

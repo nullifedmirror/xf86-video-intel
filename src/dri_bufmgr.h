@@ -38,11 +38,11 @@
 
 #include "xf86str.h"
 
-typedef struct _dri_bufmgr dri_bufmgr;
-typedef struct _dri_bo dri_bo;
+typedef struct _ddx_bufmgr ddx_bufmgr;
+typedef struct _ddx_bo ddx_bo;
 typedef struct _dri_fence dri_fence;
 
-struct _dri_bo {
+struct _ddx_bo {
    /** Size in bytes of the buffer object. */
    unsigned long size;
    /**
@@ -55,7 +55,7 @@ struct _dri_bo {
     */
    void *virtual;
    /** Buffer manager context associated with this buffer object */
-   dri_bufmgr *bufmgr;
+   ddx_bufmgr *bufmgr;
 };
 
 struct _dri_fence {
@@ -67,7 +67,7 @@ struct _dri_fence {
     */
    unsigned int type;
    /** Buffer manager context associated with this fence */
-   dri_bufmgr *bufmgr;
+   ddx_bufmgr *bufmgr;
 };
 
 /**
@@ -75,7 +75,7 @@ struct _dri_fence {
  *
  * Contains public methods followed by private storage for the buffer manager.
  */
-struct _dri_bufmgr {
+struct _ddx_bufmgr {
    /**
     * Allocate a buffer object.
     *
@@ -84,7 +84,7 @@ struct _dri_bufmgr {
     * bo_map() to be used by the CPU, and validated for use using bo_validate()
     * to be used from the graphics device.
     */
-   dri_bo *(*bo_alloc)(dri_bufmgr *bufmgr_ctx, const char *name,
+   ddx_bo *(*bo_alloc)(ddx_bufmgr *bufmgr_ctx, const char *name,
 		       unsigned long size, unsigned int alignment,
 		       unsigned int location_mask);
 
@@ -94,18 +94,18 @@ struct _dri_bufmgr {
     * Static allocations are ones such as the front buffer that are offered by
     * the X Server, which are never evicted and never moved.
     */
-   dri_bo *(*bo_alloc_static)(dri_bufmgr *bufmgr_ctx, const char *name,
+   ddx_bo *(*bo_alloc_static)(ddx_bufmgr *bufmgr_ctx, const char *name,
 			      unsigned long offset, unsigned long size,
 			      void *virtual, unsigned int location_mask);
 
    /** Takes a reference on a buffer object */
-   void (*bo_reference)(dri_bo *bo);
+   void (*bo_reference)(ddx_bo *bo);
 
    /**
     * Releases a reference on a buffer object, freeing the data if
     * rerefences remain.
     */
-   void (*bo_unreference)(dri_bo *bo);
+   void (*bo_unreference)(ddx_bo *bo);
 
    /**
     * Maps the buffer into userspace.
@@ -113,10 +113,10 @@ struct _dri_bufmgr {
     * This function will block waiting for any existing fence on the buffer to
     * clear, first.  The resulting mapping is available at buf->virtual.
 \    */
-   int (*bo_map)(dri_bo *buf, Bool write_enable);
+   int (*bo_map)(ddx_bo *buf, Bool write_enable);
 
    /** Reduces the refcount on the userspace mapping of the buffer object. */
-   int (*bo_unmap)(dri_bo *buf);
+   int (*bo_unmap)(ddx_bo *buf);
 
    /** Takes a reference on a fence object */
    void (*fence_reference)(dri_fence *fence);
@@ -135,52 +135,52 @@ struct _dri_bufmgr {
    /**
     * Tears down the buffer manager instance.
     */
-   void (*destroy)(dri_bufmgr *bufmgr);
+   void (*destroy)(ddx_bufmgr *bufmgr);
    
    /**
     * Add relocation
     */
-   void (*emit_reloc)(dri_bo *batch_buf, uint32_t flags, uint32_t delta, uint32_t offset, dri_bo *relocatee);
+   void (*emit_reloc)(ddx_bo *batch_buf, uint32_t flags, uint32_t delta, uint32_t offset, ddx_bo *relocatee);
 
-  void *(*process_relocs)(dri_bo *batch_buf, uint32_t *count);
+  void *(*process_relocs)(ddx_bo *batch_buf, uint32_t *count);
 
-   void (*post_submit)(dri_bo *batch_buf, dri_fence **fence);
+   void (*post_submit)(ddx_bo *batch_buf, dri_fence **fence);
 };
 
-dri_bo *dri_bo_alloc(dri_bufmgr *bufmgr, const char *name, unsigned long size,
+ddx_bo *ddx_bo_alloc(ddx_bufmgr *bufmgr, const char *name, unsigned long size,
 		     unsigned int alignment, unsigned int location_mask);
-dri_bo *dri_bo_alloc_static(dri_bufmgr *bufmgr, const char *name,
+ddx_bo *ddx_bo_alloc_static(ddx_bufmgr *bufmgr, const char *name,
 			    unsigned long offset, unsigned long size,
 			    void *virtual, unsigned int location_mask);
-void dri_bo_reference(dri_bo *bo);
-void dri_bo_unreference(dri_bo *bo);
-int dri_bo_map(dri_bo *buf, Bool write_enable);
-int dri_bo_unmap(dri_bo *buf);
+void ddx_bo_reference(ddx_bo *bo);
+void ddx_bo_unreference(ddx_bo *bo);
+int ddx_bo_map(ddx_bo *buf, Bool write_enable);
+int ddx_bo_unmap(ddx_bo *buf);
 void dri_fence_wait(dri_fence *fence);
 void dri_fence_reference(dri_fence *fence);
 void dri_fence_unreference(dri_fence *fence);
 
-void dri_bo_subdata(dri_bo *bo, unsigned long offset,
+void ddx_bo_subdata(ddx_bo *bo, unsigned long offset,
 		    unsigned long size, const void *data);
-void dri_bo_get_subdata(dri_bo *bo, unsigned long offset,
+void ddx_bo_get_subdata(ddx_bo *bo, unsigned long offset,
 			unsigned long size, void *data);
 
-dri_bufmgr *dri_bufmgr_ttm_init(int fd, unsigned int fence_type,
+ddx_bufmgr *ddx_bufmgr_ttm_init(int fd, unsigned int fence_type,
 				unsigned int fence_type_flush);
 
-void dri_bufmgr_fake_contended_lock_take(dri_bufmgr *bufmgr);
-dri_bufmgr *dri_bufmgr_fake_init(unsigned long low_offset, void *low_virtual,
+void ddx_bufmgr_fake_contended_lock_take(ddx_bufmgr *bufmgr);
+ddx_bufmgr *ddx_bufmgr_fake_init(unsigned long low_offset, void *low_virtual,
 				 unsigned long size,
 				 unsigned int (*fence_emit)(void *private),
 				 int (*fence_wait)(void *private,
 						   unsigned int cookie),
 				 void *driver_priv);
-void dri_bufmgr_destroy(dri_bufmgr *bufmgr);
-dri_bo *dri_ttm_bo_create_from_handle(dri_bufmgr *bufmgr, const char *name,
+void ddx_bufmgr_destroy(ddx_bufmgr *bufmgr);
+ddx_bo *dri_ttm_bo_create_from_handle(ddx_bufmgr *bufmgr, const char *name,
 				      unsigned int handle);
 
-void dri_emit_reloc(dri_bo *batch_buf, uint32_t flags, uint32_t delta, uint32_t offset, dri_bo *relocatee);
-void *dri_process_relocs(dri_bo *batch_buf, uint32_t *count);
-void dri_post_process_relocs(dri_bo *batch_buf);
-void dri_post_submit(dri_bo *batch_buf, dri_fence **last_fence);
+void dri_emit_reloc(ddx_bo *batch_buf, uint32_t flags, uint32_t delta, uint32_t offset, ddx_bo *relocatee);
+void *dri_process_relocs(ddx_bo *batch_buf, uint32_t *count);
+void dri_post_process_relocs(ddx_bo *batch_buf);
+void dri_post_submit(ddx_bo *batch_buf, dri_fence **last_fence);
 #endif

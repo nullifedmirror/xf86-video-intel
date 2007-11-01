@@ -77,38 +77,38 @@
  */
 
 void
-intel_batchbuffer_reset(struct intel_batchbuffer *batch)
+intelddx_batchbuffer_reset(struct intelddx_batchbuffer *batch)
 {
    I830Ptr pI830 = I830PTR(batch->pScrn);
 
    if (batch->buf != NULL) {
-      dri_bo_unreference(batch->buf);
+      ddx_bo_unreference(batch->buf);
       batch->buf = NULL;
    }
 
-   batch->buf = dri_bo_alloc(pI830->bufmgr, "batchbuffer",
+   batch->buf = ddx_bo_alloc(pI830->bufmgr, "batchbuffer",
 			     pI830->maxBatchSize, 4096,
 			     DRM_BO_FLAG_MEM_LOCAL | DRM_BO_FLAG_CACHED | DRM_BO_FLAG_CACHED_MAPPED);
-   dri_bo_map(batch->buf, TRUE);
+   ddx_bo_map(batch->buf, TRUE);
    batch->map = batch->buf->virtual;
    batch->size = pI830->maxBatchSize;
    batch->ptr = batch->map;
 }
 
-struct intel_batchbuffer *
-intel_batchbuffer_alloc(ScrnInfoPtr pScrn)
+struct intelddx_batchbuffer *
+intelddx_batchbuffer_alloc(ScrnInfoPtr pScrn)
 {
-   struct intel_batchbuffer *batch = calloc(sizeof(*batch), 1);
+   struct intelddx_batchbuffer *batch = calloc(sizeof(*batch), 1);
 
    batch->pScrn = pScrn;
    batch->last_fence = NULL;
-   intel_batchbuffer_reset(batch);
+   intelddx_batchbuffer_reset(batch);
 
    return batch;
 }
 
 void
-intel_batchbuffer_free(struct intel_batchbuffer *batch)
+intelddx_batchbuffer_free(struct intelddx_batchbuffer *batch)
 {
    if (batch->last_fence) {
       dri_fence_wait(batch->last_fence);
@@ -116,10 +116,10 @@ intel_batchbuffer_free(struct intel_batchbuffer *batch)
       batch->last_fence = NULL;
    }
    if (batch->map) {
-      dri_bo_unmap(batch->buf);
+      ddx_bo_unmap(batch->buf);
       batch->map = NULL;
    }
-   dri_bo_unreference(batch->buf);
+   ddx_bo_unreference(batch->buf);
    batch->buf = NULL;
    free(batch);
 }
@@ -157,7 +157,7 @@ intel_exec_ioctl(ScrnInfoPtr pScrn,
       exit(1);
    }
 
-   fo = intel_ttm_fence_create_from_arg(pI830->bufmgr, "fence buffers",
+   fo = intelddx_ttm_fence_create_from_arg(pI830->bufmgr, "fence buffers",
                                         &execbuf.fence_arg);
    if (!fo) {
       fprintf(stderr, "failed to fence handle: %08x\n", execbuf.fence_arg.handle);
@@ -168,7 +168,7 @@ intel_exec_ioctl(ScrnInfoPtr pScrn,
 
 
 static void
-do_flush_locked(struct intel_batchbuffer *batch,
+do_flush_locked(struct intelddx_batchbuffer *batch,
 		uint32_t used,
 		Bool ignore_cliprects, Bool allow_unlock)
 {
@@ -196,7 +196,7 @@ do_flush_locked(struct intel_batchbuffer *batch,
 }
 
 void
-intel_batchbuffer_flush(struct intel_batchbuffer *batch)
+intelddx_batchbuffer_flush(struct intelddx_batchbuffer *batch)
 {
    I830Ptr pI830 = I830PTR(batch->pScrn);
    uint32_t used = batch->ptr - batch->map;
@@ -226,13 +226,13 @@ intel_batchbuffer_flush(struct intel_batchbuffer *batch)
      
    /* Reset the buffer:
     */
-   intel_batchbuffer_reset(batch);
+   intelddx_batchbuffer_reset(batch);
 }
 
 void
-intel_batchbuffer_finish(struct intel_batchbuffer *batch)
+intelddx_batchbuffer_finish(struct intelddx_batchbuffer *batch)
 {
-   intel_batchbuffer_flush(batch);
+   intelddx_batchbuffer_flush(batch);
    if (batch->last_fence != NULL)
       dri_fence_wait(batch->last_fence);
 }
@@ -241,8 +241,8 @@ intel_batchbuffer_finish(struct intel_batchbuffer *batch)
 /*  This is the only way buffers get added to the validate list.
  */
 Bool
-intel_batchbuffer_emit_reloc(struct intel_batchbuffer *batch,
-                             dri_bo *buffer,
+intelddx_batchbuffer_emit_reloc(struct intelddx_batchbuffer *batch,
+                             ddx_bo *buffer,
                              uint32_t flags, uint32_t delta)
 {
    dri_emit_reloc(batch->buf, flags, delta, batch->ptr - batch->map, buffer);
@@ -252,18 +252,18 @@ intel_batchbuffer_emit_reloc(struct intel_batchbuffer *batch,
 }
 
 void
-intel_batchbuffer_data(struct intel_batchbuffer *batch,
+intelddx_batchbuffer_data(struct intelddx_batchbuffer *batch,
                        const void *data, uint32_t bytes, uint32_t flags)
 {
    assert((bytes & 3) == 0);
-   intel_batchbuffer_require_space(batch, bytes, flags);
+   intelddx_batchbuffer_require_space(batch, bytes, flags);
    memcpy(batch->ptr, data, bytes);
    batch->ptr += bytes;
 }
 
 Bool
-intel_batchbuffer_emit_pixmap(PixmapPtr pPixmap, unsigned int flags,
-			      unsigned int mask, dri_bo *reloc_buf,
+intelddx_batchbuffer_emit_pixmap(PixmapPtr pPixmap, unsigned int flags,
+			      unsigned int mask, ddx_bo *reloc_buf,
 			      unsigned int offset, unsigned int delta)
 {
     ScreenPtr pScreen = pPixmap->drawable.pScreen;
@@ -272,7 +272,7 @@ intel_batchbuffer_emit_pixmap(PixmapPtr pPixmap, unsigned int flags,
     struct i830_exa_pixmap_priv *driver_priv = exaGetPixmapDriverPrivate(pPixmap);
 
     if (driver_priv->flags & I830_EXA_PIXMAP_IS_MAPPED) {
-	dri_bo_unmap(driver_priv->bo);
+	ddx_bo_unmap(driver_priv->bo);
 	driver_priv->flags &= ~I830_EXA_PIXMAP_IS_MAPPED;
     }
     dri_emit_reloc(reloc_buf, flags, delta, offset, driver_priv->bo);

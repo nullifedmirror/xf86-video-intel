@@ -184,7 +184,7 @@ I830Sync(ScrnInfoPtr pScrn)
    if (pI830->entityPrivate && !pI830->entityPrivate->RingRunning) return;
 
    if (pI830->use_ttm_batch) {
-     intel_batchbuffer_finish(pI830->batch);
+     intelddx_batchbuffer_finish(pI830->batch);
    }
    else
    {
@@ -216,7 +216,7 @@ I830EmitFlush(ScrnInfoPtr pScrn)
    int flags = MI_WRITE_DIRTY_STATE | MI_INVALIDATE_MAP_CACHE;
 
    if (pI830->use_ttm_batch)
-      intel_batchbuffer_flush(pI830->batch);
+      intelddx_batchbuffer_flush(pI830->batch);
    else {
       if (IS_I965G(pI830))
          flags = 0;

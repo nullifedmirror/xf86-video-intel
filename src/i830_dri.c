@@ -524,13 +524,13 @@ I830InitBufMgr(ScreenPtr pScreen)
    }
 
    pI830->maxBatchSize = BATCH_SZ;
-   pI830->bufmgr = intel_bufmgr_ttm_init(pI830->drmSubFD, DRM_FENCE_TYPE_EXE,
+   pI830->bufmgr = intelddx_bufmgr_ttm_init(pI830->drmSubFD, DRM_FENCE_TYPE_EXE,
 			DRM_FENCE_TYPE_EXE | DRM_I915_FENCE_TYPE_RW,
 			BATCH_SZ);
 
    if (!pI830->bufmgr)
 	return;
-   pI830->batch = intel_batchbuffer_alloc(pScrn);
+   pI830->batch = intelddx_batchbuffer_alloc(pScrn);
    pI830->use_ttm_batch = TRUE;
 
 }
@@ -1091,7 +1091,7 @@ I830DRIRefreshArea (ScrnInfoPtr pScrn, int num, BoxPtr pbox)
       return;
 
    if (pI830->use_ttm_batch)
-       intel_batchbuffer_flush(pI830->batch);
+       intelddx_batchbuffer_flush(pI830->batch);
 
    I830DRIDoRefreshArea(pScrn, num, pbox, pI830->back_buffer->offset);
 
@@ -1100,7 +1100,7 @@ I830DRIRefreshArea (ScrnInfoPtr pScrn, int num, BoxPtr pbox)
    }
 
    if (pI830->use_ttm_batch)
-       intel_batchbuffer_finish(pI830->batch);
+       intelddx_batchbuffer_finish(pI830->batch);
    DamageEmpty(pI830->pDamage);
 }
 #endif

@@ -132,7 +132,7 @@ enum tile_format {
     TILE_YMAJOR
 };
 
-struct intel_batchbuffer;
+struct intelddx_batchbuffer;
 
 /** Record of a linear allocation in the aperture. */
 typedef struct _i830_memory i830_memory;
@@ -574,8 +574,8 @@ typedef struct _I830Rec {
 
    /* batchbuffer support */
    struct i965_exastate_buffer *exa965;
-   struct intel_batchbuffer *batch;
-   dri_bufmgr *bufmgr;
+   struct intelddx_batchbuffer *batch;
+   ddx_bufmgr *bufmgr;
    unsigned int maxBatchSize;
    Bool use_ttm_batch;
 } I830Rec;
@@ -592,7 +592,7 @@ typedef struct _I830Rec {
 
 /* i830 pixmap private for TTM */
 struct i830_exa_pixmap_priv {
-    dri_bo *bo;
+    ddx_bo *bo;
     dri_fence *fence;
     int flags;
 };

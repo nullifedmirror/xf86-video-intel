@@ -9,11 +9,11 @@ struct intel_context;
 #define EXASTATE_SZ 48000
 #define BATCH_RESERVED 16
 
-struct intel_batchbuffer
+struct intelddx_batchbuffer
 {
    ScrnInfoPtr pScrn;
 
-   dri_bo *buf;
+   ddx_bo *buf;
    dri_fence *last_fence;
    uint32_t flags;
 
@@ -24,36 +24,36 @@ struct intel_batchbuffer
 };
 
 struct i965_exastate_buffer {
-   dri_bo *buf;
+   ddx_bo *buf;
    dri_fence *last_fence;
    ScrnInfoPtr pScrn;
    unsigned char *map;
 };
 
-struct intel_batchbuffer *intel_batchbuffer_alloc(ScrnInfoPtr pScrn);
+struct intelddx_batchbuffer *intelddx_batchbuffer_alloc(ScrnInfoPtr pScrn);
 
-void intel_batchbuffer_free(struct intel_batchbuffer *batch);
+void intelddx_batchbuffer_free(struct intelddx_batchbuffer *batch);
 
 
-void intel_batchbuffer_finish(struct intel_batchbuffer *batch);
+void intelddx_batchbuffer_finish(struct intelddx_batchbuffer *batch);
 
-void intel_batchbuffer_flush(struct intel_batchbuffer *batch);
+void intelddx_batchbuffer_flush(struct intelddx_batchbuffer *batch);
 
-void intel_batchbuffer_reset(struct intel_batchbuffer *batch);
+void intelddx_batchbuffer_reset(struct intelddx_batchbuffer *batch);
 
 
 /* Unlike bmBufferData, this currently requires the buffer be mapped.
  * Consider it a convenience function wrapping multple
  * intel_buffer_dword() calls.
  */
-void intel_batchbuffer_data(struct intel_batchbuffer *batch,
+void intelddx_batchbuffer_data(struct intelddx_batchbuffer *batch,
                             const void *data, uint32_t bytes, uint32_t flags);
 
-void intel_batchbuffer_release_space(struct intel_batchbuffer *batch,
+void intelddx_batchbuffer_release_space(struct intelddx_batchbuffer *batch,
                                      uint32_t bytes);
 
-Bool intel_batchbuffer_emit_reloc(struct intel_batchbuffer *batch,
-                                       dri_bo *buffer,
+Bool intelddx_batchbuffer_emit_reloc(struct intelddx_batchbuffer *batch,
+                                       ddx_bo *buffer,
                                        uint32_t flags, uint32_t offset);
 
 /* Inline functions - might actually be better off with these
@@ -62,38 +62,39 @@ Bool intel_batchbuffer_emit_reloc(struct intel_batchbuffer *batch,
  * work...
  */
 static inline uint32_t
-intel_batchbuffer_space(struct intel_batchbuffer *batch)
+intelddx_batchbuffer_space(struct intelddx_batchbuffer *batch)
 {
    return (batch->size - BATCH_RESERVED) - (batch->ptr - batch->map);
 }
 
 
 static inline void
-intel_batchbuffer_emit_dword(struct intel_batchbuffer *batch, uint32_t dword)
+intelddx_batchbuffer_emit_dword(struct intelddx_batchbuffer *batch, uint32_t dword)
 {
    assert(batch->map);
-   assert(intel_batchbuffer_space(batch) >= 4);
+   assert(intelddx_batchbuffer_space(batch) >= 4);
    *(uint32_t *) (batch->ptr) = dword;
    batch->ptr += 4;
 }
 
 static inline void
-intel_batchbuffer_require_space(struct intel_batchbuffer *batch,
+intelddx_batchbuffer_require_space(struct intelddx_batchbuffer *batch,
                                 uint32_t sz, uint32_t flags)
 {
    assert(sz < batch->size - 8);
-   if (intel_batchbuffer_space(batch) < sz ||
+   if (intelddx_batchbuffer_space(batch) < sz ||
        (batch->flags != 0 && flags != 0 && batch->flags != flags))
-      intel_batchbuffer_flush(batch);
+      intelddx_batchbuffer_flush(batch);
 
    batch->flags |= flags;
 }
 
-extern Bool intel_batchbuffer_emit_pixmap(PixmapPtr pPixmap, unsigned int flags,
-					 unsigned int mask,
-					 dri_bo *reloc_buf,
-					 unsigned int offset,
-					 unsigned int delta);
+extern Bool intelddx_batchbuffer_emit_pixmap(PixmapPtr pPixmap,
+					     unsigned int flags,
+					     unsigned int mask,
+					     ddx_bo *reloc_buf,
+					     unsigned int offset,
+					     unsigned int delta);
 
 /* Here are the crusty old macros, to be removed:
  */
@@ -102,13 +103,13 @@ extern Bool intel_batchbuffer_emit_pixmap(PixmapPtr pPixmap, unsigned int flags,
 #define BEGIN_BATCH(n)  							\
 	RING_LOCALS 								\
 	if (pI830->use_ttm_batch)						\
-   		intel_batchbuffer_require_space(pI830->batch, (n)*4, 0);	\
+   		intelddx_batchbuffer_require_space(pI830->batch, (n)*4, 0);	\
 	 else { \
    DO_LP_RING(n) ; }
 
 #define OUT_BATCH(d) \
 	 if (pI830->use_ttm_batch) \
-		intel_batchbuffer_emit_dword(pI830->batch, d); \
+		intelddx_batchbuffer_emit_dword(pI830->batch, d); \
 	 else { OUT_RING(d);  }
 
 #define OUT_BATCH_F(x) do {                     \
@@ -118,11 +119,11 @@ extern Bool intel_batchbuffer_emit_pixmap(PixmapPtr pPixmap, unsigned int flags,
 } while(0)
 
 #define OUT_RELOC(buf, flags, delta) do {	\
-   intel_batchbuffer_emit_reloc(pI830->batch, buf, flags, delta);	\
+   intelddx_batchbuffer_emit_reloc(pI830->batch, buf, flags, delta);	\
 } while (0)
 
 #define OUT_PIXMAP_RELOC(pixmap, flags, mask, delta) if (pI830->use_ttm_batch) { \
-    intel_batchbuffer_emit_pixmap((pixmap), (flags), (mask),             \
+    intelddx_batchbuffer_emit_pixmap((pixmap), (flags), (mask),             \
                                  pI830->batch->buf, (pI830->batch->ptr - pI830->batch->map), (delta)); \
     pI830->batch->ptr += 4;						\
   } else {								\

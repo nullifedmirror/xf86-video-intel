@@ -703,14 +703,14 @@ i965_exastate_reset(struct i965_exastate_buffer *state)
     I830Ptr pI830 = I830PTR(state->pScrn);
 
     if (state->buf != NULL) {
-	dri_bo_unreference(state->buf);
+	ddx_bo_unreference(state->buf);
 	state->buf = NULL;
     }
 
-    state->buf = dri_bo_alloc(pI830->bufmgr, "exa state buffer",
+    state->buf = ddx_bo_alloc(pI830->bufmgr, "exa state buffer",
 			      EXASTATE_SZ, 4096,
 			      DRM_BO_FLAG_MEM_TT);
-    dri_bo_map(state->buf, TRUE);
+    ddx_bo_map(state->buf, TRUE);
 
     state->map = state->buf->virtual;
     i965_init_state_objects(state->pScrn, state->map);
@@ -809,7 +809,7 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     dest_surf_state->ss0.surface_format = dst_format;
 
     if (pI830->use_ttm_batch) {
-    	intel_batchbuffer_emit_pixmap(pDst,
+    	intelddx_batchbuffer_emit_pixmap(pDst,
 				     DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_WRITE,
 				     DRM_BO_MASK_MEM | DRM_BO_FLAG_WRITE | DRM_BO_FLAG_CACHED,
 				     pI830->exa965->buf, dest_surf_offset + 4, 0);
@@ -828,7 +828,7 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     src_surf_state->ss0.surface_format = i965_get_card_format(pSrcPicture);
 
     if (pI830->use_ttm_batch) {
-        intel_batchbuffer_emit_pixmap(pSrc,
+        intelddx_batchbuffer_emit_pixmap(pSrc,
 				 DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
 				 DRM_BO_MASK_MEM | DRM_BO_FLAG_READ | DRM_BO_FLAG_CACHED,
 				 pI830->exa965->buf, src_surf_offset + 4, 0);
@@ -846,7 +846,7 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
 	mask_surf_state = (void *)(start_base + mask_surf_offset);
    	mask_surf_state->ss0.surface_format = i965_get_card_format(pMaskPicture);
         if (pI830->use_ttm_batch) {
-	   intel_batchbuffer_emit_pixmap(pMask, 
+	   intelddx_batchbuffer_emit_pixmap(pMask, 
 				     DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
 				     DRM_BO_MASK_MEM | DRM_BO_FLAG_READ | DRM_BO_FLAG_CACHED,
 				     pI830->exa965->buf, mask_surf_offset + 4, 0);
@@ -1265,8 +1265,8 @@ void i965_done_composite(PixmapPtr pDst)
     }
 
     if (pI830->use_ttm_batch) {
-	dri_bo_unmap(pI830->exa965->buf);
-	intel_batchbuffer_flush(pI830->batch);
+	ddx_bo_unmap(pI830->exa965->buf);
+	intelddx_batchbuffer_flush(pI830->batch);
     } else {
 	I830Sync(pScrn);
     }
