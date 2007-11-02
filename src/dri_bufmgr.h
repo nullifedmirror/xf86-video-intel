@@ -34,6 +34,7 @@
 
 #ifndef _DRI_BUFMGR_H_
 #define _DRI_BUFMGR_H_
+#include <stdint.h>
 #include <xf86drm.h>
 
 #include "xf86str.h"

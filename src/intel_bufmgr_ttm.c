@@ -39,6 +39,7 @@
 #include <unistd.h>
 #include "errno.h"
 #include "dri_bufmgr.h"
+#include <xf86mm.h>
 
 #include "i915_drm.h"
 
