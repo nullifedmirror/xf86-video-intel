@@ -271,13 +271,12 @@ static CARD32 *binding_table;
 static int dest_surf_offset, src_surf_offset, mask_surf_offset;
 static int src_sampler_offset, mask_sampler_offset,vs_offset;
 static int sf_offset, wm_offset, cc_offset, vb_offset, cc_viewport_offset;
-static int sf_kernel_offset, ps_kernel_offset, sip_kernel_offset;
 static int wm_scratch_offset;
 static int binding_table_offset;
 static int default_color_offset;
-//static int next_offset, total_state_size;
 static float *vb;
 static int vb_max_size, vb_index;
+static int gen4_state_offset;
 
 static CARD32 src_blend, dst_blend;
 
@@ -330,14 +329,6 @@ struct i965_kernels {
 
 };
 
-static struct i965_kernels sf_kernels[] = { { sf_kernel_static, sizeof(sf_kernel_static) },
-					    { sf_kernel_mask_static, sizeof(sf_kernel_mask_static) },
-					    { sf_kernel_rotation_static, sizeof(sf_kernel_rotation_static) } };
-
-#define SF_KERNEL 0
-#define SF_KERNEL_MASK 1
-#define SF_KERNEL_ROTATION 2
-
 /* ps kernels */
 #define PS_KERNEL_NUM_GRF   32
 #define PS_MAX_THREADS	   32
@@ -362,17 +353,27 @@ static const CARD32 ps_kernel_rotation_static [][4] = {
 #include "exa_wm_rotation_prog.h"
 };
 
-static struct i965_kernels ps_kernels[] = { { ps_kernel_nomask_static, sizeof(ps_kernel_nomask_static) },
-					    { ps_kernel_maskca_static, sizeof(ps_kernel_maskca_static) },
-					    { ps_kernel_maskca_srcalpha_static, sizeof(ps_kernel_maskca_srcalpha_static) },
-					    { ps_kernel_masknoca_static, sizeof(ps_kernel_masknoca_static) },
- 					    { ps_kernel_rotation_static, sizeof(ps_kernel_rotation_static) } };
+/* Many of the fields in the state structure must be aligned to a
+ * 64-byte boundary, (or a 32-byte boundary, but 64 is good enough for
+ * those too). */
+#define PAD64(previous, idx) char previous ## _pad ## idx [(64 - (sizeof(struct previous) % 64)) % 64]
+#define KERNEL_DECL(template) \
+    CARD32 template [((sizeof (template ## _static) + 63) & ~63) / 16][4];
+typedef struct _gen4_state {
+    KERNEL_DECL (sip_kernel);
 
-#define PS_KERNEL_NOMASK 0
-#define PS_KERNEL_MASKCA 1
-#define PS_KERNEL_MASKCA_SRCALPHA 2
-#define PS_KERNEL_MASKNOCA 3
-#define PS_KERNEL_ROTATION 4
+    KERNEL_DECL (sf_kernel);
+    KERNEL_DECL (sf_kernel_mask);
+    KERNEL_DECL (sf_kernel_rotation);
+
+    KERNEL_DECL (ps_kernel_nomask);
+    KERNEL_DECL (ps_kernel_maskca);
+    KERNEL_DECL (ps_kernel_maskca_srcalpha);
+    KERNEL_DECL (ps_kernel_masknoca);
+    KERNEL_DECL (ps_kernel_rotation);
+} gen4_state_t;
+
+char gen4_state_big_enough[EXA_LINEAR_EXTRA >= sizeof(gen4_state_t) ? 1 : -1];
 
 static CARD32 
 i965_get_card_format(PicturePtr pPict)
@@ -409,12 +410,15 @@ i965_init_state_offsets(ScrnInfoPtr pScrn, int total_size)
 {
     unsigned int next_offset = 0, total_state_size;
     static int init;
-    int tmp;
 
     if (init)
 	return;
 
     init = 1;
+
+    gen4_state_offset = ALIGN(next_offset, 64);
+    next_offset = gen4_state_offset + sizeof(gen4_state_t);
+
     vs_offset = ALIGN(next_offset, 64);
     next_offset = vs_offset + sizeof(*vs_state);
 
@@ -429,31 +433,6 @@ i965_init_state_offsets(ScrnInfoPtr pScrn, int total_size)
 
     cc_offset = ALIGN(next_offset, 32);
     next_offset = cc_offset + sizeof(struct brw_cc_unit_state);
-
-    sf_kernel_offset = ALIGN(next_offset, 64);
-    tmp = sizeof(sf_kernel_mask_static);
-    if (tmp < sizeof(sf_kernel_rotation_static))
-	tmp = sizeof(sf_kernel_rotation_static);
-    if (tmp < sizeof(sf_kernel_static))
-	tmp = sizeof(sf_kernel_static);
-
-    next_offset = sf_kernel_offset + tmp;
-
-    ps_kernel_offset = ALIGN(next_offset, 64);
-    tmp = sizeof(ps_kernel_maskca_srcalpha_static);
-    if (tmp < sizeof(ps_kernel_maskca_static))
-	tmp = sizeof(ps_kernel_maskca_static);
-    if (tmp < sizeof(ps_kernel_masknoca_static))
-	tmp = sizeof(ps_kernel_masknoca_static);
-    if (tmp < sizeof(ps_kernel_rotation_static))
-	tmp = sizeof(ps_kernel_rotation_static);
-    if (tmp < sizeof(ps_kernel_nomask_static))
-	tmp = sizeof(ps_kernel_nomask_static);
-    
-    next_offset = ps_kernel_offset + tmp;
-
-    sip_kernel_offset = ALIGN(next_offset, 64);
-    next_offset = sip_kernel_offset + sizeof (sip_kernel_static);
 
     /* needed? */
     cc_viewport_offset = ALIGN(next_offset, 32);
@@ -528,6 +507,7 @@ i965_init_state_objects(ScrnInfoPtr pScrn, unsigned char *start_base)
     struct brw_cc_viewport *cc_viewport;
     struct brw_cc_unit_state *cc_state;
     struct brw_surface_state *dest_surf_state, *src_surf_state, *mask_surf_state;
+    gen4_state_t* gen4_state;
 
     cc_viewport = (void *)(start_base + cc_viewport_offset);
     cc_viewport->min_depth = -1.e35;
@@ -549,9 +529,6 @@ i965_init_state_objects(ScrnInfoPtr pScrn, unsigned char *start_base)
     cc_state->cc6.clamp_post_alpha_blend = 1;
     cc_state->cc6.clamp_pre_alpha_blend = 1;
     cc_state->cc6.clamp_range = 0;  /* clamp range [0,1] */
-
-    /* Upload system kernel */
-    memcpy (start_base + sip_kernel_offset, sip_kernel_static, sizeof (sip_kernel_static));
 
     /* destination surface state */
     dest_surf_state = (void *)(start_base + dest_surf_offset);
@@ -627,7 +604,7 @@ i965_init_state_objects(ScrnInfoPtr pScrn, unsigned char *start_base)
 
     /* sf state */
     sf_state = (void *)(start_base + sf_offset);
-    sf_state->thread0.kernel_start_pointer = sf_kernel_offset >> 6;
+/*    sf_state->thread0.kernel_start_pointer = sf_kernel_offset >> 6; */
     sf_state->thread0.grf_reg_count = BRW_GRF_BLOCKS(SF_KERNEL_NUM_GRF);
     sf_state->sf1.single_program_flow = 1;
     sf_state->sf1.binding_table_entry_count = 0;
@@ -658,7 +635,7 @@ i965_init_state_objects(ScrnInfoPtr pScrn, unsigned char *start_base)
 
     /* wm state */
     wm_state = (void *)(start_base + wm_offset);
-    wm_state->thread0.kernel_start_pointer = ps_kernel_offset >> 6;
+/*    wm_state->thread0.kernel_start_pointer = ps_kernel_offset >> 6; */
     wm_state->thread0.grf_reg_count = BRW_GRF_BLOCKS(PS_KERNEL_NUM_GRF);
     wm_state->thread1.single_program_flow = 1;
     wm_state->thread2.scratch_space_base_pointer = wm_scratch_offset>>10;
@@ -681,20 +658,29 @@ i965_init_state_objects(ScrnInfoPtr pScrn, unsigned char *start_base)
     wm_state->wm5.enable_16_pix = 1;
     wm_state->wm5.enable_8_pix = 0;
     wm_state->wm5.early_depth_test = 1;
-}
 
-static void
-i965_update_sf_kernel(ScrnInfoPtr pScrn, char *start_base,
-		      int need_sf_kernel)
-{
-    memcpy(start_base + sf_kernel_offset, sf_kernels[need_sf_kernel].kernel, sf_kernels[need_sf_kernel].size);
-}
+    /* Upload kernels */
+    gen4_state = (void *)(start_base + gen4_state_offset);
+    memcpy (gen4_state->sip_kernel, sip_kernel_static, sizeof (sip_kernel_static));
 
-static void
-i965_update_ps_kernel(ScrnInfoPtr pScrn, char *start_base,
-		      int need_ps_kernel)
-{
-    memcpy(start_base + ps_kernel_offset, ps_kernels[need_ps_kernel].kernel, ps_kernels[need_ps_kernel].size);
+    memcpy (gen4_state->sf_kernel, sf_kernel_static,
+	    sizeof (sf_kernel_static));
+    memcpy (gen4_state->sf_kernel_mask, sf_kernel_mask_static,
+	    sizeof (sf_kernel_mask_static));
+    memcpy (gen4_state->sf_kernel_rotation, sf_kernel_rotation_static,
+	    sizeof (sf_kernel_rotation_static));
+
+    memcpy (gen4_state->ps_kernel_nomask, ps_kernel_nomask_static,
+	    sizeof (ps_kernel_nomask_static));
+    memcpy (gen4_state->ps_kernel_maskca, ps_kernel_maskca_static,
+	    sizeof (ps_kernel_maskca_static));
+    memcpy (gen4_state->ps_kernel_maskca_srcalpha,
+	    ps_kernel_maskca_srcalpha_static,
+	    sizeof (ps_kernel_maskca_srcalpha_static));
+    memcpy (gen4_state->ps_kernel_masknoca, ps_kernel_masknoca_static,
+	    sizeof (ps_kernel_masknoca_static));
+    memcpy (gen4_state->ps_kernel_rotation, ps_kernel_rotation_static,
+	    sizeof (ps_kernel_rotation_static));
 }
 
 static void
@@ -728,9 +714,11 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     CARD32 dst_format, dst_pitch, dst_tile_format = 0, dst_tiled = 0;
     Bool rotation_program = FALSE;
     struct brw_cc_unit_state *cc_state;
-    int need_ps_kernel, need_sf_kernel;
+    CARD32 *sf_kernel, *ps_kernel;
+    int sf_kernel_offset, ps_kernel_offset, sip_kernel_offset;
     char *start_base;
     void *map;
+    gen4_state_t *gen4_state;
 
     if (pI830->use_ttm_batch) {
 	i965_exastate_reset(pI830->exa965);
@@ -740,6 +728,8 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     }
 
     start_base = map;
+
+    gen4_state = (void *)(start_base + gen4_state_offset);
 
     IntelEmitInvarientState(pScrn);
     *pI830->last_3d = LAST_3D_RENDER;
@@ -932,31 +922,36 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
      * back to SF which then hands pixels off to WM.
      */
     if (pMask)
-	need_sf_kernel = SF_KERNEL_MASK;
+	sf_kernel = (CARD32 *) gen4_state->sf_kernel_mask;
     else if (rotation_program)
-	need_sf_kernel = SF_KERNEL_ROTATION;
+	sf_kernel = (CARD32 *) gen4_state->sf_kernel_rotation;
     else
-	need_sf_kernel = SF_KERNEL;
-    
-    i965_update_sf_kernel(pScrn, start_base, need_sf_kernel);
+	sf_kernel = (CARD32 *) gen4_state->sf_kernel;
+
+    sf_kernel_offset = (char *) sf_kernel - (char *) gen4_state;
+    sf_state->thread0.kernel_start_pointer = sf_kernel_offset >> 6;
 
     /* Set up the PS kernel (dispatched by WM) */
     if (pMask) {
 	if (pMaskPicture->componentAlpha && 
 	    PICT_FORMAT_RGB(pMaskPicture->format)) {
             if (i965_blend_op[op].src_alpha) 
-		need_ps_kernel = PS_KERNEL_MASKCA_SRCALPHA;
+		ps_kernel = (CARD32 *) gen4_state->ps_kernel_maskca_srcalpha;
             else
-		need_ps_kernel = PS_KERNEL_MASKCA;
+		ps_kernel = (CARD32 *) gen4_state->ps_kernel_maskca;
         } else
-	    need_ps_kernel = PS_KERNEL_MASKNOCA;
+	    ps_kernel = (CARD32 *) gen4_state->ps_kernel_masknoca;
     } else if (rotation_program) {
-	need_ps_kernel = PS_KERNEL_ROTATION;
+	ps_kernel = (CARD32 *) gen4_state->ps_kernel_rotation;
     } else {
-	need_ps_kernel = PS_KERNEL_NOMASK;
+	ps_kernel = (CARD32 *) gen4_state->ps_kernel_nomask;
     }
 
-    i965_update_ps_kernel(pScrn, start_base, need_ps_kernel);
+    ps_kernel_offset = (char *) ps_kernel - (char *) gen4_state;
+    wm_state->thread0.kernel_start_pointer = ps_kernel_offset >> 6;
+
+    sip_kernel_offset = ((char *) gen4_state->sip_kernel -
+			 (char *) gen4_state);
     
     wm_state = (void *)(start_base + wm_offset);
     if (!pMask) {
