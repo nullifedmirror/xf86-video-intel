@@ -6,7 +6,7 @@
 struct intel_context;
 
 #define BATCH_SZ 16384
-#define EXASTATE_SZ 48000
+#define EXASTATE_SZ EXA_LINEAR_EXTRA
 #define BATCH_RESERVED 16
 
 struct intelddx_batchbuffer
