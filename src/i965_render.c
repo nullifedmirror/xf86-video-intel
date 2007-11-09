@@ -316,11 +316,11 @@ static const CARD32 sf_kernel_static[][4] = {
 #include "exa_sf_prog.h"
 };
 
-static const CARD32 sf_kernel_static_mask[][4] = {
+static const CARD32 sf_kernel_mask_static[][4] = {
 #include "exa_sf_mask_prog.h"
 };
 
-static const CARD32 sf_kernel_static_rotation[][4] = {
+static const CARD32 sf_kernel_rotation_static[][4] = {
 #include "exa_sf_rotation_prog.h"
 };
 
@@ -331,8 +331,8 @@ struct i965_kernels {
 };
 
 static struct i965_kernels sf_kernels[] = { { sf_kernel_static, sizeof(sf_kernel_static) },
-					    { sf_kernel_static_mask, sizeof(sf_kernel_static_mask) },
-					    { sf_kernel_static_rotation, sizeof(sf_kernel_static_rotation) } };
+					    { sf_kernel_mask_static, sizeof(sf_kernel_mask_static) },
+					    { sf_kernel_rotation_static, sizeof(sf_kernel_rotation_static) } };
 
 #define SF_KERNEL 0
 #define SF_KERNEL_MASK 1
@@ -342,31 +342,31 @@ static struct i965_kernels sf_kernels[] = { { sf_kernel_static, sizeof(sf_kernel
 #define PS_KERNEL_NUM_GRF   32
 #define PS_MAX_THREADS	   32
 
-static const CARD32 ps_kernel_static_nomask [][4] = {
+static const CARD32 ps_kernel_nomask_static [][4] = {
 #include "exa_wm_nomask_prog.h"
 };
 
-static const CARD32 ps_kernel_static_maskca [][4] = {
+static const CARD32 ps_kernel_maskca_static [][4] = {
 #include "exa_wm_maskca_prog.h"
 };
 
-static const CARD32 ps_kernel_static_maskca_srcalpha [][4] = {
+static const CARD32 ps_kernel_maskca_srcalpha_static [][4] = {
 #include "exa_wm_maskca_srcalpha_prog.h"
 };
 
-static const CARD32 ps_kernel_static_masknoca [][4] = {
+static const CARD32 ps_kernel_masknoca_static [][4] = {
 #include "exa_wm_masknoca_prog.h"
 };
 
-static const CARD32 ps_kernel_static_rotation [][4] = {
+static const CARD32 ps_kernel_rotation_static [][4] = {
 #include "exa_wm_rotation_prog.h"
 };
 
-static struct i965_kernels ps_kernels[] = { { ps_kernel_static_nomask, sizeof(ps_kernel_static_nomask) },
-					    { ps_kernel_static_maskca, sizeof(ps_kernel_static_maskca) },
-					    { ps_kernel_static_maskca_srcalpha, sizeof(ps_kernel_static_maskca_srcalpha) },
-					    { ps_kernel_static_masknoca, sizeof(ps_kernel_static_masknoca) },
- 					    { ps_kernel_static_rotation, sizeof(ps_kernel_static_rotation) } };
+static struct i965_kernels ps_kernels[] = { { ps_kernel_nomask_static, sizeof(ps_kernel_nomask_static) },
+					    { ps_kernel_maskca_static, sizeof(ps_kernel_maskca_static) },
+					    { ps_kernel_maskca_srcalpha_static, sizeof(ps_kernel_maskca_srcalpha_static) },
+					    { ps_kernel_masknoca_static, sizeof(ps_kernel_masknoca_static) },
+ 					    { ps_kernel_rotation_static, sizeof(ps_kernel_rotation_static) } };
 
 #define PS_KERNEL_NOMASK 0
 #define PS_KERNEL_MASKCA 1
@@ -431,24 +431,24 @@ i965_init_state_offsets(ScrnInfoPtr pScrn, int total_size)
     next_offset = cc_offset + sizeof(struct brw_cc_unit_state);
 
     sf_kernel_offset = ALIGN(next_offset, 64);
-    tmp = sizeof(sf_kernel_static_mask);
-    if (tmp < sizeof(sf_kernel_static_rotation))
-	tmp = sizeof(sf_kernel_static_rotation);
+    tmp = sizeof(sf_kernel_mask_static);
+    if (tmp < sizeof(sf_kernel_rotation_static))
+	tmp = sizeof(sf_kernel_rotation_static);
     if (tmp < sizeof(sf_kernel_static))
 	tmp = sizeof(sf_kernel_static);
 
     next_offset = sf_kernel_offset + tmp;
 
     ps_kernel_offset = ALIGN(next_offset, 64);
-    tmp = sizeof(ps_kernel_static_maskca_srcalpha);
-    if (tmp < sizeof(ps_kernel_static_maskca))
-	tmp = sizeof(ps_kernel_static_maskca);
-    if (tmp < sizeof(ps_kernel_static_masknoca))
-	tmp = sizeof(ps_kernel_static_masknoca);
-    if (tmp < sizeof(ps_kernel_static_rotation))
-	tmp = sizeof(ps_kernel_static_rotation);
-    if (tmp < sizeof(ps_kernel_static_nomask))
-	tmp = sizeof(ps_kernel_static_nomask);
+    tmp = sizeof(ps_kernel_maskca_srcalpha_static);
+    if (tmp < sizeof(ps_kernel_maskca_static))
+	tmp = sizeof(ps_kernel_maskca_static);
+    if (tmp < sizeof(ps_kernel_masknoca_static))
+	tmp = sizeof(ps_kernel_masknoca_static);
+    if (tmp < sizeof(ps_kernel_rotation_static))
+	tmp = sizeof(ps_kernel_rotation_static);
+    if (tmp < sizeof(ps_kernel_nomask_static))
+	tmp = sizeof(ps_kernel_nomask_static);
     
     next_offset = ps_kernel_offset + tmp;
 
