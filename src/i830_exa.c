@@ -407,8 +407,6 @@ static void *I830EXACreatePixmap(ScreenPtr pScreen, int size, int align)
 
 static void I830EXADestroyPixmap(ScreenPtr pScreen, void *driverPriv)
 {
-    ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
-    I830Ptr pI830 = I830PTR(pScrn);
     struct i830_exa_pixmap_priv *driver_priv = driverPriv;
 
     if (driver_priv->flags & I830_EXA_PIXMAP_IS_MAPPED)

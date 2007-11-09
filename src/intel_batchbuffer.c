@@ -266,9 +266,6 @@ intelddx_batchbuffer_emit_pixmap(PixmapPtr pPixmap, unsigned int flags,
 			      unsigned int mask, ddx_bo *reloc_buf,
 			      unsigned int offset, unsigned int delta)
 {
-    ScreenPtr pScreen = pPixmap->drawable.pScreen;
-    ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
-    I830Ptr pI830 = I830PTR(pScrn);
     struct i830_exa_pixmap_priv *driver_priv = exaGetPixmapDriverPrivate(pPixmap);
 
     if (driver_priv->flags & I830_EXA_PIXMAP_IS_MAPPED) {
