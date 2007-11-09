@@ -697,7 +697,7 @@ i965_update_ps_kernel(ScrnInfoPtr pScrn, char *start_base,
     memcpy(start_base + ps_kernel_offset, ps_kernels[need_ps_kernel].kernel, ps_kernels[need_ps_kernel].size);
 }
 
-void
+static void
 i965_exastate_reset(struct i965_exastate_buffer *state)
 {
     I830Ptr pI830 = I830PTR(state->pScrn);
