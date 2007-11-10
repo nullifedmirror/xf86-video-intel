@@ -359,8 +359,7 @@ typedef struct _gen4_state {
     PAD64 (brw_sampler_default_color, 0);
     struct brw_vs_unit_state vs_state;
     PAD64 (brw_vs_unit_state, 0);
-    struct brw_sf_unit_state sf_state;
-    PAD64 (brw_sf_unit_state, 0);
+
     struct brw_wm_unit_state wm_state;
     PAD64 (brw_wm_unit_state, 0);
     struct brw_cc_unit_state cc_state;
@@ -370,9 +369,18 @@ typedef struct _gen4_state {
 
     KERNEL_DECL (sip_kernel);
 
+    /* SF kernels and corresponding states */
     KERNEL_DECL (sf_kernel);
+    struct brw_sf_unit_state sf_state;
+    PAD64 (brw_sf_unit_state, 0);
+
     KERNEL_DECL (sf_kernel_mask);
+    struct brw_sf_unit_state sf_state_mask;
+    PAD64 (brw_sf_unit_state, 1);
+
     KERNEL_DECL (sf_kernel_rotation);
+    struct brw_sf_unit_state sf_state_rotation;
+    PAD64 (brw_sf_unit_state, 2);
 
     KERNEL_DECL (ps_kernel_nomask);
     KERNEL_DECL (ps_kernel_maskca);
@@ -480,16 +488,49 @@ i965_init_state_offsets(ScrnInfoPtr pScrn, int total_size)
 }
 
 static void
+sf_state_init (struct brw_sf_unit_state *sf_state, int kernel_offset)
+{
+    memset(sf_state, 0, sizeof(*sf_state));
+    sf_state->thread0.grf_reg_count = BRW_GRF_BLOCKS(SF_KERNEL_NUM_GRF);
+    sf_state->sf1.single_program_flow = 1;
+    sf_state->sf1.binding_table_entry_count = 0;
+    sf_state->sf1.thread_priority = 0;
+    sf_state->sf1.floating_point_mode = 0; /* Mesa does this */
+    sf_state->sf1.illegal_op_exception_enable = 1;
+    sf_state->sf1.mask_stack_exception_enable = 1;
+    sf_state->sf1.sw_exception_enable = 1;
+    sf_state->thread2.per_thread_scratch_space = 0;
+    /* scratch space is not used in our kernel */
+    sf_state->thread2.scratch_space_base_pointer = 0;
+    sf_state->thread3.const_urb_entry_read_length = 0; /* no const URBs */
+    sf_state->thread3.const_urb_entry_read_offset = 0; /* no const URBs */
+    sf_state->thread3.urb_entry_read_length = 1; /* 1 URB per vertex */
+    /* don't smash vertex header, read start from dw8 */
+    sf_state->thread3.urb_entry_read_offset = 1;
+    sf_state->thread3.dispatch_grf_start_reg = 3;
+    sf_state->thread4.max_threads = SF_MAX_THREADS - 1;
+    sf_state->thread4.urb_entry_allocation_size = URB_SF_ENTRY_SIZE - 1;
+    sf_state->thread4.nr_urb_entries = URB_SF_ENTRIES;
+    sf_state->thread4.stats_enable = 1;
+    sf_state->sf5.viewport_transform = FALSE; /* skip viewport */
+    sf_state->sf6.cull_mode = BRW_CULLMODE_NONE;
+    sf_state->sf6.scissor = 0;
+    sf_state->sf7.trifan_pv = 2;
+    sf_state->sf6.dest_org_vbias = 0x8;
+    sf_state->sf6.dest_org_hbias = 0x8;
+
+    sf_state->thread0.kernel_start_pointer = kernel_offset >> 6;
+}
+
+static void
 gen4_state_init (gen4_state_t *state)
 {
-    /* cc viewport */
     struct brw_cc_viewport *cc_viewport;
     struct brw_cc_unit_state *cc_state;
     struct brw_sampler_default_color *default_color_state;
     struct brw_sampler_state *src_sampler_state;
     struct brw_sampler_state *mask_sampler_state;
     struct brw_vs_unit_state *vs_state;
-    struct brw_sf_unit_state *sf_state;
     struct brw_wm_unit_state *wm_state;
     int cc_viewport_offset, wm_scratch_offset, src_sampler_offset;
 
@@ -541,36 +582,20 @@ gen4_state_init (gen4_state_t *state)
     vs_state->vs6.vs_enable = 0;
     vs_state->vs6.vert_cache_disable = 1;
 
-    /* sf state */
-    sf_state = &state->sf_state;
-/*    sf_state->thread0.kernel_start_pointer = sf_kernel_offset >> 6; */
-    sf_state->thread0.grf_reg_count = BRW_GRF_BLOCKS(SF_KERNEL_NUM_GRF);
-    sf_state->sf1.single_program_flow = 1;
-    sf_state->sf1.binding_table_entry_count = 0;
-    sf_state->sf1.thread_priority = 0;
-    sf_state->sf1.floating_point_mode = 0; /* Mesa does this */
-    sf_state->sf1.illegal_op_exception_enable = 1;
-    sf_state->sf1.mask_stack_exception_enable = 1;
-    sf_state->sf1.sw_exception_enable = 1;
-    sf_state->thread2.per_thread_scratch_space = 0;
-    /* scratch space is not used in our kernel */
-    sf_state->thread2.scratch_space_base_pointer = 0;
-    sf_state->thread3.const_urb_entry_read_length = 0; /* no const URBs */
-    sf_state->thread3.const_urb_entry_read_offset = 0; /* no const URBs */
-    sf_state->thread3.urb_entry_read_length = 1; /* 1 URB per vertex */
-    /* don't smash vertex header, read start from dw8 */
-    sf_state->thread3.urb_entry_read_offset = 1;
-    sf_state->thread3.dispatch_grf_start_reg = 3;
-    sf_state->thread4.max_threads = SF_MAX_THREADS - 1;
-    sf_state->thread4.urb_entry_allocation_size = URB_SF_ENTRY_SIZE - 1;
-    sf_state->thread4.nr_urb_entries = URB_SF_ENTRIES;
-    sf_state->thread4.stats_enable = 1;
-    sf_state->sf5.viewport_transform = FALSE; /* skip viewport */
-    sf_state->sf6.cull_mode = BRW_CULLMODE_NONE;
-    sf_state->sf6.scissor = 0;
-    sf_state->sf7.trifan_pv = 2;
-    sf_state->sf6.dest_org_vbias = 0x8;
-    sf_state->sf6.dest_org_hbias = 0x8;
+    /* Copy all SF kernels into state structure. */
+    memcpy(state->sf_kernel, sf_kernel_static,
+	   sizeof (sf_kernel_static));
+    memcpy(state->sf_kernel_mask, sf_kernel_mask_static,
+	   sizeof (sf_kernel_mask_static));
+    memcpy(state->sf_kernel_rotation, sf_kernel_rotation_static,
+	   sizeof (sf_kernel_rotation_static));
+
+    sf_state_init (&state->sf_state,
+		   offsetof (gen4_state_t, sf_kernel));
+    sf_state_init (&state->sf_state_mask,
+		   offsetof (gen4_state_t, sf_kernel_mask));
+    sf_state_init (&state->sf_state_rotation,
+		   offsetof (gen4_state_t, sf_kernel_rotation));
 
     /* wm state */
     wm_state = &state->wm_state;
@@ -602,13 +627,6 @@ gen4_state_init (gen4_state_t *state)
 
     /* Upload kernels */
     memcpy (state->sip_kernel, sip_kernel_static, sizeof (sip_kernel_static));
-
-    memcpy (state->sf_kernel, sf_kernel_static,
-	    sizeof (sf_kernel_static));
-    memcpy (state->sf_kernel_mask, sf_kernel_mask_static,
-	    sizeof (sf_kernel_mask_static));
-    memcpy (state->sf_kernel_rotation, sf_kernel_rotation_static,
-	    sizeof (sf_kernel_rotation_static));
 
     memcpy (state->ps_kernel_nomask, ps_kernel_nomask_static,
 	    sizeof (ps_kernel_nomask_static));
@@ -711,13 +729,12 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     CARD32 dst_format, dst_pitch, dst_tile_format = 0, dst_tiled = 0;
     Bool rotation_program = FALSE;
     struct brw_cc_unit_state *cc_state;
-    CARD32 *sf_kernel, *ps_kernel;
-    int sf_kernel_offset, ps_kernel_offset, sip_kernel_offset;
-    int default_color_offset;
+    CARD32 *ps_kernel;
+    int ps_kernel_offset, sip_kernel_offset;
+    int sf_state_offset, default_color_offset;
     char *start_base;
     void *map;
     gen4_state_t *gen4_state;
-    struct brw_sf_unit_state *sf_state;
     struct brw_wm_unit_state *wm_state;
     struct brw_sampler_state *src_sampler_state;
     struct brw_sampler_state *mask_sampler_state;
@@ -776,6 +793,12 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     }
 
     /* setup 3d pipeline state */
+    if (pMask)
+	sf_state_offset = offsetof (gen4_state_t, sf_state_mask);
+    else if (rotation_program)
+	sf_state_offset = offsetof (gen4_state_t, sf_state_rotation);
+    else
+	sf_state_offset = offsetof (gen4_state_t, sf_state);
 
     /* Because we only have a single static buffer for our state currently,
      * we have to sync before updating it every time.
@@ -919,22 +942,6 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     	}
     }
 
-
-    /* Set up the SF kernel to do coord interp: for each attribute,
-     * calculate dA/dx and dA/dy.  Hand these interpolation coefficients
-     * back to SF which then hands pixels off to WM.
-     */
-    if (pMask)
-	sf_kernel = (CARD32 *) gen4_state->sf_kernel_mask;
-    else if (rotation_program)
-	sf_kernel = (CARD32 *) gen4_state->sf_kernel_rotation;
-    else
-	sf_kernel = (CARD32 *) gen4_state->sf_kernel;
-
-    sf_kernel_offset = (char *) sf_kernel - (char *) gen4_state;
-    sf_state = &gen4_state->sf_state;
-    sf_state->thread0.kernel_start_pointer = sf_kernel_offset >> 6;
-
     /* Set up the PS kernel (dispatched by WM) */
     if (pMask) {
 	if (pMaskPicture->componentAlpha && 
@@ -955,8 +962,7 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     wm_state = &gen4_state->wm_state;
     wm_state->thread0.kernel_start_pointer = ps_kernel_offset >> 6;
 
-    sip_kernel_offset = ((char *) gen4_state->sip_kernel -
-			 (char *) gen4_state);
+    sip_kernel_offset = offsetof (gen4_state_t, sip_kernel);
     
     if (!pMask) {
 	wm_state->thread1.binding_table_entry_count = 2; /* 1 tex and fb */
@@ -1052,7 +1058,7 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
 	OUT_BATCH(offsetof (gen4_state_t, vs_state));  /* 32 byte aligned */
    	OUT_BATCH(BRW_GS_DISABLE);   /* disable GS, resulting in passthrough */
    	OUT_BATCH(BRW_CLIP_DISABLE); /* disable CLIP, resulting in passthrough */
-	OUT_BATCH(offsetof (gen4_state_t, sf_state));  /* 32 byte aligned */
+	OUT_BATCH(sf_state_offset); /* 32 byte aligned */
 	OUT_BATCH(offsetof (gen4_state_t, wm_state));  /* 32 byte aligned */
 	OUT_BATCH(offsetof (gen4_state_t, cc_state));  /* 64 byte aligned */
 
