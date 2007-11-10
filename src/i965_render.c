@@ -257,13 +257,6 @@ static int urb_cs_start, urb_cs_size;
 static struct brw_surface_state *dest_surf_state;
 static struct brw_surface_state *src_surf_state;
 static struct brw_surface_state *mask_surf_state;
-static struct brw_sampler_state *src_sampler_state;
-static struct brw_sampler_state *mask_sampler_state;
-static struct brw_sampler_default_color *default_color_state;
-
-static struct brw_vs_unit_state *vs_state;
-static struct brw_sf_unit_state *sf_state;
-static struct brw_wm_unit_state *wm_state;
 
 static CARD32 *binding_table;
 
@@ -492,6 +485,12 @@ gen4_state_init (gen4_state_t *state)
     /* cc viewport */
     struct brw_cc_viewport *cc_viewport;
     struct brw_cc_unit_state *cc_state;
+    struct brw_sampler_default_color *default_color_state;
+    struct brw_sampler_state *src_sampler_state;
+    struct brw_sampler_state *mask_sampler_state;
+    struct brw_vs_unit_state *vs_state;
+    struct brw_sf_unit_state *sf_state;
+    struct brw_wm_unit_state *wm_state;
     int cc_viewport_offset, wm_scratch_offset, src_sampler_offset;
 
     cc_viewport = &state->cc_viewport;
@@ -718,6 +717,10 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     char *start_base;
     void *map;
     gen4_state_t *gen4_state;
+    struct brw_sf_unit_state *sf_state;
+    struct brw_wm_unit_state *wm_state;
+    struct brw_sampler_state *src_sampler_state;
+    struct brw_sampler_state *mask_sampler_state;
 
     if (pI830->use_ttm_batch) {
 	i965_exastate_reset(pI830->exa965);
@@ -929,6 +932,7 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
 	sf_kernel = (CARD32 *) gen4_state->sf_kernel;
 
     sf_kernel_offset = (char *) sf_kernel - (char *) gen4_state;
+    sf_state = &gen4_state->sf_state;
     sf_state->thread0.kernel_start_pointer = sf_kernel_offset >> 6;
 
     /* Set up the PS kernel (dispatched by WM) */
@@ -948,12 +952,12 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     }
 
     ps_kernel_offset = (char *) ps_kernel - (char *) gen4_state;
+    wm_state = &gen4_state->wm_state;
     wm_state->thread0.kernel_start_pointer = ps_kernel_offset >> 6;
 
     sip_kernel_offset = ((char *) gen4_state->sip_kernel -
 			 (char *) gen4_state);
     
-    wm_state = &gen4_state->wm_state;
     if (!pMask) {
 	wm_state->thread1.binding_table_entry_count = 2; /* 1 tex and fb */
 	wm_state->thread3.urb_entry_read_length = 1;
