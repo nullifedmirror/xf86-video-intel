@@ -269,11 +269,8 @@ static CARD32 *binding_table;
 
 /* these offsets will remain the same for all buffers post allocation */
 static int dest_surf_offset, src_surf_offset, mask_surf_offset;
-static int src_sampler_offset, mask_sampler_offset,vs_offset;
-static int sf_offset, wm_offset, cc_offset, vb_offset, cc_viewport_offset;
-static int wm_scratch_offset;
+static int vb_offset;
 static int binding_table_offset;
-static int default_color_offset;
 static float *vb;
 static int vb_max_size, vb_index;
 static int gen4_state_offset;
@@ -360,6 +357,24 @@ static const CARD32 ps_kernel_rotation_static [][4] = {
 #define KERNEL_DECL(template) \
     CARD32 template [((sizeof (template ## _static) + 63) & ~63) / 16][4];
 typedef struct _gen4_state {
+    char wm_scratch[1024 * PS_MAX_THREADS];
+    struct brw_sampler_state src_sampler_state;
+    PAD64 (brw_sampler_state, 0);
+    struct brw_sampler_state mask_sampler_state;
+    PAD64 (brw_sampler_state, 1);
+    struct brw_sampler_default_color default_color_state;
+    PAD64 (brw_sampler_default_color, 0);
+    struct brw_vs_unit_state vs_state;
+    PAD64 (brw_vs_unit_state, 0);
+    struct brw_sf_unit_state sf_state;
+    PAD64 (brw_sf_unit_state, 0);
+    struct brw_wm_unit_state wm_state;
+    PAD64 (brw_wm_unit_state, 0);
+    struct brw_cc_unit_state cc_state;
+    PAD64 (brw_cc_unit_state, 0);
+    struct brw_cc_viewport cc_viewport;
+    PAD64 (brw_cc_viewport, 0);
+
     KERNEL_DECL (sip_kernel);
 
     KERNEL_DECL (sf_kernel);
@@ -419,32 +434,6 @@ i965_init_state_offsets(ScrnInfoPtr pScrn, int total_size)
     gen4_state_offset = ALIGN(next_offset, 64);
     next_offset = gen4_state_offset + sizeof(gen4_state_t);
 
-    vs_offset = ALIGN(next_offset, 64);
-    next_offset = vs_offset + sizeof(*vs_state);
-
-    sf_offset = ALIGN(next_offset, 32);
-    next_offset = sf_offset + sizeof(*sf_state);
-
-    wm_offset = ALIGN(next_offset, 32);
-    next_offset = wm_offset + sizeof(*wm_state);
-
-    wm_scratch_offset = ALIGN(next_offset, 1024);
-    next_offset = wm_scratch_offset + 1024 * PS_MAX_THREADS;
-
-    cc_offset = ALIGN(next_offset, 32);
-    next_offset = cc_offset + sizeof(struct brw_cc_unit_state);
-
-    /* needed? */
-    cc_viewport_offset = ALIGN(next_offset, 32);
-    next_offset = cc_viewport_offset + sizeof(struct brw_cc_viewport);
-
-    /* for texture sampler */
-    src_sampler_offset = ALIGN(next_offset, 32);
-    next_offset = src_sampler_offset + sizeof(*src_sampler_state);
-    
-    mask_sampler_offset = ALIGN(next_offset, 32);
-    next_offset = mask_sampler_offset + sizeof(*mask_sampler_state);
-
     /* And then the general state: */
     dest_surf_offset = ALIGN(next_offset, 32);
     next_offset = dest_surf_offset + sizeof(*dest_surf_state);
@@ -457,9 +446,6 @@ i965_init_state_offsets(ScrnInfoPtr pScrn, int total_size)
 
     binding_table_offset = ALIGN(next_offset, 32);
     next_offset = binding_table_offset + (4 * 4);
-
-    default_color_offset = ALIGN(next_offset, 32);
-    next_offset = default_color_offset + sizeof(*default_color_state);
 
     total_state_size = next_offset;
 
@@ -508,18 +494,22 @@ i965_init_state_objects(ScrnInfoPtr pScrn, unsigned char *start_base)
     struct brw_cc_unit_state *cc_state;
     struct brw_surface_state *dest_surf_state, *src_surf_state, *mask_surf_state;
     gen4_state_t* gen4_state;
+    int cc_viewport_offset, wm_scratch_offset, src_sampler_offset;
 
-    cc_viewport = (void *)(start_base + cc_viewport_offset);
+    gen4_state = (void *)(start_base + gen4_state_offset);
+
+    cc_viewport = &gen4_state->cc_viewport;
     cc_viewport->min_depth = -1.e35;
     cc_viewport->max_depth = 1.e35;
 
-    cc_state = (void *)(start_base + cc_offset);
+    cc_state = &gen4_state->cc_state;
     cc_state->cc0.stencil_enable = 0;   /* disable stencil */
     cc_state->cc2.depth_test = 0;       /* disable depth test */
     cc_state->cc2.logicop_enable = 0;   /* disable logic op */
     cc_state->cc3.ia_blend_enable = 1;  /* blend alpha just like colors */
     cc_state->cc3.blend_enable = 1;     /* enable color blend */
     cc_state->cc3.alpha_test = 0;       /* disable alpha test */
+    cc_viewport_offset = offsetof (gen4_state_t, cc_viewport);
     cc_state->cc4.cc_viewport_state_offset = cc_viewport_offset >> 5;
     cc_state->cc5.dither_enable = 0;    /* disable dither */
     cc_state->cc5.logicop_func = 0xc;   /* COPY */
@@ -577,33 +567,33 @@ i965_init_state_objects(ScrnInfoPtr pScrn, unsigned char *start_base)
     mask_surf_state->ss2.render_target_rotation = 0;
 
     /* default color state */
-    default_color_state = (void *)(start_base + default_color_offset);
+    default_color_state = &gen4_state->default_color_state;
     default_color_state->color[0] = 0.0; /* R */
     default_color_state->color[1] = 0.0; /* G */
     default_color_state->color[2] = 0.0; /* B */
     default_color_state->color[3] = 0.0; /* A */
 
     /* src sampler state */
-    src_sampler_state = (void *)(start_base + src_sampler_offset);
+    src_sampler_state = &gen4_state->src_sampler_state;
     src_sampler_state->ss0.lod_preclamp = 1; /* GL mode */
     src_sampler_state->ss0.default_color_mode = 0; /* GL mode */
     src_sampler_state->ss3.chroma_key_enable = 0; /* disable chromakey */
 
     /* mask sampler state */
-    mask_sampler_state = (void *)(start_base + mask_sampler_offset);
+    mask_sampler_state = &gen4_state->mask_sampler_state;
     mask_sampler_state->ss0.lod_preclamp = 1; /* GL mode */
     mask_sampler_state->ss3.chroma_key_enable = 0; /* disable chromakey */
 
     /* vertex shader state */
     /* Set up the vertex shader to be disabled (passthrough) */
-    vs_state = (void *)(start_base + vs_offset);
+    vs_state = &gen4_state->vs_state;
     vs_state->thread4.nr_urb_entries = URB_VS_ENTRIES;
     vs_state->thread4.urb_entry_allocation_size = URB_VS_ENTRY_SIZE - 1;
     vs_state->vs6.vs_enable = 0;
     vs_state->vs6.vert_cache_disable = 1;
 
     /* sf state */
-    sf_state = (void *)(start_base + sf_offset);
+    sf_state = &gen4_state->sf_state;
 /*    sf_state->thread0.kernel_start_pointer = sf_kernel_offset >> 6; */
     sf_state->thread0.grf_reg_count = BRW_GRF_BLOCKS(SF_KERNEL_NUM_GRF);
     sf_state->sf1.single_program_flow = 1;
@@ -634,10 +624,11 @@ i965_init_state_objects(ScrnInfoPtr pScrn, unsigned char *start_base)
     sf_state->sf6.dest_org_hbias = 0x8;
 
     /* wm state */
-    wm_state = (void *)(start_base + wm_offset);
+    wm_state = &gen4_state->wm_state;
 /*    wm_state->thread0.kernel_start_pointer = ps_kernel_offset >> 6; */
     wm_state->thread0.grf_reg_count = BRW_GRF_BLOCKS(PS_KERNEL_NUM_GRF);
     wm_state->thread1.single_program_flow = 1;
+    wm_scratch_offset = offsetof (gen4_state_t, wm_scratch);
     wm_state->thread2.scratch_space_base_pointer = wm_scratch_offset>>10;
     wm_state->thread2.per_thread_scratch_space = 0;
     wm_state->thread3.const_urb_entry_read_length = 0;
@@ -648,6 +639,7 @@ i965_init_state_objects(ScrnInfoPtr pScrn, unsigned char *start_base)
     wm_state->thread3.dispatch_grf_start_reg = 3; /* must match kernel */
 
     wm_state->wm4.stats_enable = 1;  /* statistic */
+    src_sampler_offset = offsetof (gen4_state_t, src_sampler_state);
     wm_state->wm4.sampler_state_pointer = src_sampler_offset >> 5;
     wm_state->wm4.sampler_count = 1; /* 1-4 samplers used */
     wm_state->wm5.max_threads = PS_MAX_THREADS - 1;
@@ -660,7 +652,6 @@ i965_init_state_objects(ScrnInfoPtr pScrn, unsigned char *start_base)
     wm_state->wm5.early_depth_test = 1;
 
     /* Upload kernels */
-    gen4_state = (void *)(start_base + gen4_state_offset);
     memcpy (gen4_state->sip_kernel, sip_kernel_static, sizeof (sip_kernel_static));
 
     memcpy (gen4_state->sf_kernel, sf_kernel_static,
@@ -716,6 +707,7 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     struct brw_cc_unit_state *cc_state;
     CARD32 *sf_kernel, *ps_kernel;
     int sf_kernel_offset, ps_kernel_offset, sip_kernel_offset;
+    int default_color_offset;
     char *start_base;
     void *map;
     gen4_state_t *gen4_state;
@@ -781,7 +773,7 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     vb = (void *)(start_base + vb_offset);
     vb_index = 0;
     /* Color calculator state */
-    cc_state = (void *)(start_base + cc_offset);
+    cc_state = &gen4_state->cc_state;
     i965_get_blend_cntl(op, pMaskPicture, pDstPicture->format,
 			&src_blend, &dst_blend);
     /* XXX: alpha blend factor should be same as color, but check
@@ -860,7 +852,7 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
 	binding_table[2] = 0;
 
     /* PS kernel use this sampler */
-    src_sampler_state = (void *)(start_base + src_sampler_offset);
+    src_sampler_state = &gen4_state->src_sampler_state;
     switch(pSrcPicture->filter) {
     case PictFilterNearest:
    	src_sampler_state->ss0.min_filter = BRW_MAPFILTER_NEAREST;
@@ -878,6 +870,7 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
    	src_sampler_state->ss1.r_wrap_mode = BRW_TEXCOORDMODE_CLAMP_BORDER;
    	src_sampler_state->ss1.s_wrap_mode = BRW_TEXCOORDMODE_CLAMP_BORDER;
    	src_sampler_state->ss1.t_wrap_mode = BRW_TEXCOORDMODE_CLAMP_BORDER;
+	default_color_offset = offsetof (gen4_state_t, default_color_state);
 	src_sampler_state->ss2.default_color_pointer = default_color_offset >> 5;
     } else {
    	src_sampler_state->ss1.r_wrap_mode = BRW_TEXCOORDMODE_WRAP;
@@ -886,7 +879,7 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     }
 
     if (pMask) {
-	mask_sampler_state = (void *)(start_base + mask_sampler_offset);
+	mask_sampler_state = &gen4_state->mask_sampler_state;
    	switch(pMaskPicture->filter) {
    	case PictFilterNearest:
    	    mask_sampler_state->ss0.min_filter = BRW_MAPFILTER_NEAREST;
@@ -953,7 +946,7 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     sip_kernel_offset = ((char *) gen4_state->sip_kernel -
 			 (char *) gen4_state);
     
-    wm_state = (void *)(start_base + wm_offset);
+    wm_state = &gen4_state->wm_state;
     if (!pMask) {
 	wm_state->thread1.binding_table_entry_count = 2; /* 1 tex and fb */
 	wm_state->thread3.urb_entry_read_length = 1;
@@ -1045,12 +1038,12 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
 
 	/* Set the pointers to the 3d pipeline state */
    	OUT_BATCH(BRW_3DSTATE_PIPELINED_POINTERS | 5);
-   	OUT_BATCH(vs_offset);  /* 32 byte aligned */
+	OUT_BATCH(offsetof (gen4_state_t, vs_state));  /* 32 byte aligned */
    	OUT_BATCH(BRW_GS_DISABLE);   /* disable GS, resulting in passthrough */
    	OUT_BATCH(BRW_CLIP_DISABLE); /* disable CLIP, resulting in passthrough */
-   	OUT_BATCH(sf_offset);  /* 32 byte aligned */
-   	OUT_BATCH(wm_offset);  /* 32 byte aligned */
-   	OUT_BATCH(cc_offset);  /* 64 byte aligned */
+	OUT_BATCH(offsetof (gen4_state_t, sf_state));  /* 32 byte aligned */
+	OUT_BATCH(offsetof (gen4_state_t, wm_state));  /* 32 byte aligned */
+	OUT_BATCH(offsetof (gen4_state_t, cc_state));  /* 64 byte aligned */
 
 	/* URB fence */
    	OUT_BATCH(BRW_URB_FENCE |
