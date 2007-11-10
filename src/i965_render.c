@@ -487,22 +487,18 @@ i965_init_state_offsets(ScrnInfoPtr pScrn, int total_size)
 }
 
 static void
-i965_init_state_objects(ScrnInfoPtr pScrn, unsigned char *start_base)
+gen4_state_init (gen4_state_t *state)
 {
     /* cc viewport */
     struct brw_cc_viewport *cc_viewport;
     struct brw_cc_unit_state *cc_state;
-    struct brw_surface_state *dest_surf_state, *src_surf_state, *mask_surf_state;
-    gen4_state_t* gen4_state;
     int cc_viewport_offset, wm_scratch_offset, src_sampler_offset;
 
-    gen4_state = (void *)(start_base + gen4_state_offset);
-
-    cc_viewport = &gen4_state->cc_viewport;
+    cc_viewport = &state->cc_viewport;
     cc_viewport->min_depth = -1.e35;
     cc_viewport->max_depth = 1.e35;
 
-    cc_state = &gen4_state->cc_state;
+    cc_state = &state->cc_state;
     cc_state->cc0.stencil_enable = 0;   /* disable stencil */
     cc_state->cc2.depth_test = 0;       /* disable depth test */
     cc_state->cc2.logicop_enable = 0;   /* disable logic op */
@@ -519,6 +515,124 @@ i965_init_state_objects(ScrnInfoPtr pScrn, unsigned char *start_base)
     cc_state->cc6.clamp_post_alpha_blend = 1;
     cc_state->cc6.clamp_pre_alpha_blend = 1;
     cc_state->cc6.clamp_range = 0;  /* clamp range [0,1] */
+
+    /* default color state */
+    default_color_state = &state->default_color_state;
+    default_color_state->color[0] = 0.0; /* R */
+    default_color_state->color[1] = 0.0; /* G */
+    default_color_state->color[2] = 0.0; /* B */
+    default_color_state->color[3] = 0.0; /* A */
+
+    /* src sampler state */
+    src_sampler_state = &state->src_sampler_state;
+    src_sampler_state->ss0.lod_preclamp = 1; /* GL mode */
+    src_sampler_state->ss0.default_color_mode = 0; /* GL mode */
+    src_sampler_state->ss3.chroma_key_enable = 0; /* disable chromakey */
+
+    /* mask sampler state */
+    mask_sampler_state = &state->mask_sampler_state;
+    mask_sampler_state->ss0.lod_preclamp = 1; /* GL mode */
+    mask_sampler_state->ss3.chroma_key_enable = 0; /* disable chromakey */
+
+    /* vertex shader state */
+    /* Set up the vertex shader to be disabled (passthrough) */
+    vs_state = &state->vs_state;
+    vs_state->thread4.nr_urb_entries = URB_VS_ENTRIES;
+    vs_state->thread4.urb_entry_allocation_size = URB_VS_ENTRY_SIZE - 1;
+    vs_state->vs6.vs_enable = 0;
+    vs_state->vs6.vert_cache_disable = 1;
+
+    /* sf state */
+    sf_state = &state->sf_state;
+/*    sf_state->thread0.kernel_start_pointer = sf_kernel_offset >> 6; */
+    sf_state->thread0.grf_reg_count = BRW_GRF_BLOCKS(SF_KERNEL_NUM_GRF);
+    sf_state->sf1.single_program_flow = 1;
+    sf_state->sf1.binding_table_entry_count = 0;
+    sf_state->sf1.thread_priority = 0;
+    sf_state->sf1.floating_point_mode = 0; /* Mesa does this */
+    sf_state->sf1.illegal_op_exception_enable = 1;
+    sf_state->sf1.mask_stack_exception_enable = 1;
+    sf_state->sf1.sw_exception_enable = 1;
+    sf_state->thread2.per_thread_scratch_space = 0;
+    /* scratch space is not used in our kernel */
+    sf_state->thread2.scratch_space_base_pointer = 0;
+    sf_state->thread3.const_urb_entry_read_length = 0; /* no const URBs */
+    sf_state->thread3.const_urb_entry_read_offset = 0; /* no const URBs */
+    sf_state->thread3.urb_entry_read_length = 1; /* 1 URB per vertex */
+    /* don't smash vertex header, read start from dw8 */
+    sf_state->thread3.urb_entry_read_offset = 1;
+    sf_state->thread3.dispatch_grf_start_reg = 3;
+    sf_state->thread4.max_threads = SF_MAX_THREADS - 1;
+    sf_state->thread4.urb_entry_allocation_size = URB_SF_ENTRY_SIZE - 1;
+    sf_state->thread4.nr_urb_entries = URB_SF_ENTRIES;
+    sf_state->thread4.stats_enable = 1;
+    sf_state->sf5.viewport_transform = FALSE; /* skip viewport */
+    sf_state->sf6.cull_mode = BRW_CULLMODE_NONE;
+    sf_state->sf6.scissor = 0;
+    sf_state->sf7.trifan_pv = 2;
+    sf_state->sf6.dest_org_vbias = 0x8;
+    sf_state->sf6.dest_org_hbias = 0x8;
+
+    /* wm state */
+    wm_state = &state->wm_state;
+/*    wm_state->thread0.kernel_start_pointer = ps_kernel_offset >> 6; */
+    wm_state->thread0.grf_reg_count = BRW_GRF_BLOCKS(PS_KERNEL_NUM_GRF);
+    wm_state->thread1.single_program_flow = 1;
+    wm_scratch_offset = offsetof (gen4_state_t, wm_scratch);
+    wm_state->thread2.scratch_space_base_pointer = wm_scratch_offset>>10;
+    wm_state->thread2.per_thread_scratch_space = 0;
+    wm_state->thread3.const_urb_entry_read_length = 0;
+    wm_state->thread3.const_urb_entry_read_offset = 0;
+    /* Each pair of attributes (src/mask coords) is one URB entry */
+    wm_state->thread3.urb_entry_read_offset = 0;
+    /* wm kernel use urb from 3, see wm_program in compiler module */
+    wm_state->thread3.dispatch_grf_start_reg = 3; /* must match kernel */
+
+    wm_state->wm4.stats_enable = 1;  /* statistic */
+    src_sampler_offset = offsetof (gen4_state_t, src_sampler_state);
+    wm_state->wm4.sampler_state_pointer = src_sampler_offset >> 5;
+    wm_state->wm4.sampler_count = 1; /* 1-4 samplers used */
+    wm_state->wm5.max_threads = PS_MAX_THREADS - 1;
+    wm_state->wm5.thread_dispatch_enable = 1;
+    /* just use 16-pixel dispatch (4 subspans), don't need to change kernel
+     * start point
+     */
+    wm_state->wm5.enable_16_pix = 1;
+    wm_state->wm5.enable_8_pix = 0;
+    wm_state->wm5.early_depth_test = 1;
+
+    /* Upload kernels */
+    memcpy (state->sip_kernel, sip_kernel_static, sizeof (sip_kernel_static));
+
+    memcpy (state->sf_kernel, sf_kernel_static,
+	    sizeof (sf_kernel_static));
+    memcpy (state->sf_kernel_mask, sf_kernel_mask_static,
+	    sizeof (sf_kernel_mask_static));
+    memcpy (state->sf_kernel_rotation, sf_kernel_rotation_static,
+	    sizeof (sf_kernel_rotation_static));
+
+    memcpy (state->ps_kernel_nomask, ps_kernel_nomask_static,
+	    sizeof (ps_kernel_nomask_static));
+    memcpy (state->ps_kernel_maskca, ps_kernel_maskca_static,
+	    sizeof (ps_kernel_maskca_static));
+    memcpy (state->ps_kernel_maskca_srcalpha,
+	    ps_kernel_maskca_srcalpha_static,
+	    sizeof (ps_kernel_maskca_srcalpha_static));
+    memcpy (state->ps_kernel_masknoca, ps_kernel_masknoca_static,
+	    sizeof (ps_kernel_masknoca_static));
+    memcpy (state->ps_kernel_rotation, ps_kernel_rotation_static,
+	    sizeof (ps_kernel_rotation_static));
+}
+
+static void
+i965_init_state_objects(ScrnInfoPtr pScrn, unsigned char *start_base)
+{
+    struct brw_surface_state *dest_surf_state, *src_surf_state, *mask_surf_state;
+    gen4_state_t* gen4_state;
+
+    gen4_state = (void *)(start_base + gen4_state_offset);
+
+    gen4_state_init (gen4_state);
 
     /* destination surface state */
     dest_surf_state = (void *)(start_base + dest_surf_offset);
@@ -565,113 +679,6 @@ i965_init_state_objects(ScrnInfoPtr pScrn, unsigned char *start_base)
     mask_surf_state->ss0.render_cache_read_mode = 0;
     mask_surf_state->ss2.mip_count = 0;
     mask_surf_state->ss2.render_target_rotation = 0;
-
-    /* default color state */
-    default_color_state = &gen4_state->default_color_state;
-    default_color_state->color[0] = 0.0; /* R */
-    default_color_state->color[1] = 0.0; /* G */
-    default_color_state->color[2] = 0.0; /* B */
-    default_color_state->color[3] = 0.0; /* A */
-
-    /* src sampler state */
-    src_sampler_state = &gen4_state->src_sampler_state;
-    src_sampler_state->ss0.lod_preclamp = 1; /* GL mode */
-    src_sampler_state->ss0.default_color_mode = 0; /* GL mode */
-    src_sampler_state->ss3.chroma_key_enable = 0; /* disable chromakey */
-
-    /* mask sampler state */
-    mask_sampler_state = &gen4_state->mask_sampler_state;
-    mask_sampler_state->ss0.lod_preclamp = 1; /* GL mode */
-    mask_sampler_state->ss3.chroma_key_enable = 0; /* disable chromakey */
-
-    /* vertex shader state */
-    /* Set up the vertex shader to be disabled (passthrough) */
-    vs_state = &gen4_state->vs_state;
-    vs_state->thread4.nr_urb_entries = URB_VS_ENTRIES;
-    vs_state->thread4.urb_entry_allocation_size = URB_VS_ENTRY_SIZE - 1;
-    vs_state->vs6.vs_enable = 0;
-    vs_state->vs6.vert_cache_disable = 1;
-
-    /* sf state */
-    sf_state = &gen4_state->sf_state;
-/*    sf_state->thread0.kernel_start_pointer = sf_kernel_offset >> 6; */
-    sf_state->thread0.grf_reg_count = BRW_GRF_BLOCKS(SF_KERNEL_NUM_GRF);
-    sf_state->sf1.single_program_flow = 1;
-    sf_state->sf1.binding_table_entry_count = 0;
-    sf_state->sf1.thread_priority = 0;
-    sf_state->sf1.floating_point_mode = 0; /* Mesa does this */
-    sf_state->sf1.illegal_op_exception_enable = 1;
-    sf_state->sf1.mask_stack_exception_enable = 1;
-    sf_state->sf1.sw_exception_enable = 1;
-    sf_state->thread2.per_thread_scratch_space = 0;
-    /* scratch space is not used in our kernel */
-    sf_state->thread2.scratch_space_base_pointer = 0;
-    sf_state->thread3.const_urb_entry_read_length = 0; /* no const URBs */
-    sf_state->thread3.const_urb_entry_read_offset = 0; /* no const URBs */
-    sf_state->thread3.urb_entry_read_length = 1; /* 1 URB per vertex */
-    /* don't smash vertex header, read start from dw8 */
-    sf_state->thread3.urb_entry_read_offset = 1;
-    sf_state->thread3.dispatch_grf_start_reg = 3;
-    sf_state->thread4.max_threads = SF_MAX_THREADS - 1;
-    sf_state->thread4.urb_entry_allocation_size = URB_SF_ENTRY_SIZE - 1;
-    sf_state->thread4.nr_urb_entries = URB_SF_ENTRIES;
-    sf_state->thread4.stats_enable = 1;
-    sf_state->sf5.viewport_transform = FALSE; /* skip viewport */
-    sf_state->sf6.cull_mode = BRW_CULLMODE_NONE;
-    sf_state->sf6.scissor = 0;
-    sf_state->sf7.trifan_pv = 2;
-    sf_state->sf6.dest_org_vbias = 0x8;
-    sf_state->sf6.dest_org_hbias = 0x8;
-
-    /* wm state */
-    wm_state = &gen4_state->wm_state;
-/*    wm_state->thread0.kernel_start_pointer = ps_kernel_offset >> 6; */
-    wm_state->thread0.grf_reg_count = BRW_GRF_BLOCKS(PS_KERNEL_NUM_GRF);
-    wm_state->thread1.single_program_flow = 1;
-    wm_scratch_offset = offsetof (gen4_state_t, wm_scratch);
-    wm_state->thread2.scratch_space_base_pointer = wm_scratch_offset>>10;
-    wm_state->thread2.per_thread_scratch_space = 0;
-    wm_state->thread3.const_urb_entry_read_length = 0;
-    wm_state->thread3.const_urb_entry_read_offset = 0;
-    /* Each pair of attributes (src/mask coords) is one URB entry */
-    wm_state->thread3.urb_entry_read_offset = 0;
-    /* wm kernel use urb from 3, see wm_program in compiler module */
-    wm_state->thread3.dispatch_grf_start_reg = 3; /* must match kernel */
-
-    wm_state->wm4.stats_enable = 1;  /* statistic */
-    src_sampler_offset = offsetof (gen4_state_t, src_sampler_state);
-    wm_state->wm4.sampler_state_pointer = src_sampler_offset >> 5;
-    wm_state->wm4.sampler_count = 1; /* 1-4 samplers used */
-    wm_state->wm5.max_threads = PS_MAX_THREADS - 1;
-    wm_state->wm5.thread_dispatch_enable = 1;
-    /* just use 16-pixel dispatch (4 subspans), don't need to change kernel
-     * start point
-     */
-    wm_state->wm5.enable_16_pix = 1;
-    wm_state->wm5.enable_8_pix = 0;
-    wm_state->wm5.early_depth_test = 1;
-
-    /* Upload kernels */
-    memcpy (gen4_state->sip_kernel, sip_kernel_static, sizeof (sip_kernel_static));
-
-    memcpy (gen4_state->sf_kernel, sf_kernel_static,
-	    sizeof (sf_kernel_static));
-    memcpy (gen4_state->sf_kernel_mask, sf_kernel_mask_static,
-	    sizeof (sf_kernel_mask_static));
-    memcpy (gen4_state->sf_kernel_rotation, sf_kernel_rotation_static,
-	    sizeof (sf_kernel_rotation_static));
-
-    memcpy (gen4_state->ps_kernel_nomask, ps_kernel_nomask_static,
-	    sizeof (ps_kernel_nomask_static));
-    memcpy (gen4_state->ps_kernel_maskca, ps_kernel_maskca_static,
-	    sizeof (ps_kernel_maskca_static));
-    memcpy (gen4_state->ps_kernel_maskca_srcalpha,
-	    ps_kernel_maskca_srcalpha_static,
-	    sizeof (ps_kernel_maskca_srcalpha_static));
-    memcpy (gen4_state->ps_kernel_masknoca, ps_kernel_masknoca_static,
-	    sizeof (ps_kernel_masknoca_static));
-    memcpy (gen4_state->ps_kernel_rotation, ps_kernel_rotation_static,
-	    sizeof (ps_kernel_rotation_static));
 }
 
 static void
