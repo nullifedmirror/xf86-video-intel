@@ -355,14 +355,20 @@ typedef enum {
     SAMPLER_STATE_EXTEND_COUNT
 } sampler_state_extend_t;
 
+typedef struct _brw_cc_unit_state_padded {
+    struct brw_cc_unit_state state;
+    char pad[64 - sizeof (struct brw_cc_unit_state)];
+} brw_cc_unit_state_padded;
+
 /* Many of the fields in the state structure must be aligned to a
  * 64-byte boundary, (or a 32-byte boundary, but 64 is good enough for
  * those too). */
-#define PAD64(previous, idx) char previous ## _pad ## idx [(64 - (sizeof(struct previous) % 64)) % 64]
+#define PAD64_MULTI(previous, idx, factor) char previous ## _pad ## idx [(64 - (sizeof(struct previous) * (factor)) % 64) % 64]
+#define PAD64(previous, idx) PAD64_MULTI(previous, idx, 1)
 #define KERNEL_DECL(template) \
     CARD32 template [((sizeof (template ## _static) + 63) & ~63) / 16][4];
 typedef struct _gen4_state {
-    char wm_scratch[1024 * PS_MAX_THREADS];
+    char wm_scratch[128 * PS_MAX_THREADS];
 
     /* Index by [src_filter][src_extend][mask_filter][mask_extend] */
     struct brw_sampler_state sampler_state[SAMPLER_STATE_FILTER_COUNT]
@@ -375,8 +381,10 @@ typedef struct _gen4_state {
     struct brw_vs_unit_state vs_state;
     PAD64 (brw_vs_unit_state, 0);
 
-    struct brw_cc_unit_state cc_state;
-    PAD64 (brw_cc_unit_state, 0);
+    /* Index by [src_blend][dst_blend] */
+    brw_cc_unit_state_padded cc_state[BRW_BLENDFACTOR_COUNT]
+				     [BRW_BLENDFACTOR_COUNT];
+
     struct brw_cc_viewport cc_viewport;
     PAD64 (brw_cc_viewport, 0);
 
@@ -649,44 +657,57 @@ wm_state_init (struct brw_wm_unit_state *wm_state,
 }
 
 static void
-gen4_state_init (gen4_state_t *state)
+cc_state_init (struct brw_cc_unit_state *cc_state,
+	       int src_blend,
+	       int dst_blend,
+	       int cc_viewport_offset)
 {
-    struct brw_cc_viewport *cc_viewport;
-    struct brw_cc_unit_state *cc_state;
-    struct brw_sampler_default_color *default_color_state;
-    struct brw_vs_unit_state *vs_state;
-    int cc_viewport_offset;
-
-    int i,j, k, l;
-
-    cc_viewport = &state->cc_viewport;
-    cc_viewport->min_depth = -1.e35;
-    cc_viewport->max_depth = 1.e35;
-
-    cc_state = &state->cc_state;
+    memset(cc_state, 0, sizeof(*cc_state));
     cc_state->cc0.stencil_enable = 0;   /* disable stencil */
     cc_state->cc2.depth_test = 0;       /* disable depth test */
     cc_state->cc2.logicop_enable = 0;   /* disable logic op */
     cc_state->cc3.ia_blend_enable = 1;  /* blend alpha just like colors */
     cc_state->cc3.blend_enable = 1;     /* enable color blend */
     cc_state->cc3.alpha_test = 0;       /* disable alpha test */
-    cc_viewport_offset = offsetof (gen4_state_t, cc_viewport);
+
     cc_state->cc4.cc_viewport_state_offset = cc_viewport_offset >> 5;
+
     cc_state->cc5.dither_enable = 0;    /* disable dither */
     cc_state->cc5.logicop_func = 0xc;   /* COPY */
     cc_state->cc5.statistics_enable = 1;
     cc_state->cc5.ia_blend_function = BRW_BLENDFUNCTION_ADD;
+
+    /* XXX: alpha blend factor should be same as color, but check
+     * for CA case in future
+     */
+    cc_state->cc5.ia_src_blend_factor = src_blend;
+    cc_state->cc5.ia_dest_blend_factor = dst_blend;
+
     cc_state->cc6.blend_function = BRW_BLENDFUNCTION_ADD;
     cc_state->cc6.clamp_post_alpha_blend = 1;
     cc_state->cc6.clamp_pre_alpha_blend = 1;
     cc_state->cc6.clamp_range = 0;  /* clamp range [0,1] */
 
-    /* default color state */
-    default_color_state = &state->default_color_state;
-    default_color_state->color[0] = 0.0; /* R */
-    default_color_state->color[1] = 0.0; /* G */
-    default_color_state->color[2] = 0.0; /* B */
-    default_color_state->color[3] = 0.0; /* A */
+    cc_state->cc6.src_blend_factor = src_blend;
+    cc_state->cc6.dest_blend_factor = dst_blend;
+}
+
+static void
+gen4_state_init (gen4_state_t *state)
+{
+    struct brw_cc_viewport *cc_viewport;
+    struct brw_vs_unit_state *vs_state;
+    int i,j, k, l;
+
+    cc_viewport = &state->cc_viewport;
+    cc_viewport->min_depth = -1.e35;
+    cc_viewport->max_depth = 1.e35;
+
+    /* Color calculator state */
+    for (i = 0; i < BRW_BLENDFACTOR_COUNT; i++)
+	for (j = 0; j < BRW_BLENDFACTOR_COUNT; j++)
+	    cc_state_init (&state->cc_state[i][j].state, i, j,
+			   offsetof (gen4_state_t, cc_viewport));
 
     for (i = 0; i < SAMPLER_STATE_FILTER_COUNT; i++)
 	for (j = 0; j < SAMPLER_STATE_EXTEND_COUNT; j++)
@@ -878,9 +899,8 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     CARD32 mask_pitch = 0, mask_tile_format = 0, mask_tiled = 0;
     CARD32 dst_format, dst_pitch, dst_tile_format = 0, dst_tiled = 0;
     Bool rotation_program = FALSE;
-    struct brw_cc_unit_state *cc_state;
     int wm_state_offset, sip_kernel_offset;
-    int sf_state_offset;
+    int sf_state_offset, cc_state_offset;
     char *start_base;
     void *map;
     gen4_state_t *gen4_state;
@@ -953,18 +973,9 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
      */
     vb = (void *)(start_base + vb_offset);
     vb_index = 0;
-    /* Color calculator state */
-    cc_state = &gen4_state->cc_state;
+
     i965_get_blend_cntl(op, pMaskPicture, pDstPicture->format,
 			&src_blend, &dst_blend);
-    /* XXX: alpha blend factor should be same as color, but check
-     * for CA case in future
-     */
-    cc_state->cc5.ia_src_blend_factor = src_blend;
-    cc_state->cc5.ia_dest_blend_factor = dst_blend;
-    cc_state->cc6.src_blend_factor = src_blend;
-    cc_state->cc6.dest_blend_factor = dst_blend;
-
 
     /* Set up the state buffer for the destination surface */
     dest_surf_state = (void *)(start_base + dest_surf_offset);
@@ -1094,6 +1105,9 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
 
     sip_kernel_offset = offsetof (gen4_state_t, sip_kernel);
     
+    cc_state_offset = offsetof (gen4_state_t,
+				cc_state[src_blend][dst_blend]);
+
     /* Begin the long sequence of commands needed to set up the 3D
      * rendering pipe
      */
@@ -1182,7 +1196,7 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
    	OUT_BATCH(BRW_CLIP_DISABLE); /* disable CLIP, resulting in passthrough */
 	OUT_BATCH(sf_state_offset); /* 32 byte aligned */
 	OUT_BATCH(wm_state_offset); /* 32 byte aligned */
-	OUT_BATCH(offsetof (gen4_state_t, cc_state));  /* 64 byte aligned */
+	OUT_BATCH(cc_state_offset); /* 64 byte aligned */
 
 	/* URB fence */
    	OUT_BATCH(BRW_URB_FENCE |
