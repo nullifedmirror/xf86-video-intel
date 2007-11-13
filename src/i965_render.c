@@ -343,6 +343,18 @@ static const CARD32 ps_kernel_rotation_static [][4] = {
 #include "exa_wm_rotation_prog.h"
 };
 
+typedef enum {
+    SAMPLER_STATE_FILTER_NEAREST,
+    SAMPLER_STATE_FILTER_BILINEAR,
+    SAMPLER_STATE_FILTER_COUNT
+} sampler_state_filter_t;
+
+typedef enum {
+    SAMPLER_STATE_EXTEND_NONE,
+    SAMPLER_STATE_EXTEND_REPEAT,
+    SAMPLER_STATE_EXTEND_COUNT
+} sampler_state_extend_t;
+
 /* Many of the fields in the state structure must be aligned to a
  * 64-byte boundary, (or a 32-byte boundary, but 64 is good enough for
  * those too). */
@@ -351,10 +363,13 @@ static const CARD32 ps_kernel_rotation_static [][4] = {
     CARD32 template [((sizeof (template ## _static) + 63) & ~63) / 16][4];
 typedef struct _gen4_state {
     char wm_scratch[1024 * PS_MAX_THREADS];
-    struct brw_sampler_state src_sampler_state;
-    PAD64 (brw_sampler_state, 0);
-    struct brw_sampler_state mask_sampler_state;
-    PAD64 (brw_sampler_state, 1);
+
+    /* Index by [src_filter][src_extend][mask_filter][mask_extend] */
+    struct brw_sampler_state sampler_state[SAMPLER_STATE_FILTER_COUNT]
+					  [SAMPLER_STATE_EXTEND_COUNT]
+					  [SAMPLER_STATE_FILTER_COUNT]
+					  [SAMPLER_STATE_EXTEND_COUNT][2];
+
     struct brw_sampler_default_color default_color_state;
     PAD64 (brw_sampler_default_color, 0);
     struct brw_vs_unit_state vs_state;
@@ -523,16 +538,59 @@ sf_state_init (struct brw_sf_unit_state *sf_state, int kernel_offset)
 }
 
 static void
+sampler_state_init (struct brw_sampler_state *sampler_state,
+		    sampler_state_filter_t filter,
+		    sampler_state_extend_t extend,
+		    int default_color_offset)
+{
+    /* PS kernel use this sampler */
+    memset(sampler_state, 0, sizeof(*sampler_state));
+    sampler_state->ss0.lod_preclamp = 1; /* GL mode */
+
+    sampler_state->ss0.default_color_mode = 0; /* GL mode */
+
+    switch(filter) {
+    default:
+    case SAMPLER_STATE_FILTER_NEAREST:
+	sampler_state->ss0.min_filter = BRW_MAPFILTER_NEAREST;
+	sampler_state->ss0.mag_filter = BRW_MAPFILTER_NEAREST;
+	break;
+    case SAMPLER_STATE_FILTER_BILINEAR:
+	sampler_state->ss0.min_filter = BRW_MAPFILTER_LINEAR;
+	sampler_state->ss0.mag_filter = BRW_MAPFILTER_LINEAR;
+	break;
+    }
+
+    switch (extend) {
+    default:
+    case SAMPLER_STATE_EXTEND_NONE:
+	sampler_state->ss1.r_wrap_mode = BRW_TEXCOORDMODE_CLAMP_BORDER;
+	sampler_state->ss1.s_wrap_mode = BRW_TEXCOORDMODE_CLAMP_BORDER;
+	sampler_state->ss1.t_wrap_mode = BRW_TEXCOORDMODE_CLAMP_BORDER;
+	break;
+    case SAMPLER_STATE_EXTEND_REPEAT:
+	sampler_state->ss1.r_wrap_mode = BRW_TEXCOORDMODE_WRAP;
+	sampler_state->ss1.s_wrap_mode = BRW_TEXCOORDMODE_WRAP;
+	sampler_state->ss1.t_wrap_mode = BRW_TEXCOORDMODE_WRAP;
+	break;
+    }
+
+    sampler_state->ss2.default_color_pointer = default_color_offset >> 5;
+
+    sampler_state->ss3.chroma_key_enable = 0; /* disable chromakey */
+}
+
+static void
 gen4_state_init (gen4_state_t *state)
 {
     struct brw_cc_viewport *cc_viewport;
     struct brw_cc_unit_state *cc_state;
     struct brw_sampler_default_color *default_color_state;
-    struct brw_sampler_state *src_sampler_state;
-    struct brw_sampler_state *mask_sampler_state;
     struct brw_vs_unit_state *vs_state;
     struct brw_wm_unit_state *wm_state;
-    int cc_viewport_offset, wm_scratch_offset, src_sampler_offset;
+    int cc_viewport_offset, wm_scratch_offset;
+
+    int i,j, k, l;
 
     cc_viewport = &state->cc_viewport;
     cc_viewport->min_depth = -1.e35;
@@ -563,18 +621,18 @@ gen4_state_init (gen4_state_t *state)
     default_color_state->color[2] = 0.0; /* B */
     default_color_state->color[3] = 0.0; /* A */
 
-    /* src sampler state */
-    src_sampler_state = &state->src_sampler_state;
-    src_sampler_state->ss0.lod_preclamp = 1; /* GL mode */
-    src_sampler_state->ss0.default_color_mode = 0; /* GL mode */
-    src_sampler_state->ss3.chroma_key_enable = 0; /* disable chromakey */
+    for (i = 0; i < SAMPLER_STATE_FILTER_COUNT; i++)
+	for (j = 0; j < SAMPLER_STATE_EXTEND_COUNT; j++)
+	    for (k = 0; k < SAMPLER_STATE_FILTER_COUNT; k++)
+		for (l = 0; l < SAMPLER_STATE_EXTEND_COUNT; l++) {
+		    sampler_state_init (&state->sampler_state[i][j][k][l][0],
+					i, j,
+					offsetof (gen4_state_t, default_color_state));
+		    sampler_state_init (&state->sampler_state[i][j][k][l][1],
+					k, l,
+					offsetof (gen4_state_t, default_color_state));
+		}
 
-    /* mask sampler state */
-    mask_sampler_state = &state->mask_sampler_state;
-    mask_sampler_state->ss0.lod_preclamp = 1; /* GL mode */
-    mask_sampler_state->ss3.chroma_key_enable = 0; /* disable chromakey */
-
-    /* vertex shader state */
     /* Set up the vertex shader to be disabled (passthrough) */
     vs_state = &state->vs_state;
     vs_state->thread4.nr_urb_entries = URB_VS_ENTRIES;
@@ -613,8 +671,6 @@ gen4_state_init (gen4_state_t *state)
     wm_state->thread3.dispatch_grf_start_reg = 3; /* must match kernel */
 
     wm_state->wm4.stats_enable = 1;  /* statistic */
-    src_sampler_offset = offsetof (gen4_state_t, src_sampler_state);
-    wm_state->wm4.sampler_state_pointer = src_sampler_offset >> 5;
     wm_state->wm4.sampler_count = 1; /* 1-4 samplers used */
     wm_state->wm5.max_threads = PS_MAX_THREADS - 1;
     wm_state->wm5.thread_dispatch_enable = 1;
@@ -717,6 +773,28 @@ i965_exastate_reset(struct i965_exastate_buffer *state)
     i965_init_state_objects(state->pScrn, state->map);
 }
 
+static sampler_state_filter_t
+sampler_state_filter_from_picture (int filter)
+{
+    switch (filter) {
+    case PictFilterNearest:
+	return SAMPLER_STATE_FILTER_NEAREST;
+    case PictFilterBilinear:
+	return SAMPLER_STATE_FILTER_BILINEAR;
+    default:
+	return -1;
+    }
+}
+
+static sampler_state_extend_t
+sampler_state_extend_from_picture (int repeat)
+{
+    if (repeat)
+	return SAMPLER_STATE_EXTEND_REPEAT;
+    else
+	return SAMPLER_STATE_EXTEND_NONE;
+}
+
 Bool
 i965_prepare_composite(int op, PicturePtr pSrcPicture,
 		       PicturePtr pMaskPicture, PicturePtr pDstPicture,
@@ -731,13 +809,14 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     struct brw_cc_unit_state *cc_state;
     CARD32 *ps_kernel;
     int ps_kernel_offset, sip_kernel_offset;
-    int sf_state_offset, default_color_offset;
+    int sf_state_offset;
     char *start_base;
     void *map;
     gen4_state_t *gen4_state;
     struct brw_wm_unit_state *wm_state;
-    struct brw_sampler_state *src_sampler_state;
-    struct brw_sampler_state *mask_sampler_state;
+    int sampler_state_offset;
+    sampler_state_filter_t src_filter, mask_filter;
+    sampler_state_extend_t src_extend, mask_extend;
 
     if (pI830->use_ttm_batch) {
 	i965_exastate_reset(pI830->exa965);
@@ -884,63 +963,31 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     else
 	binding_table[2] = 0;
 
-    /* PS kernel use this sampler */
-    src_sampler_state = &gen4_state->src_sampler_state;
-    switch(pSrcPicture->filter) {
-    case PictFilterNearest:
-   	src_sampler_state->ss0.min_filter = BRW_MAPFILTER_NEAREST;
-   	src_sampler_state->ss0.mag_filter = BRW_MAPFILTER_NEAREST;
-	break;
-    case PictFilterBilinear:
-	src_sampler_state->ss0.min_filter = BRW_MAPFILTER_LINEAR;
-   	src_sampler_state->ss0.mag_filter = BRW_MAPFILTER_LINEAR;
-	break;
-    default:
-	I830FALLBACK("Bad filter 0x%x\n", pSrcPicture->filter);
-    }
+    src_filter = sampler_state_filter_from_picture (pSrcPicture->filter);
+    if (src_filter < 0)
+	I830FALLBACK ("Bad filter 0x%x\n", pSrcPicture->filter);
 
-    if (!pSrcPicture->repeat) {
-   	src_sampler_state->ss1.r_wrap_mode = BRW_TEXCOORDMODE_CLAMP_BORDER;
-   	src_sampler_state->ss1.s_wrap_mode = BRW_TEXCOORDMODE_CLAMP_BORDER;
-   	src_sampler_state->ss1.t_wrap_mode = BRW_TEXCOORDMODE_CLAMP_BORDER;
-	default_color_offset = offsetof (gen4_state_t, default_color_state);
-	src_sampler_state->ss2.default_color_pointer = default_color_offset >> 5;
+    src_extend = sampler_state_extend_from_picture (pSrcPicture->repeat);
+
+    if (pMaskPicture) {
+	mask_filter = sampler_state_filter_from_picture (pMaskPicture->filter);
+	if (mask_filter < 0)
+	    I830FALLBACK ("Bad filter 0x%x\n", pMaskPicture->filter);
+
+	mask_extend = sampler_state_extend_from_picture (pMaskPicture->repeat);
     } else {
-   	src_sampler_state->ss1.r_wrap_mode = BRW_TEXCOORDMODE_WRAP;
-   	src_sampler_state->ss1.s_wrap_mode = BRW_TEXCOORDMODE_WRAP;
-   	src_sampler_state->ss1.t_wrap_mode = BRW_TEXCOORDMODE_WRAP;
+	mask_filter = SAMPLER_STATE_FILTER_NEAREST;
+	mask_extend = SAMPLER_STATE_EXTEND_NONE;
     }
 
-    if (pMask) {
-	mask_sampler_state = &gen4_state->mask_sampler_state;
-   	switch(pMaskPicture->filter) {
-   	case PictFilterNearest:
-   	    mask_sampler_state->ss0.min_filter = BRW_MAPFILTER_NEAREST;
-   	    mask_sampler_state->ss0.mag_filter = BRW_MAPFILTER_NEAREST;
-	    break;
-   	case PictFilterBilinear:
-   	    mask_sampler_state->ss0.min_filter = BRW_MAPFILTER_LINEAR;
-   	    mask_sampler_state->ss0.mag_filter = BRW_MAPFILTER_LINEAR;
-	    break;
-   	default:
-	    I830FALLBACK("Bad filter 0x%x\n", pMaskPicture->filter);
-   	}
+    sampler_state_offset = offsetof (gen4_state_t,
+				     sampler_state
+				     [src_filter]
+				     [src_extend]
+				     [mask_filter]
+				     [mask_extend][0]);
 
-   	if (!pMaskPicture->repeat) {
-   	    mask_sampler_state->ss1.r_wrap_mode =
-		BRW_TEXCOORDMODE_CLAMP_BORDER;
-   	    mask_sampler_state->ss1.s_wrap_mode =
-		BRW_TEXCOORDMODE_CLAMP_BORDER;
-   	    mask_sampler_state->ss1.t_wrap_mode =
-		BRW_TEXCOORDMODE_CLAMP_BORDER;
-            mask_sampler_state->ss2.default_color_pointer =
-		default_color_offset >> 5;
-   	} else {
-   	    mask_sampler_state->ss1.r_wrap_mode = BRW_TEXCOORDMODE_WRAP;
-   	    mask_sampler_state->ss1.s_wrap_mode = BRW_TEXCOORDMODE_WRAP;
-   	    mask_sampler_state->ss1.t_wrap_mode = BRW_TEXCOORDMODE_WRAP;
-    	}
-    }
+    gen4_state->wm_state.wm4.sampler_state_pointer = sampler_state_offset >> 5;
 
     /* Set up the PS kernel (dispatched by WM) */
     if (pMask) {
