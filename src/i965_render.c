@@ -262,10 +262,11 @@ static CARD32 *binding_table;
 
 /* these offsets will remain the same for all buffers post allocation */
 static int dest_surf_offset, src_surf_offset, mask_surf_offset;
+static int surface_state_offset;
 static int vb_offset;
 static int binding_table_offset;
 static float *vb;
-static int vb_max_size, vb_index;
+static int vb_index;
 
 static CARD32 src_blend, dst_blend;
 
@@ -434,7 +435,24 @@ typedef struct _gen4_state {
 					    [SAMPLER_STATE_EXTEND_COUNT];
 } gen4_state_t;
 
-char gen4_state_big_enough[EXA_LINEAR_EXTRA >= sizeof(gen4_state_t) ? 1 : -1];
+#define GEN4_VB_NUM_VERTICES   32
+
+typedef struct _gen4_surface_state {
+    struct brw_surface_state dest_surf_state;
+    PAD64 (brw_surface_state, 0);
+    struct brw_surface_state src_surf_state;
+    PAD64 (brw_surface_state, 1);
+    struct brw_surface_state mask_surf_state;
+    PAD64 (brw_surface_state, 2);
+
+    CARD32 binding_table[16];
+
+    float vb[GEN4_VB_NUM_VERTICES];
+} gen4_surface_state_t;
+
+char gen4_state_big_enough[(EXA_LINEAR_EXTRA >=
+			    (sizeof(gen4_state_t) +
+			     sizeof(gen4_surface_state_t))) ? 1 : -1];
 
 static CARD32 
 i965_get_card_format(PicturePtr pPict)
@@ -469,36 +487,31 @@ i965_check_rotation_transform(PictTransformPtr t)
 static void
 i965_init_state_offsets(ScrnInfoPtr pScrn, int total_size)
 {
-    unsigned int next_offset = 0, total_state_size;
-    static int init;
+    static int init = 0;
 
     if (init)
 	return;
 
     init = 1;
 
-    next_offset = sizeof(gen4_state_t);
+    surface_state_offset = ALIGN(sizeof(gen4_state_t), 32);
 
     /* And then the general state: */
-    dest_surf_offset = ALIGN(next_offset, 32);
-    next_offset = dest_surf_offset + sizeof(*dest_surf_state);
+    dest_surf_offset = surface_state_offset +
+	offsetof (gen4_surface_state_t, dest_surf_state);
 
-    src_surf_offset = ALIGN(next_offset, 32);
-    next_offset = src_surf_offset + sizeof(*src_surf_state);
+    src_surf_offset = surface_state_offset +
+	offsetof (gen4_surface_state_t, src_surf_state);
 
-    mask_surf_offset = ALIGN(next_offset, 32);
-    next_offset = mask_surf_offset + sizeof(*mask_surf_state);
+    mask_surf_offset = surface_state_offset +
+	offsetof (gen4_surface_state_t, mask_surf_state);
 
-    binding_table_offset = ALIGN(next_offset, 32);
-    next_offset = binding_table_offset + (4 * 4);
+    binding_table_offset = surface_state_offset +
+	offsetof (gen4_surface_state_t, binding_table);
 
-    total_state_size = next_offset;
+    vb_offset = surface_state_offset +
+	offsetof (gen4_surface_state_t, vb);
 
-    /* Align VB to native size of elements, for safety */
-    vb_offset = ALIGN(next_offset, 32);
-    vb_max_size = total_size - vb_offset;
-
-    ErrorF("%d available for vertex data\n", vb_max_size);
     /* Set up a default static partitioning of the URB, which is supposed to
      * allow anything we would want to do, at potentially lower performance.
      */
@@ -1227,7 +1240,7 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
 	    OUT_BATCH(pI830->exa_965_state->offset + vb_offset);
 	}
 
-        OUT_BATCH((vb_max_size / sizeof(float))); // set max index
+        OUT_BATCH(GEN4_VB_NUM_VERTICES); // set max index
    	OUT_BATCH(0); // ignore for VERTEXDATA, but still there
 
 	/* Set up our vertex elements, sourced from the single vertex buffer.
@@ -1314,7 +1327,7 @@ i965_composite(PixmapPtr pDst, int srcX, int srcY, int maskX, int maskY,
     /* Wait for any existing composite rectangles to land before we overwrite
      * the VB with the next one.
      */
-    if ((vb_index + 18) > (vb_max_size / sizeof(float))) {
+    if ((vb_index + 18) > GEN4_VB_NUM_VERTICES) {
       ErrorF("vb index exceeded maximum bailing...");
       return;
     }
