@@ -266,7 +266,6 @@ static int vb_offset;
 static int binding_table_offset;
 static float *vb;
 static int vb_max_size, vb_index;
-static int gen4_state_offset;
 
 static CARD32 src_blend, dst_blend;
 
@@ -478,8 +477,7 @@ i965_init_state_offsets(ScrnInfoPtr pScrn, int total_size)
 
     init = 1;
 
-    gen4_state_offset = ALIGN(next_offset, 64);
-    next_offset = gen4_state_offset + sizeof(gen4_state_t);
+    next_offset = sizeof(gen4_state_t);
 
     /* And then the general state: */
     dest_surf_offset = ALIGN(next_offset, 32);
@@ -791,14 +789,9 @@ gen4_state_init (gen4_state_t *state)
 }
 
 static void
-i965_init_state_objects(ScrnInfoPtr pScrn, unsigned char *start_base)
+gen4_surface_state_init (ScrnInfoPtr pScrn, unsigned char *start_base)
 {
     struct brw_surface_state *dest_surf_state, *src_surf_state, *mask_surf_state;
-    gen4_state_t* gen4_state;
-
-    gen4_state = (void *)(start_base + gen4_state_offset);
-
-    gen4_state_init (gen4_state);
 
     /* destination surface state */
     dest_surf_state = (void *)(start_base + dest_surf_offset);
@@ -863,7 +856,8 @@ i965_exastate_reset(struct i965_exastate_buffer *state)
     ddx_bo_map(state->buf, TRUE);
 
     state->map = state->buf->virtual;
-    i965_init_state_objects(state->pScrn, state->map);
+    gen4_state_init ((void *) state->map);
+    gen4_surface_state_init (state->pScrn, state->map);
 }
 
 static sampler_state_filter_t
@@ -915,8 +909,6 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     }
 
     start_base = map;
-
-    gen4_state = (void *)(start_base + gen4_state_offset);
 
     IntelEmitInvarientState(pScrn);
     *pI830->last_3d = LAST_3D_RENDER;
@@ -1438,7 +1430,8 @@ i965_init_exa_state(ScrnInfoPtr pScrn)
 	pI830->exa965 = i965_exastate_alloc(pScrn);
     } else {
 	void *map = pI830->FbBase + pI830->exa_965_state->offset;
-	i965_init_state_objects(pScrn, map);
+	gen4_state_init ((void *) map);
+	gen4_surface_state_init (pScrn, map);
     }
 
     return 0;
