@@ -523,7 +523,14 @@ I830InitBufMgr(ScreenPtr pScreen)
 	return;
    }
 
-   pI830->maxBatchSize = BATCH_SZ;
+   /* 865G appears to have a problem with large batchbuffer sizes,
+    * according to comments in Mesa code. It fixes problems on the hardware.
+    * - airlied */
+   if (IS_I865G(pI830))
+   	pI830->maxBatchSize = 4096;
+   else
+   	pI830->maxBatchSize = BATCH_SZ;
+
    pI830->bufmgr = intelddx_bufmgr_ttm_init(pI830->drmSubFD, DRM_FENCE_TYPE_EXE,
 			DRM_FENCE_TYPE_EXE | DRM_I915_FENCE_TYPE_RW,
 			BATCH_SZ);
