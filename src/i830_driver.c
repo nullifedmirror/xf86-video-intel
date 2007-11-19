@@ -3007,7 +3007,6 @@ I830LeaveVT(int scrnIndex, int flags)
       DRILock(screenInfo.screens[pScrn->scrnIndex], 0);
 
       I830DRISetVBlankInterrupt (pScrn, FALSE);
-      drmCtlUninstHandler(pI830->drmSubFD);
    }
 #endif
 
@@ -3017,6 +3016,12 @@ I830LeaveVT(int scrnIndex, int flags)
 
    i830_stop_ring(pScrn, TRUE);
 
+#ifdef XF86DRI
+   /* don't disable interrupt before stopping the ring for fencing */
+   if (pI830->directRenderingOpen) {
+      drmCtlUninstHandler(pI830->drmSubFD);
+   }
+#endif
    if (pI830->debug_modes) {
       i830CompareRegsToSnapshot(pScrn, "After LeaveVT");
       i830DumpRegs (pScrn);
