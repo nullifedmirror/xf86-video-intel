@@ -850,13 +850,10 @@ i965_exastate_reset(struct i965_exastate_buffer *state)
 {
     I830Ptr pI830 = I830PTR(state->pScrn);
 
+    /* First the general state buffer. */
     if (state->buf != NULL) {
 	ddx_bo_unreference(state->buf);
 	state->buf = NULL;
-    }
-    if (state->surface_buf != NULL) {
-	ddx_bo_unreference(state->surface_buf);
-	state->surface_buf = NULL;
     }
 
     state->buf = ddx_bo_alloc(pI830->bufmgr, "exa state buffer",
@@ -864,13 +861,19 @@ i965_exastate_reset(struct i965_exastate_buffer *state)
 			      DRM_BO_FLAG_MEM_TT);
     ddx_bo_map(state->buf, TRUE);
 
+    state->map = state->buf->virtual;
+    gen4_state_init ((void *) state->map);
+
+    /* Then the surface state buffer */
+    if (state->surface_buf != NULL) {
+	ddx_bo_unreference(state->surface_buf);
+	state->surface_buf = NULL;
+    }
+
     state->surface_buf = ddx_bo_alloc(pI830->bufmgr, "exa surface state buffer",
 				      EXASTATE_SZ, 4096,
 				      DRM_BO_FLAG_MEM_TT);
     ddx_bo_map(state->surface_buf, TRUE);
-
-    state->map = state->buf->virtual;
-    gen4_state_init ((void *) state->map);
 
     state->surface_map = state->surface_buf->virtual;
     gen4_surface_state_init (state->pScrn, state->surface_map);
