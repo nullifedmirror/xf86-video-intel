@@ -851,18 +851,15 @@ i965_exastate_reset(struct i965_exastate_buffer *state)
     I830Ptr pI830 = I830PTR(state->pScrn);
 
     /* First the general state buffer. */
-    if (state->buf != NULL) {
-	ddx_bo_unreference(state->buf);
-	state->buf = NULL;
+    if (state->buf == NULL) {
+	state->buf = ddx_bo_alloc(pI830->bufmgr, "exa state buffer",
+				  EXASTATE_SZ, 4096,
+				  DRM_BO_FLAG_MEM_TT);
+	ddx_bo_map(state->buf, TRUE);
+	state->map = state->buf->virtual;
+	gen4_state_init ((void *) state->map);
+	ddx_bo_unmap(state->buf);
     }
-
-    state->buf = ddx_bo_alloc(pI830->bufmgr, "exa state buffer",
-			      EXASTATE_SZ, 4096,
-			      DRM_BO_FLAG_MEM_TT);
-    ddx_bo_map(state->buf, TRUE);
-
-    state->map = state->buf->virtual;
-    gen4_state_init ((void *) state->map);
 
     /* Then the surface state buffer */
     if (state->surface_buf != NULL) {
@@ -1419,7 +1416,6 @@ void i965_done_composite(PixmapPtr pDst)
     }
 
     if (pI830->use_ttm_batch) {
-	ddx_bo_unmap(pI830->exa965->buf);
 	ddx_bo_unmap(pI830->exa965->surface_buf);
 	intelddx_batchbuffer_flush(pI830->batch);
     } else {
