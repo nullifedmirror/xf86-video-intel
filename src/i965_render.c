@@ -262,7 +262,6 @@ static CARD32 *binding_table;
 
 /* these offsets will remain the same for all buffers post allocation */
 static int dest_surf_offset, src_surf_offset, mask_surf_offset;
-static int surface_state_offset;
 static int vb_offset;
 static int binding_table_offset;
 static float *vb;
@@ -494,23 +493,16 @@ i965_init_state_offsets(ScrnInfoPtr pScrn, int total_size)
 
     init = 1;
 
-    surface_state_offset = ALIGN(sizeof(gen4_state_t), 32);
-
     /* And then the general state: */
-    dest_surf_offset = surface_state_offset +
-	offsetof (gen4_surface_state_t, dest_surf_state);
+    dest_surf_offset = offsetof (gen4_surface_state_t, dest_surf_state);
 
-    src_surf_offset = surface_state_offset +
-	offsetof (gen4_surface_state_t, src_surf_state);
+    src_surf_offset = offsetof (gen4_surface_state_t, src_surf_state);
 
-    mask_surf_offset = surface_state_offset +
-	offsetof (gen4_surface_state_t, mask_surf_state);
+    mask_surf_offset = offsetof (gen4_surface_state_t, mask_surf_state);
 
-    binding_table_offset = surface_state_offset +
-	offsetof (gen4_surface_state_t, binding_table);
+    binding_table_offset = offsetof (gen4_surface_state_t, binding_table);
 
-    vb_offset = surface_state_offset +
-	offsetof (gen4_surface_state_t, vb);
+    vb_offset = offsetof (gen4_surface_state_t, vb);
 
     /* Set up a default static partitioning of the URB, which is supposed to
      * allow anything we would want to do, at potentially lower performance.
@@ -862,15 +854,26 @@ i965_exastate_reset(struct i965_exastate_buffer *state)
 	ddx_bo_unreference(state->buf);
 	state->buf = NULL;
     }
+    if (state->surface_buf != NULL) {
+	ddx_bo_unreference(state->surface_buf);
+	state->surface_buf = NULL;
+    }
 
     state->buf = ddx_bo_alloc(pI830->bufmgr, "exa state buffer",
 			      EXASTATE_SZ, 4096,
 			      DRM_BO_FLAG_MEM_TT);
     ddx_bo_map(state->buf, TRUE);
 
+    state->surface_buf = ddx_bo_alloc(pI830->bufmgr, "exa surface state buffer",
+				      EXASTATE_SZ, 4096,
+				      DRM_BO_FLAG_MEM_TT);
+    ddx_bo_map(state->surface_buf, TRUE);
+
     state->map = state->buf->virtual;
     gen4_state_init ((void *) state->map);
-    gen4_surface_state_init (state->pScrn, state->map);
+
+    state->surface_map = state->surface_buf->virtual;
+    gen4_surface_state_init (state->pScrn, state->surface_map);
 }
 
 static sampler_state_filter_t
@@ -911,17 +914,19 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     char *start_base;
     void *map;
     gen4_state_t *gen4_state;
+    char *surface_start_base;
+    void *surface_map;
     sampler_state_filter_t src_filter, mask_filter;
     sampler_state_extend_t src_extend, mask_extend;
 
     if (pI830->use_ttm_batch) {
 	i965_exastate_reset(pI830->exa965);
-	map = pI830->exa965->map;
+	surface_map = pI830->exa965->surface_map;
     }else{
-	map = pI830->exa_965_state->offset + pI830->FbBase;
+	surface_map = pI830->exa_965_state->offset + pI830->FbBase;
     }
 
-    start_base = map;
+    surface_start_base = surface_map;
 
     IntelEmitInvarientState(pScrn);
     *pI830->last_3d = LAST_3D_RENDER;
@@ -976,14 +981,14 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     /* Because we only have a single static buffer for our state currently,
      * we have to sync before updating it every time.
      */
-    vb = (void *)(start_base + vb_offset);
+    vb = (void *)(surface_start_base + vb_offset);
     vb_index = 0;
 
     i965_get_blend_cntl(op, pMaskPicture, pDstPicture->format,
 			&src_blend, &dst_blend);
 
     /* Set up the state buffer for the destination surface */
-    dest_surf_state = (void *)(start_base + dest_surf_offset);
+    dest_surf_state = (void *)(surface_start_base + dest_surf_offset);
     i965_get_dest_format(pDstPicture, &dst_format);
     dest_surf_state->ss0.surface_format = dst_format;
 
@@ -991,7 +996,7 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     	intelddx_batchbuffer_emit_pixmap(pDst,
 				     DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_WRITE,
 				     DRM_BO_MASK_MEM | DRM_BO_FLAG_WRITE | DRM_BO_FLAG_CACHED,
-				     pI830->exa965->buf, dest_surf_offset + 4, 0);
+				     pI830->exa965->surface_buf, dest_surf_offset + 4, 0);
     } else {
         dest_surf_state->ss1.base_addr = intel_get_pixmap_offset(pDst);
     }
@@ -1003,14 +1008,14 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     dest_surf_state->ss3.tiled_surface = dst_tiled;
 
     /* Set up the source surface state buffer */
-    src_surf_state = (void *)(start_base + src_surf_offset);
+    src_surf_state = (void *)(surface_start_base + src_surf_offset);
     src_surf_state->ss0.surface_format = i965_get_card_format(pSrcPicture);
 
     if (pI830->use_ttm_batch) {
         intelddx_batchbuffer_emit_pixmap(pSrc,
 				 DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
 				 DRM_BO_MASK_MEM | DRM_BO_FLAG_READ | DRM_BO_FLAG_CACHED,
-				 pI830->exa965->buf, src_surf_offset + 4, 0);
+				 pI830->exa965->surface_buf, src_surf_offset + 4, 0);
     } else {
         src_surf_state->ss1.base_addr = intel_get_pixmap_offset(pSrc);
     }
@@ -1022,13 +1027,13 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
 
     /* setup mask surface */
     if (pMask) {
-	mask_surf_state = (void *)(start_base + mask_surf_offset);
+	mask_surf_state = (void *)(surface_start_base + mask_surf_offset);
    	mask_surf_state->ss0.surface_format = i965_get_card_format(pMaskPicture);
         if (pI830->use_ttm_batch) {
 	   intelddx_batchbuffer_emit_pixmap(pMask, 
 				     DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
 				     DRM_BO_MASK_MEM | DRM_BO_FLAG_READ | DRM_BO_FLAG_CACHED,
-				     pI830->exa965->buf, mask_surf_offset + 4, 0);
+				     pI830->exa965->surface_buf, mask_surf_offset + 4, 0);
         } else {
 	    mask_surf_state->ss1.base_addr = intel_get_pixmap_offset(pMask);
 	}
@@ -1039,7 +1044,7 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
 	mask_surf_state->ss3.tiled_surface = mask_tiled;
     }
 
-    binding_table = (void *)(start_base + binding_table_offset);
+    binding_table = (void *)(surface_start_base + binding_table_offset);
     /* Set up a binding table for our surfaces.  Only the PS will use it */
     binding_table[0] = dest_surf_offset;
     binding_table[1] = src_surf_offset;
@@ -1142,7 +1147,7 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
 	if (pI830->use_ttm_batch) {
 	    OUT_RELOC(pI830->exa965->buf, DRM_BO_FLAG_MEM_TT, BASE_ADDRESS_MODIFY);
 
-	    OUT_RELOC(pI830->exa965->buf, DRM_BO_FLAG_MEM_TT, BASE_ADDRESS_MODIFY);
+	    OUT_RELOC(pI830->exa965->surface_buf, DRM_BO_FLAG_MEM_TT, BASE_ADDRESS_MODIFY);
 	} else {
 	    OUT_BATCH(pI830->exa_965_state->offset | BASE_ADDRESS_MODIFY);
 	    OUT_BATCH(pI830->exa_965_state->offset | BASE_ADDRESS_MODIFY);
@@ -1234,7 +1239,7 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
 	    	 ((4 * 2 * nelem) << VB0_BUFFER_PITCH_SHIFT));
 
 	if (pI830->use_ttm_batch) {
-	    OUT_RELOC(pI830->exa965->buf, DRM_BO_FLAG_MEM_TT, vb_offset);
+	    OUT_RELOC(pI830->exa965->surface_buf, DRM_BO_FLAG_MEM_TT, vb_offset);
 
 	} else {
 	    OUT_BATCH(pI830->exa_965_state->offset + vb_offset);
@@ -1412,6 +1417,7 @@ void i965_done_composite(PixmapPtr pDst)
 
     if (pI830->use_ttm_batch) {
 	ddx_bo_unmap(pI830->exa965->buf);
+	ddx_bo_unmap(pI830->exa965->surface_buf);
 	intelddx_batchbuffer_flush(pI830->batch);
     } else {
 	I830Sync(pScrn);
