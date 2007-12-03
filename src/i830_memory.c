@@ -347,7 +347,6 @@ i830_reset_allocations(ScrnInfoPtr pScrn)
     pI830->exa_offscreen = NULL;
     pI830->exa_965_state = NULL;
     pI830->overlay_regs = NULL;
-    pI830->logical_context = NULL;
 #ifdef XF86DRI
     pI830->back_buffer = NULL;
     pI830->third_buffer = NULL;
@@ -1354,15 +1353,6 @@ i830_allocate_2d_memory(ScrnInfoPtr pScrn)
 		   "Disabling HW cursor because the cursor memory "
 		   "allocation failed.\n");
 	pI830->SWCursor = TRUE;
-    }
-
-    /* Space for the X Server's 3D context.  32k is fine for right now. */
-    pI830->logical_context = i830_allocate_memory(pScrn, "logical 3D context",
-						  KB(32), GTT_PAGE_SIZE, 0);
-    if (pI830->logical_context == NULL) {
-	xf86DrvMsg(pScrn->scrnIndex, X_WARNING,
-		   "Failed to allocate logical context space.\n");
-	return FALSE;
     }
 
     /* even in XAA, 965G needs state mem buffer for rendering */

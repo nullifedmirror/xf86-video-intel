@@ -404,8 +404,6 @@ typedef struct _I830Rec {
    void (*PointerMoved)(int, int, int);
    CreateScreenResourcesProcPtr    CreateScreenResources;
 
-   i830_memory *logical_context;
-
 #ifdef XF86DRI
    i830_memory *back_buffer;
    i830_memory *third_buffer;
