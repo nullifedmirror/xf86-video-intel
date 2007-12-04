@@ -1223,7 +1223,7 @@ static enum accel_method
 i830_get_accel_method(ScrnInfoPtr pScrn)
 {
     I830Ptr pI830 = I830PTR(pScrn);
-    enum accel_method method;
+    enum accel_method method = ACCEL_NONE;
     char *s;
 
     /*
@@ -1247,15 +1247,30 @@ i830_get_accel_method(ScrnInfoPtr pScrn)
 #if defined(I830_USE_XAA) && defined(I830_USE_EXA)
     if ((s = (char *)xf86GetOptValString(pI830->Options, OPTION_ACCELMETHOD))) {
 	if (!xf86NameCmp(s, "EXA"))
-	    pI830->accel_method = ACCEL_EXA;
+	    method = ACCEL_EXA;
 	else if (!xf86NameCmp(s, "XAA"))
-	    pI830->accel_method = ACCEL_XAA;
+	    method = ACCEL_XAA;
     }
 #endif
 
     /* Noaccel overrides everything */
     if (xf86ReturnOptValBool(pI830->Options, OPTION_NOACCEL, FALSE))
 	method = ACCEL_NONE;
+
+    switch (method) {
+    case ACCEL_EXA:
+	xf86DrvMsg(pScrn->scrnIndex, X_INFO, "using EXA for acceleration\n");
+	break;
+    case ACCEL_XAA:
+	xf86DrvMsg(pScrn->scrnIndex, X_INFO, "using XAA for acceleration\n");
+	break;
+    case ACCEL_NONE:
+	xf86DrvMsg(pScrn->scrnIndex, X_INFO, "disabling acceleration\n");
+	break;
+    default:
+	xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "unknown acceleration method\n");
+	break;
+    }
 
     return method;
 }
@@ -1677,7 +1692,7 @@ I830PreInit(ScrnInfoPtr pScrn, int flags)
 #endif
 
 #ifdef I830_USE_EXA
-   if (pI830->accel_method == ACCEL_XAA) {
+   if (pI830->accel_method == ACCEL_EXA) {
       XF86ModReqInfo req;
       int errmaj, errmin;
 
@@ -2455,6 +2470,13 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
 	   pI830->tiling = TRUE;
        else
 	   pI830->tiling = FALSE;
+   }
+
+   /* Tiling only works with EXA, so disable it if needed */
+   if (pI830->tiling == TRUE && (pI830->accel_method != ACCEL_EXA)) {
+       xf86DrvMsg(pScrn->scrnIndex, X_WARNING, "Disabling tiling, only "
+		  "supported with EXA\n");
+       pI830->tiling = FALSE;
    }
 
    /* Enable FB compression if possible */
