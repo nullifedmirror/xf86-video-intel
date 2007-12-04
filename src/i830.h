@@ -346,6 +346,16 @@ enum backlight_control {
     KERNEL,
 };
 
+/*
+ * Already we have two too many accel methods.  None is equivalent to the
+ * noaccel case.
+ */
+enum accel_method {
+    ACCEL_NONE = 0,
+    ACCEL_EXA,
+    ACCEL_XAA,
+};
+
 typedef struct _I830Rec {
    unsigned char *MMIOBase;
    unsigned char *GTTBase;
@@ -458,8 +468,7 @@ typedef struct _I830Rec {
 
    Bool fence_used[FENCE_NEW_NR];
 
-   Bool useEXA;
-   Bool noAccel;
+   enum accel_method accel_method;
    Bool SWCursor;
 #ifdef I830_USE_XAA
    XAAInfoRecPtr AccelInfoRec;
@@ -808,7 +817,11 @@ static inline int i830_fb_compression_supported(I830Ptr pI830)
     /* fbc depends on tiled surface. And we don't support tiled
      * front buffer with XAA now.
      */
-    if (!pI830->tiling || (IS_I965G(pI830) && !pI830->useEXA))
+    if (!pI830->tiling)
+	return FALSE;
+    if (IS_I965G(pI830))
+	return FALSE;
+    if (!(pI830->accel_method == ACCEL_EXA))
 	return FALSE;
     return TRUE;
 }
