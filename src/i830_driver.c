@@ -1303,13 +1303,10 @@ I830PreInit(ScrnInfoPtr pScrn, int flags)
 
    i830_detect_chipset(pScrn);
 
-   if (IS_I9XX(pI830))
-   {
+   if (IS_I9XX(pI830)) {
       fb_bar = 2;
       mmio_bar = 0;
-   }
-   else
-   {
+   } else {
       fb_bar = 0;
       mmio_bar = 1;
    }
