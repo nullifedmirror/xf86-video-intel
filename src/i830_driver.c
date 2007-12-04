@@ -952,6 +952,7 @@ PreInitCleanup(ScrnInfoPtr pScrn)
 {
    I830Ptr pI830 = I830PTR(pScrn);
 
+   RestoreHWState(pScrn);
    if (I830IsPrimary(pScrn)) {
       if (pI830->entityPrivate)
 	 pI830->entityPrivate->pScrn_1 = NULL;
