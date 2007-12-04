@@ -2005,13 +2005,6 @@ RestoreHWState(ScrnInfoPtr pScrn)
 #ifdef XF86DRI
    I830DRISetVBlankInterrupt (pScrn, FALSE);
 #endif
-   /* Disable outputs */
-   for (i = 0; i < xf86_config->num_output; i++) {
-      xf86OutputPtr   output = xf86_config->output[i];
-      output->funcs->dpms(output, DPMSModeOff);
-   }
-   i830WaitForVblank(pScrn);
-   
    /* Disable pipes */
    for (i = 0; i < xf86_config->num_crtc; i++) {
       xf86CrtcPtr crtc = xf86_config->crtc[i];
@@ -3090,11 +3083,6 @@ I830EnterVT(int scrnIndex, int flags)
    /* Clear the framebuffer */
    memset(pI830->FbBase + pScrn->fbOffset, 0,
 	  pScrn->virtualY * pScrn->displayWidth * pI830->cpp);
-
-   for (o = 0; o < config->num_output; o++) {
-   	xf86OutputPtr  output = config->output[o];
-	output->funcs->dpms(output, DPMSModeOff);
-   }
 
    if (!xf86SetDesiredModes (pScrn))
       return FALSE;
