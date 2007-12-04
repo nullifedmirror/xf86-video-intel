@@ -435,7 +435,7 @@ i830_allocator_init(ScrnInfoPtr pScrn, unsigned long offset, unsigned long size)
      * 5.4 or newer so we can rely on the lock being held after DRIScreenInit,
      * rather than after DRIFinishScreenInit.
      */
-    if (pI830->directRenderingEnabled && pI830->drmMinor >= 7 &&
+    if (pI830->directRendering && pI830->drmMinor >= 7 &&
 	(dri_major > 5 || (dri_major == 5 && dri_minor >= 4)))
     {
 	int mmsize;

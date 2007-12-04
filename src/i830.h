@@ -515,8 +515,7 @@ typedef struct _I830Rec {
    CARD32 mapstate[6];
    CARD32 samplerstate[6];
 
-   Bool directRenderingDisabled;	/* DRI disabled in PreInit. */
-   Bool directRenderingEnabled;		/* DRI enabled this generation. */
+   Bool directRendering;
 
 #ifdef XF86DRI
    Bool directRenderingOpen;
