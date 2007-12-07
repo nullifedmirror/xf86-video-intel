@@ -952,6 +952,7 @@ PreInitCleanup(ScrnInfoPtr pScrn)
 {
    I830Ptr pI830 = I830PTR(pScrn);
 
+   RestoreHWState(pScrn);
    if (I830IsPrimary(pScrn)) {
       if (pI830->entityPrivate)
 	 pI830->entityPrivate->pScrn_1 = NULL;
@@ -1018,6 +1019,262 @@ i830SetHotkeyControl(ScrnInfoPtr pScrn, int mode)
    pI830->writeControl(pI830, GRX, 0x18, gr18);
 }
 
+static Bool
+i830_detect_chipset(ScrnInfoPtr pScrn)
+{
+    I830Ptr pI830 = I830PTR(pScrn);
+    MessageType from = X_PROBED;
+    const char *chipname;
+    uint32_t capid;
+    int fb_bar, mmio_bar;
+
+    switch (DEVICE_ID(pI830->PciInfo)) {
+    case PCI_CHIP_I830_M:
+	chipname = "830M";
+	break;
+    case PCI_CHIP_845_G:
+	chipname = "845G";
+	break;
+    case PCI_CHIP_I855_GM:
+	/* Check capid register to find the chipset variant */
+#if XSERVER_LIBPCIACCESS
+	pci_device_cfg_read_u32 (pI830->PciInfo, &capid, I85X_CAPID);
+#else
+	capid = pciReadLong (pI830->PciTag, I85X_CAPID);
+#endif
+	pI830->variant = (capid >> I85X_VARIANT_SHIFT) & I85X_VARIANT_MASK;
+	switch (pI830->variant) {
+	case I855_GM:
+	    chipname = "855GM";
+	    break;
+	case I855_GME:
+	    chipname = "855GME";
+	    break;
+	case I852_GM:
+	    chipname = "852GM";
+	    break;
+	case I852_GME:
+	    chipname = "852GME";
+	    break;
+	default:
+	    xf86DrvMsg(pScrn->scrnIndex, X_INFO,
+		       "Unknown 852GM/855GM variant: 0x%x)\n", pI830->variant);
+	    chipname = "852GM/855GM (unknown variant)";
+	    break;
+	}
+	break;
+    case PCI_CHIP_I865_G:
+	chipname = "865G";
+	break;
+    case PCI_CHIP_I915_G:
+	chipname = "915G";
+	break;
+    case PCI_CHIP_E7221_G:
+	chipname = "E7221 (i915)";
+	break;
+    case PCI_CHIP_I915_GM:
+	chipname = "915GM";
+	break;
+    case PCI_CHIP_I945_G:
+	chipname = "945G";
+	break;
+    case PCI_CHIP_I945_GM:
+	chipname = "945GM";
+	break;
+    case PCI_CHIP_I945_GME:
+	chipname = "945GME";
+	break;
+    case PCI_CHIP_I965_G:
+    case PCI_CHIP_I965_G_1:
+	chipname = "965G";
+	break;
+    case PCI_CHIP_I965_Q:
+	chipname = "965Q";
+	break;
+    case PCI_CHIP_I946_GZ:
+	chipname = "946GZ";
+	break;
+    case PCI_CHIP_I965_GM:
+	chipname = "965GM";
+	break;
+    case PCI_CHIP_I965_GME:
+	chipname = "965GME/GLE";
+	break;
+    case PCI_CHIP_G33_G:
+	chipname = "G33";
+	break;
+    case PCI_CHIP_Q35_G:
+	chipname = "Q35";
+	break;
+    case PCI_CHIP_Q33_G:
+	chipname = "Q33";
+	break;
+    default:
+	chipname = "unknown chipset";
+	break;
+    }
+    xf86DrvMsg(pScrn->scrnIndex, X_INFO,
+	       "Integrated Graphics Chipset: Intel(R) %s\n", chipname);
+
+    /* Set the Chipset and ChipRev, allowing config file entries to override. */
+    if (pI830->pEnt->device->chipset && *pI830->pEnt->device->chipset) {
+	pScrn->chipset = pI830->pEnt->device->chipset;
+	from = X_CONFIG;
+    } else if (pI830->pEnt->device->chipID >= 0) {
+	pScrn->chipset = (char *)xf86TokenToString(I830Chipsets,
+						   pI830->pEnt->device->chipID);
+	from = X_CONFIG;
+	xf86DrvMsg(pScrn->scrnIndex, X_CONFIG, "ChipID override: 0x%04X\n",
+		   pI830->pEnt->device->chipID);
+	DEVICE_ID(pI830->PciInfo) = pI830->pEnt->device->chipID;
+    } else {
+	from = X_PROBED;
+	pScrn->chipset = (char *)xf86TokenToString(I830Chipsets,
+						   DEVICE_ID(pI830->PciInfo));
+    }
+
+    if (pI830->pEnt->device->chipRev >= 0) {
+	xf86DrvMsg(pScrn->scrnIndex, X_CONFIG, "ChipRev override: %d\n",
+		   pI830->pEnt->device->chipRev);
+    }
+
+    xf86DrvMsg(pScrn->scrnIndex, from, "Chipset: \"%s\"\n",
+	       (pScrn->chipset != NULL) ? pScrn->chipset : "Unknown i8xx");
+
+    /* Now that we know the chipset, figure out the resource base addrs */
+    if (IS_I9XX(pI830)) {
+	fb_bar = 2;
+	mmio_bar = 0;
+    } else {
+	fb_bar = 0;
+	mmio_bar = 1;
+    }
+
+    if (pI830->pEnt->device->MemBase != 0) {
+	pI830->LinearAddr = pI830->pEnt->device->MemBase;
+	from = X_CONFIG;
+    } else {
+	pI830->LinearAddr = I810_MEMBASE (pI830->PciInfo, fb_bar);
+	if (pI830->LinearAddr == 0) {
+	    xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
+		       "No valid FB address in PCI config space\n");
+	    PreInitCleanup(pScrn);
+	    return FALSE;
+	}
+    }
+
+    xf86DrvMsg(pScrn->scrnIndex, from, "Linear framebuffer at 0x%lX\n",
+	       (unsigned long)pI830->LinearAddr);
+
+    if (pI830->pEnt->device->IOBase != 0) {
+	pI830->MMIOAddr = pI830->pEnt->device->IOBase;
+	from = X_CONFIG;
+    } else {
+	pI830->MMIOAddr = I810_MEMBASE (pI830->PciInfo, mmio_bar);
+	if (pI830->MMIOAddr == 0) {
+	    xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
+		       "No valid MMIO address in PCI config space\n");
+	    PreInitCleanup(pScrn);
+	    return FALSE;
+	}
+    }
+
+    xf86DrvMsg(pScrn->scrnIndex, from, "IO registers at addr 0x%lX\n",
+	       (unsigned long)pI830->MMIOAddr);
+
+    /* Now figure out mapsize on 8xx chips */
+    if (IS_I830(pI830) || IS_845G(pI830)) {
+#if XSERVER_LIBPCIACCESS
+	uint16_t		gmch_ctrl;
+	struct pci_device *bridge;
+
+	bridge = intel_host_bridge ();
+	pci_device_cfg_read_u16 (bridge, &gmch_ctrl, I830_GMCH_CTRL);
+#else
+	PCITAG bridge;
+	CARD16 gmch_ctrl;
+
+	bridge = pciTag(0, 0, 0);		/* This is always the host bridge */
+	gmch_ctrl = pciReadWord(bridge, I830_GMCH_CTRL);
+#endif
+	if ((gmch_ctrl & I830_GMCH_MEM_MASK) == I830_GMCH_MEM_128M) {
+	    pI830->FbMapSize = 0x8000000;
+	} else {
+	    pI830->FbMapSize = 0x4000000; /* 64MB - has this been tested ?? */
+	}
+    } else {
+	if (IS_I9XX(pI830)) {
+#if XSERVER_LIBPCIACCESS
+	    pI830->FbMapSize = pI830->PciInfo->regions[fb_bar].size;
+#else
+	    pI830->FbMapSize = 1UL << pciGetBaseSize(pI830->PciTag, 2, TRUE,
+						     NULL);
+#endif
+	} else {
+	    /* 128MB aperture for later i8xx series. */
+	    pI830->FbMapSize = 0x8000000;
+	}
+    }
+
+    return TRUE;
+}
+
+static enum accel_method
+i830_get_accel_method(ScrnInfoPtr pScrn)
+{
+    I830Ptr pI830 = I830PTR(pScrn);
+    enum accel_method method = ACCEL_NONE;
+    char *s;
+
+    /*
+     * The ugliness below:
+     * If either XAA or EXA (exclusive) is compiled in, default to it.
+     * 
+     * If both are compiled in, and the user didn't specify noAccel, use the
+     * config option AccelMethod to determine which to use, defaulting to EXA
+     * if none is specified, or if the string was unrecognized.
+     *
+     * All this *could* go away if we removed XAA support from this driver,
+     * for example. :)
+     */
+
+#ifdef I830_USE_EXA
+    method = ACCEL_EXA;
+#else
+    method = ACCEL_XAA;
+#endif
+
+#if defined(I830_USE_XAA) && defined(I830_USE_EXA)
+    if ((s = (char *)xf86GetOptValString(pI830->Options, OPTION_ACCELMETHOD))) {
+	if (!xf86NameCmp(s, "EXA"))
+	    method = ACCEL_EXA;
+	else if (!xf86NameCmp(s, "XAA"))
+	    method = ACCEL_XAA;
+    }
+#endif
+
+    /* Noaccel overrides everything */
+    if (xf86ReturnOptValBool(pI830->Options, OPTION_NOACCEL, FALSE))
+	method = ACCEL_NONE;
+
+    switch (method) {
+    case ACCEL_EXA:
+	xf86DrvMsg(pScrn->scrnIndex, X_INFO, "using EXA for acceleration\n");
+	break;
+    case ACCEL_XAA:
+	xf86DrvMsg(pScrn->scrnIndex, X_INFO, "using XAA for acceleration\n");
+	break;
+    case ACCEL_NONE:
+	xf86DrvMsg(pScrn->scrnIndex, X_INFO, "disabling acceleration\n");
+	break;
+    default:
+	xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "unknown acceleration method\n");
+	break;
+    }
+
+    return method;
+}
+
 /**
  * This is called per zaphod head (so usually just once) to do initialization
  * before the Screen is created.
@@ -1037,13 +1294,9 @@ I830PreInit(ScrnInfoPtr pScrn, int flags)
    I830EntPtr pI830Ent = NULL;					
    int flags24;
    int i;
-   char *s;
    pointer pVBEModule = NULL;
-   const char *chipname;
    int num_pipe;
    int max_width, max_height;
-   uint32_t	capid;
-   int fb_bar, mmio_bar;
 
    if (pScrn->numEntities != 1)
       return FALSE;
@@ -1180,161 +1433,8 @@ I830PreInit(ScrnInfoPtr pScrn, int flags)
    /* We have to use PIO to probe, because we haven't mapped yet. */
    I830SetPIOAccess(pI830);
 
-   switch (DEVICE_ID(pI830->PciInfo)) {
-   case PCI_CHIP_I830_M:
-      chipname = "830M";
-      break;
-   case PCI_CHIP_845_G:
-      chipname = "845G";
-      break;
-   case PCI_CHIP_I855_GM:
-      /* Check capid register to find the chipset variant */
-#if XSERVER_LIBPCIACCESS
-      pci_device_cfg_read_u32 (pI830->PciInfo, &capid, I85X_CAPID);
-#else
-      capid = pciReadLong (pI830->PciTag, I85X_CAPID);
-#endif
-      pI830->variant = (capid >> I85X_VARIANT_SHIFT) & I85X_VARIANT_MASK;
-      switch (pI830->variant) {
-      case I855_GM:
-	 chipname = "855GM";
-	 break;
-      case I855_GME:
-	 chipname = "855GME";
-	 break;
-      case I852_GM:
-	 chipname = "852GM";
-	 break;
-      case I852_GME:
-	 chipname = "852GME";
-	 break;
-      default:
-	 xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-		    "Unknown 852GM/855GM variant: 0x%x)\n", pI830->variant);
-	 chipname = "852GM/855GM (unknown variant)";
-	 break;
-      }
-      break;
-   case PCI_CHIP_I865_G:
-      chipname = "865G";
-      break;
-   case PCI_CHIP_I915_G:
-      chipname = "915G";
-      break;
-   case PCI_CHIP_E7221_G:
-      chipname = "E7221 (i915)";
-      break;
-   case PCI_CHIP_I915_GM:
-      chipname = "915GM";
-      break;
-   case PCI_CHIP_I945_G:
-      chipname = "945G";
-      break;
-   case PCI_CHIP_I945_GM:
-      chipname = "945GM";
-      break;
-   case PCI_CHIP_I945_GME:
-      chipname = "945GME";
-      break;
-   case PCI_CHIP_I965_G:
-   case PCI_CHIP_I965_G_1:
-      chipname = "965G";
-      break;
-   case PCI_CHIP_I965_Q:
-      chipname = "965Q";
-      break;
-   case PCI_CHIP_I946_GZ:
-      chipname = "946GZ";
-      break;
-   case PCI_CHIP_I965_GM:
-      chipname = "965GM";
-      break;
-   case PCI_CHIP_I965_GME:
-      chipname = "965GME/GLE";
-      break;
-   case PCI_CHIP_G33_G:
-      chipname = "G33";
-      break;
-   case PCI_CHIP_Q35_G:
-      chipname = "Q35";
-      break;
-   case PCI_CHIP_Q33_G:
-      chipname = "Q33";
-      break;
-   default:
-      chipname = "unknown chipset";
-      break;
-   }
-   xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-	      "Integrated Graphics Chipset: Intel(R) %s\n", chipname);
-
-   /* Set the Chipset and ChipRev, allowing config file entries to override. */
-   if (pI830->pEnt->device->chipset && *pI830->pEnt->device->chipset) {
-      pScrn->chipset = pI830->pEnt->device->chipset;
-      from = X_CONFIG;
-   } else if (pI830->pEnt->device->chipID >= 0) {
-      pScrn->chipset = (char *)xf86TokenToString(I830Chipsets,
-						 pI830->pEnt->device->chipID);
-      from = X_CONFIG;
-      xf86DrvMsg(pScrn->scrnIndex, X_CONFIG, "ChipID override: 0x%04X\n",
-		 pI830->pEnt->device->chipID);
-      DEVICE_ID(pI830->PciInfo) = pI830->pEnt->device->chipID;
-   } else {
-      from = X_PROBED;
-      pScrn->chipset = (char *)xf86TokenToString(I830Chipsets,
-						 DEVICE_ID(pI830->PciInfo));
-   }
-
-   if (pI830->pEnt->device->chipRev >= 0) {
-      xf86DrvMsg(pScrn->scrnIndex, X_CONFIG, "ChipRev override: %d\n",
-		 pI830->pEnt->device->chipRev);
-   }
-
-   xf86DrvMsg(pScrn->scrnIndex, from, "Chipset: \"%s\"\n",
-	      (pScrn->chipset != NULL) ? pScrn->chipset : "Unknown i8xx");
-
-   if (IS_I9XX(pI830))
-   {
-      fb_bar = 2;
-      mmio_bar = 0;
-   }
-   else
-   {
-      fb_bar = 0;
-      mmio_bar = 1;
-   }
-
-   if (pI830->pEnt->device->MemBase != 0) {
-      pI830->LinearAddr = pI830->pEnt->device->MemBase;
-      from = X_CONFIG;
-   } else {
-      pI830->LinearAddr = I810_MEMBASE (pI830->PciInfo, fb_bar);
-      if (pI830->LinearAddr == 0) {
-	 xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
-		    "No valid FB address in PCI config space\n");
-	 PreInitCleanup(pScrn);
-	 return FALSE;
-      }
-   }
-
-   xf86DrvMsg(pScrn->scrnIndex, from, "Linear framebuffer at 0x%lX\n",
-	      (unsigned long)pI830->LinearAddr);
-
-   if (pI830->pEnt->device->IOBase != 0) {
-      pI830->MMIOAddr = pI830->pEnt->device->IOBase;
-      from = X_CONFIG;
-   } else {
-      pI830->MMIOAddr = I810_MEMBASE (pI830->PciInfo, mmio_bar);
-      if (pI830->MMIOAddr == 0) {
-	 xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
-		    "No valid MMIO address in PCI config space\n");
-	 PreInitCleanup(pScrn);
-	 return FALSE;
-      }
-   }
-
-   xf86DrvMsg(pScrn->scrnIndex, from, "IO registers at addr 0x%lX\n",
-	      (unsigned long)pI830->MMIOAddr);
+   if (!i830_detect_chipset(pScrn))
+       return FALSE;
 
    /* check quirks */
    i830_fixup_devices(pScrn);
@@ -1353,39 +1453,6 @@ I830PreInit(ScrnInfoPtr pScrn, int flags)
       max_height = 2048;
    }
    xf86CrtcSetSizeRange (pScrn, 320, 200, max_width, max_height);
-
-   if (IS_I830(pI830) || IS_845G(pI830)) {
-#if XSERVER_LIBPCIACCESS
-      uint16_t		gmch_ctrl;
-      struct pci_device *bridge;
-
-      bridge = intel_host_bridge ();
-      pci_device_cfg_read_u16 (bridge, &gmch_ctrl, I830_GMCH_CTRL);
-#else
-      PCITAG bridge;
-      CARD16 gmch_ctrl;
-
-      bridge = pciTag(0, 0, 0);		/* This is always the host bridge */
-      gmch_ctrl = pciReadWord(bridge, I830_GMCH_CTRL);
-#endif
-      if ((gmch_ctrl & I830_GMCH_MEM_MASK) == I830_GMCH_MEM_128M) {
-	 pI830->FbMapSize = 0x8000000;
-      } else {
-	 pI830->FbMapSize = 0x4000000; /* 64MB - has this been tested ?? */
-      }
-   } else {
-      if (IS_I9XX(pI830)) {
-#if XSERVER_LIBPCIACCESS
-	 pI830->FbMapSize = pI830->PciInfo->regions[fb_bar].size;
-#else
-	 pI830->FbMapSize = 1UL << pciGetBaseSize(pI830->PciTag, 2, TRUE,
-						  NULL);
-#endif
-      } else {
-	 /* 128MB aperture for later i8xx series. */
-	 pI830->FbMapSize = 0x8000000;
-      }
-   }
 
    /* Some of the probing needs MMIO access, so map it here. */
    I830MapMMIO(pScrn);
@@ -1420,65 +1487,25 @@ I830PreInit(ScrnInfoPtr pScrn, int flags)
    xf86DrvMsg(pScrn->scrnIndex, X_INFO, "%d display pipe%s available.\n",
 	      num_pipe, num_pipe > 1 ? "s" : "");
 
-   if (xf86ReturnOptValBool(pI830->Options, OPTION_NOACCEL, FALSE)) {
-      pI830->noAccel = TRUE;
-   }
-
-   /*
-    * The ugliness below:
-    * If either XAA or EXA (exclusive) is compiled in, default to it.
-    * 
-    * If both are compiled in, and the user didn't specify noAccel, use the
-    * config option AccelMethod to determine which to use, defaulting to EXA
-    * if none is specified, or if the string was unrecognized.
-    *
-    * All this *could* go away if we removed XAA support from this driver,
-    * for example. :)
-    */
-   if (!pI830->noAccel) {
-#ifdef I830_USE_EXA
-       pI830->useEXA = TRUE;
-#else
-       pI830->useEXA = FALSE;
-#endif
-#if defined(I830_USE_XAA) && defined(I830_USE_EXA)
-       int from = X_DEFAULT;
-       if ((s = (char *)xf86GetOptValString(pI830->Options,
-					    OPTION_ACCELMETHOD))) {
-	   if (!xf86NameCmp(s, "EXA")) {
-	       from = X_CONFIG;
-	       pI830->useEXA = TRUE;
-	   }
-	   else if (!xf86NameCmp(s, "XAA")) {
-	       from = X_CONFIG;
-	       pI830->useEXA = FALSE;
-	   }
-       }
-#endif
-       xf86DrvMsg(pScrn->scrnIndex, from, "Using %s for acceleration\n",
-		  pI830->useEXA ? "EXA" : "XAA");
-   }
+   pI830->accel_method =  i830_get_accel_method(pScrn);
 
    if (xf86ReturnOptValBool(pI830->Options, OPTION_SW_CURSOR, FALSE)) {
       pI830->SWCursor = TRUE;
    }
 
-   pI830->directRenderingDisabled =
-	!xf86ReturnOptValBool(pI830->Options, OPTION_DRI, TRUE);
+   /* Try to enable DRI unless explicitly disabled */
+   pI830->directRendering = xf86ReturnOptValBool(pI830->Options, OPTION_DRI,
+						 TRUE);
 
 #ifdef XF86DRI
-   if (!pI830->directRenderingDisabled) {
-      if (pI830->noAccel || pI830->SWCursor) {
-	 xf86DrvMsg(pScrn->scrnIndex, X_CONFIG, "DRI is disabled because it "
-		    "needs HW cursor and 2D acceleration.\n");
-	 pI830->directRenderingDisabled = TRUE;
-      } else if (pScrn->depth != 16 && pScrn->depth != 24) {
-	 xf86DrvMsg(pScrn->scrnIndex, X_CONFIG, "DRI is disabled because it "
-		    "runs only at depths 16 and 24.\n");
-	 pI830->directRenderingDisabled = TRUE;
-      }
-
-      if (!pI830->directRenderingDisabled) {
+   if (pI830->directRendering) {
+      if ((pI830->accel_method == ACCEL_NONE) || pI830->SWCursor ||
+	  ((pScrn->depth != 16) && (pScrn->depth != 24))) {
+	 xf86DrvMsg(pScrn->scrnIndex, X_CONFIG, "DRI disabled because it "
+		    "needs HW cursor, 2D acceleration and 16 or 24 bit "
+		    "color.\n");
+	 pI830->directRendering = FALSE;
+      } else {
 	 pI830->allocate_classic_textures = TRUE;
 
 	 from = X_PROBED;
@@ -1496,9 +1523,10 @@ I830PreInit(ScrnInfoPtr pScrn, int flags)
 	 }
 #endif
       }
-   } 
-   
-#endif
+   }
+#else /* !XF86DRI */
+   pI830->directRendering = FALSE;
+#endif /* XF86DRI */
 
    I830PreInitDDC(pScrn);
    for (i = 0; i < num_pipe; i++) {
@@ -1514,7 +1542,6 @@ I830PreInit(ScrnInfoPtr pScrn, int flags)
       PreInitCleanup(pScrn);
       return FALSE;
    }
-   RestoreHWState(pScrn);
 
    /* XXX This should go away, replaced by xf86Crtc.c support for it */
    pI830->rotation = RR_Rotate_0;
@@ -1565,7 +1592,7 @@ I830PreInit(ScrnInfoPtr pScrn, int flags)
 
 #ifdef XF86DRI
    pI830->allowPageFlip = FALSE;
-   from = (!pI830->directRenderingDisabled &&
+   from = (pI830->directRendering &&
 	   xf86GetOptValBool(pI830->Options, OPTION_PAGEFLIP,
 			     &pI830->allowPageFlip)) ? X_CONFIG : X_DEFAULT;
 
@@ -1575,7 +1602,7 @@ I830PreInit(ScrnInfoPtr pScrn, int flags)
 
 #ifdef XF86DRI
    pI830->TripleBuffer = FALSE;
-   from =  (!pI830->directRenderingDisabled &&
+   from =  (pI830->directRendering &&
 	    xf86GetOptValBool(pI830->Options, OPTION_TRIPLEBUFFER,
 			      &pI830->TripleBuffer)) ? X_CONFIG : X_DEFAULT;
 
@@ -1632,7 +1659,7 @@ I830PreInit(ScrnInfoPtr pScrn, int flags)
 
    if (!IS_I965G(pI830) && pScrn->virtualY > 2048) {
       xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "Cannot support > 2048 vertical lines. disabling acceleration.\n");
-      pI830->noAccel = TRUE;
+      pI830->accel_method = ACCEL_NONE;
    }
 
    /* Don't need MMIO access anymore. */
@@ -1653,7 +1680,7 @@ I830PreInit(ScrnInfoPtr pScrn, int flags)
    xf86LoaderReqSymLists(I810fbSymbols, NULL);
 
 #ifdef I830_USE_XAA
-   if (!pI830->noAccel && !pI830->useEXA) {
+   if (pI830->accel_method == ACCEL_XAA) {
       if (!xf86LoadSubModule(pScrn, "xaa")) {
 	 PreInitCleanup(pScrn);
 	 return FALSE;
@@ -1663,7 +1690,7 @@ I830PreInit(ScrnInfoPtr pScrn, int flags)
 #endif
 
 #ifdef I830_USE_EXA
-   if (!pI830->noAccel && pI830->useEXA) {
+   if (pI830->accel_method == ACCEL_EXA) {
       XF86ModReqInfo req;
       int errmaj, errmin;
 
@@ -1709,8 +1736,7 @@ I830PreInit(ScrnInfoPtr pScrn, int flags)
 
 #if defined(XF86DRI)
    /* Load the dri module if requested. */
-   if (xf86ReturnOptValBool(pI830->Options, OPTION_DRI, FALSE) &&
-       !pI830->directRenderingDisabled) {
+   if (pI830->directRendering) {
       if (xf86LoadSubModule(pScrn, "dri")) {
 	 xf86LoaderReqSymLists(I810driSymbols, I810drmSymbols, NULL);
       }
@@ -1741,20 +1767,22 @@ i830_stop_ring(ScrnInfoPtr pScrn, Bool flush)
    if (pI830->entityPrivate)
       pI830->entityPrivate->RingRunning = 0;
 
-   /* Flush the ring buffer (if enabled), then disable it. */
-   if (!pI830->noAccel) {
-      temp = INREG(LP_RING + RING_LEN);
-      if (temp & RING_VALID) {
-	 i830_refresh_ring(pScrn);
-	 I830Sync(pScrn);
-	 DO_RING_IDLE();
-      }
+   /* In the ACCEL_NONE case we don't have a ring buffer */
+   if (pI830->accel_method == ACCEL_NONE)
+       return;
 
-      OUTREG(LP_RING + RING_LEN, 0);
-      OUTREG(LP_RING + RING_HEAD, 0);
-      OUTREG(LP_RING + RING_TAIL, 0);
-      OUTREG(LP_RING + RING_START, 0);
+   /* Flush the ring buffer (if enabled), then disable it. */
+   temp = INREG(LP_RING + RING_LEN);
+   if (temp & RING_VALID) {
+       i830_refresh_ring(pScrn);
+       I830Sync(pScrn);
+       DO_RING_IDLE();
    }
+
+   OUTREG(LP_RING + RING_LEN, 0);
+   OUTREG(LP_RING + RING_HEAD, 0);
+   OUTREG(LP_RING + RING_TAIL, 0);
+   OUTREG(LP_RING + RING_START, 0);
 }
 
 static void
@@ -1764,8 +1792,9 @@ i830_start_ring(ScrnInfoPtr pScrn)
    unsigned int itemp;
 
    DPRINTF(PFX, "SetRingRegs\n");
-
-   if (pI830->noAccel)
+   
+   /* In the ACCEL_NONE case we don't have a ring buffer */
+   if (pI830->accel_method == ACCEL_NONE)
       return;
 
    if (!I830IsPrimary(pScrn)) return;
@@ -2005,13 +2034,6 @@ RestoreHWState(ScrnInfoPtr pScrn)
 #ifdef XF86DRI
    I830DRISetVBlankInterrupt (pScrn, FALSE);
 #endif
-   /* Disable outputs */
-   for (i = 0; i < xf86_config->num_output; i++) {
-      xf86OutputPtr   output = xf86_config->output[i];
-      output->funcs->dpms(output, DPMSModeOff);
-   }
-   i830WaitForVblank(pScrn);
-   
    /* Disable pipes */
    for (i = 0; i < xf86_config->num_crtc; i++) {
       xf86CrtcPtr crtc = xf86_config->crtc[i];
@@ -2235,11 +2257,11 @@ IntelEmitInvarientState(ScrnInfoPtr pScrn)
    I830Ptr pI830 = I830PTR(pScrn);
    CARD32 ctx_addr;
 
-   if (pI830->noAccel)
+   if (pI830->accel_method == ACCEL_NONE)
       return;
 
 #ifdef XF86DRI
-   if (pI830->directRenderingEnabled) {
+   if (pI830->directRendering) {
       drmI830Sarea *sarea = DRIGetSAREAPrivate(pScrn->pScreen);
 
       /* Mark that the X Server was the last holder of the context */
@@ -2289,6 +2311,50 @@ I830BlockHandler(int i,
     pScreen->BlockHandler = I830BlockHandler;
 
     I830VideoBlockHandler(i, blockData, pTimeout, pReadmask);
+}
+
+static void
+i830_fixup_mtrrs(ScrnInfoPtr pScrn)
+{
+#ifdef HAS_MTRR_SUPPORT
+    I830Ptr pI830 = I830PTR(pScrn);
+    int fd;
+    struct mtrr_gentry gentry;
+    struct mtrr_sentry sentry;
+
+    if ( ( fd = open ("/proc/mtrr", O_RDONLY, 0) ) != -1 ) {
+	for (gentry.regnum = 0; ioctl (fd, MTRRIOC_GET_ENTRY, &gentry) == 0;
+	     ++gentry.regnum) {
+
+	    if (gentry.size < 1) {
+		/* DISABLED */
+		continue;
+	    }
+
+	    /* Check the MTRR range is one we like and if not - remove it.
+	     * The Xserver common layer will then setup the right range
+	     * for us.
+	     */
+	    if (gentry.base == pI830->LinearAddr && 
+		gentry.size < pI830->FbMapSize) {
+
+		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
+			   "Removing bad MTRR range (base 0x%lx, size 0x%x)\n",
+			   gentry.base, gentry.size);
+
+		sentry.base = gentry.base;
+		sentry.size = gentry.size;
+		sentry.type = gentry.type;
+
+		if (ioctl (fd, MTRRIOC_DEL_ENTRY, &sentry) == -1) {
+		    xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
+			       "Failed to remove bad MTRR range\n");
+		}
+	    }
+	}
+	close(fd);
+    }
+#endif
 }
 
 static Bool
@@ -2400,20 +2466,13 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
    }
 
 #ifdef XF86DRI
-   /* Check for appropriate bpp and module support to initialize DRI. */
-   if (!I830CheckDRIAvailable(pScrn)) {
-      pI830->directRenderingDisabled = TRUE;
+   /* Try to init DRI if it's enabled */
+   if (pI830->directRendering) {
+       if (I830CheckDRIAvailable(pScrn))
+	   pI830->directRendering = I830DRIScreenInit(pScreen);
+       else
+	   pI830->directRendering = FALSE;
    }
-
-   /* If DRI hasn't been explicitly disabled, try to initialize it.
-    * It will be used by the memory allocator.
-    */
-   if (!pI830->directRenderingDisabled)
-      pI830->directRenderingEnabled = I830DRIScreenInit(pScreen);
-   else
-      pI830->directRenderingEnabled = FALSE;
-#else
-   pI830->directRenderingEnabled = FALSE;
 #endif
 
    /* Set up our video memory allocator for the chosen videoRam */
@@ -2445,6 +2504,13 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
 	   pI830->tiling = TRUE;
        else
 	   pI830->tiling = FALSE;
+   }
+
+   /* Tiling only works with EXA, so disable it if needed */
+   if (pI830->tiling == TRUE && (pI830->accel_method != ACCEL_EXA)) {
+       xf86DrvMsg(pScrn->scrnIndex, X_WARNING, "Disabling tiling, only "
+		  "supported with EXA\n");
+       pI830->tiling = FALSE;
    }
 
    /* Enable FB compression if possible */
@@ -2510,7 +2576,7 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
     pI830->XvEnabled = !pI830->XvDisabled;
 #endif
 
-   if (pI830->directRenderingEnabled) {
+   if (pI830->directRendering) {
       int savedDisplayWidth = pScrn->displayWidth;
       Bool tiled = FALSE;
 
@@ -2591,7 +2657,7 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
       if (i == MM_TURNS) {
 	 xf86DrvMsg(pScrn->scrnIndex, X_WARNING,
 		    "Not enough video memory.  Disabling DRI.\n");
-	 pI830->directRenderingEnabled = FALSE;
+	 pI830->directRendering = FALSE;
       }
    }
 #endif
@@ -2611,49 +2677,10 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
       xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
 		 "Cannot support DRI with frame buffer width > 2048.\n");
       pI830->tiling = FALSE;
-      pI830->directRenderingEnabled = FALSE;
+      pI830->directRendering = FALSE;
    }
 
-#ifdef HAS_MTRR_SUPPORT
-   {
-      int fd;
-      struct mtrr_gentry gentry;
-      struct mtrr_sentry sentry;
-
-      if ( ( fd = open ("/proc/mtrr", O_RDONLY, 0) ) != -1 ) {
-         for (gentry.regnum = 0; ioctl (fd, MTRRIOC_GET_ENTRY, &gentry) == 0;
-	      ++gentry.regnum) {
-
-	    if (gentry.size < 1) {
-	       /* DISABLED */
-	       continue;
-	    }
-
-            /* Check the MTRR range is one we like and if not - remove it.
-             * The Xserver common layer will then setup the right range
-             * for us.
-             */
-	    if (gentry.base == pI830->LinearAddr && 
-	        gentry.size < pI830->FbMapSize) {
-
-               xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-		  "Removing bad MTRR range (base 0x%lx, size 0x%x)\n",
-		  gentry.base, gentry.size);
-
-    	       sentry.base = gentry.base;
-               sentry.size = gentry.size;
-               sentry.type = gentry.type;
-
-               if (ioctl (fd, MTRRIOC_DEL_ENTRY, &sentry) == -1) {
-                  xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
-		     "Failed to remove bad MTRR range\n");
-               }
-	    }
-         }
-         close(fd);
-      }
-   }
-#endif
+   i830_fixup_mtrrs(pScrn);
 
    pI830->starting = TRUE;
 
@@ -2669,12 +2696,11 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
    pI830->XvEnabled = !pI830->XvDisabled;
    if (pI830->XvEnabled) {
       if (!I830IsPrimary(pScrn)) {
-         if (!pI8301->XvEnabled || pI830->noAccel) {
+	 if (!pI8301->XvEnabled || (pI830->accel_method == ACCEL_NONE)) {
             pI830->XvEnabled = FALSE;
 	    xf86DrvMsg(pScrn->scrnIndex, X_PROBED, "Xv is disabled.\n");
          }
-      } else
-      if (pI830->noAccel || pI830->StolenOnly) {
+      } else if ((pI830->accel_method == ACCEL_NONE) || pI830->StolenOnly) {
 	 xf86DrvMsg(pScrn->scrnIndex, X_PROBED, "Xv is disabled because it "
 		    "needs 2D accel and AGPGART.\n");
 	 pI830->XvEnabled = FALSE;
@@ -2684,18 +2710,18 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
    pI830->XvEnabled = FALSE;
 #endif
 
-   if (!pI830->noAccel) {
+   if (!(pI830->accel_method == ACCEL_NONE)) {
       if (pI830->LpRing->mem->size == 0) {
 	  xf86DrvMsg(pScrn->scrnIndex, X_WARNING,
 		     "Disabling acceleration because the ring buffer "
 		      "allocation failed.\n");
-	   pI830->noAccel = TRUE;
+	  pI830->accel_method = ACCEL_NONE;
       }
    }
 
 #ifdef I830_XV
    if (pI830->XvEnabled) {
-      if (pI830->noAccel) {
+      if (pI830->accel_method == ACCEL_NONE) {
 	 xf86DrvMsg(pScrn->scrnIndex, X_WARNING, "Disabling Xv because it "
 		    "needs 2D acceleration.\n");
 	 pI830->XvEnabled = FALSE;
@@ -2716,19 +2742,20 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
     * InitGLXVisuals call back.
     */
 
-   if (pI830->directRenderingEnabled) {
-      if (pI830->noAccel || pI830->SWCursor || (pI830->StolenOnly && I830IsPrimary(pScrn))) {
+   if (pI830->directRendering) {
+      if ((pI830->accel_method == ACCEL_NONE) || pI830->SWCursor ||
+	  (pI830->StolenOnly && I830IsPrimary(pScrn))) {
 	 xf86DrvMsg(pScrn->scrnIndex, X_PROBED, "DRI is disabled because it "
 		    "needs HW cursor, 2D accel and AGPGART.\n");
-	 pI830->directRenderingEnabled = FALSE;
+	 pI830->directRendering = FALSE;
       }
    }
 
-   if (pI830->directRenderingEnabled)
-      pI830->directRenderingEnabled = I830DRIDoMappings(pScreen);
+   if (pI830->directRendering)
+      pI830->directRendering = I830DRIDoMappings(pScreen);
 
    /* If we failed for any reason, free DRI memory. */
-   if (!pI830->directRenderingEnabled)
+   if (!pI830->directRendering)
       i830_free_3d_memory(pScrn);
 
    config = XF86_CRTC_CONFIG_PTR(pScrn);
@@ -2741,8 +2768,8 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
     * Also make sure the DRM can handle the swap.
     */
    if (I830LVDSPresent(pScrn) && !IS_I965GM(pI830) &&
-       (!pI830->directRenderingEnabled ||
-	(pI830->directRenderingEnabled && pI830->drmMinor >= 10))) {
+       (!pI830->directRendering ||
+	(pI830->directRendering && pI830->drmMinor >= 10))) {
        xf86DrvMsg(pScrn->scrnIndex, X_INFO, "adjusting plane->pipe mappings "
 		  "to allow for framebuffer compression\n");
        for (c = 0; c < config->num_crtc; c++) {
@@ -2757,7 +2784,7 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
    }
 
 #else
-   pI830->directRenderingEnabled = FALSE;
+   pI830->directRendering = FALSE;
 #endif
 
 #ifdef XF86DRI
@@ -2789,7 +2816,7 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
 
    DPRINTF(PFX, "assert( if(!I830EnterVT(scrnIndex, 0)) )\n");
 
-   if (!pI830->useEXA) {
+   if (!(pI830->accel_method == ACCEL_EXA)) {
       if (I830IsPrimary(pScrn)) {
 	 if (!I830InitFBManager(pScreen, &(pI830->FbMemBox))) {
 	    xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
@@ -2837,10 +2864,11 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
    DPRINTF(PFX,
 	   "assert( if(!I830InitFBManager(pScreen, &(pI830->FbMemBox))) )\n");
 
-   if (!pI830->noAccel) {
+   if (!(pI830->accel_method == ACCEL_NONE)) {
       if (!I830AccelInit(pScreen)) {
 	 xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
-		    "Hardware acceleration initialization failed\n");
+		    "Hardware acceleration initialization failed, disabling.\n");
+	 pI830->accel_method = ACCEL_NONE;
       }
    }
 
@@ -2861,8 +2889,8 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
    /* Must be called before EnterVT, so we can acquire the DRI lock when
     * binding our memory.
     */
-   if (pI830->directRenderingEnabled)
-      pI830->directRenderingEnabled = I830DRIFinishScreenInit(pScreen);
+   if (pI830->directRendering)
+      pI830->directRendering = I830DRIFinishScreenInit(pScreen);
 #endif
 
    if (!I830EnterVT(scrnIndex, 0))
@@ -2891,14 +2919,11 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
    IntelEmitInvarientState(pScrn);
 
 #ifdef XF86DRI
-   if (pI830->directRenderingEnabled) {
+   if (pI830->directRendering) {
       pI830->directRenderingOpen = TRUE;
       xf86DrvMsg(pScrn->scrnIndex, X_INFO, "direct rendering: Enabled\n");
    } else {
-      if (pI830->directRenderingDisabled)
-	 xf86DrvMsg(pScrn->scrnIndex, X_INFO, "direct rendering: Disabled\n");
-      else
-	 xf86DrvMsg(pScrn->scrnIndex, X_INFO, "direct rendering: Failed\n");
+      xf86DrvMsg(pScrn->scrnIndex, X_INFO, "direct rendering: Disabled\n");
    }
 #else
    xf86DrvMsg(pScrn->scrnIndex, X_INFO, "direct rendering: Not available\n");
@@ -3043,8 +3068,6 @@ I830EnterVT(int scrnIndex, int flags)
 {
    ScrnInfoPtr pScrn = xf86Screens[scrnIndex];
    I830Ptr  pI830 = I830PTR(pScrn);
-   xf86CrtcConfigPtr	config = XF86_CRTC_CONFIG_PTR(pScrn);
-   int o;
 
    DPRINTF(PFX, "Enter VT\n");
 
@@ -3060,7 +3083,7 @@ I830EnterVT(int scrnIndex, int flags)
    pI830->leaving = FALSE;
 
 #ifdef XF86DRI_MM
-   if (pI830->directRenderingEnabled) {
+   if (pI830->directRendering) {
       /* Unlock the memory manager first of all so that we can pin our
        * buffer objects
        */
@@ -3091,11 +3114,6 @@ I830EnterVT(int scrnIndex, int flags)
    memset(pI830->FbBase + pScrn->fbOffset, 0,
 	  pScrn->virtualY * pScrn->displayWidth * pI830->cpp);
 
-   for (o = 0; o < config->num_output; o++) {
-   	xf86OutputPtr  output = config->output[o];
-	output->funcs->dpms(output, DPMSModeOff);
-   }
-
    if (!xf86SetDesiredModes (pScrn))
       return FALSE;
    
@@ -3109,7 +3127,7 @@ I830EnterVT(int scrnIndex, int flags)
    SetHWOperatingState(pScrn);
 
 #ifdef XF86DRI
-   if (pI830->directRenderingEnabled) {
+   if (pI830->directRendering) {
       /* Update buffer offsets in sarea and mappings, since buffer offsets
        * may have changed.
        */
@@ -3180,7 +3198,7 @@ I830CloseScreen(int scrnIndex, ScreenPtr pScreen)
    if (pScrn->vtSema == TRUE) {
       I830LeaveVT(scrnIndex, 0);
 #ifdef XF86DRI_MM
-      if (pI830->directRenderingEnabled) {
+      if (pI830->directRendering) {
  	 if (pI830->memory_manager != NULL) {
 	    drmMMUnlock(pI830->drmSubFD, DRM_BO_MEM_TT, 1);
 	 }
@@ -3210,7 +3228,7 @@ I830CloseScreen(int scrnIndex, ScreenPtr pScreen)
    }
 #endif
 #ifdef I830_USE_EXA
-   if (pI830->useEXA && pI830->EXADriverPtr) {
+   if ((pI830->accel_method == ACCEL_EXA) && pI830->EXADriverPtr) {
        exaDriverFini(pScreen);
        xfree(pI830->EXADriverPtr);
        pI830->EXADriverPtr = NULL;
@@ -3425,14 +3443,14 @@ i830WaitSync(ScrnInfoPtr pScrn)
    I830Ptr pI830 = I830PTR(pScrn);
 
 #ifdef I830_USE_XAA
-   if (!pI830->noAccel && !pI830->useEXA && pI830->AccelInfoRec 
-	&& pI830->AccelInfoRec->NeedToSync) {
+   if ((pI830->accel_method == ACCEL_XAA) && pI830->AccelInfoRec 
+       && pI830->AccelInfoRec->NeedToSync) {
       (*pI830->AccelInfoRec->Sync)(pScrn);
       pI830->AccelInfoRec->NeedToSync = FALSE;
    }
 #endif
 #ifdef I830_USE_EXA
-   if (!pI830->noAccel && pI830->useEXA && pI830->EXADriverPtr) {
+   if ((pI830->accel_method == ACCEL_EXA) && pI830->EXADriverPtr) {
 	ScreenPtr pScreen = screenInfo.screens[pScrn->scrnIndex];
 	exaWaitSync(pScreen);
    }
@@ -3445,11 +3463,11 @@ i830MarkSync(ScrnInfoPtr pScrn)
    I830Ptr pI830 = I830PTR(pScrn);
 
 #ifdef I830_USE_XAA
-   if (!pI830->useEXA && pI830->AccelInfoRec)
+   if ((pI830->accel_method == ACCEL_XAA) && pI830->AccelInfoRec)
       pI830->AccelInfoRec->NeedToSync = TRUE;
 #endif
 #ifdef I830_USE_EXA
-   if (pI830->useEXA && pI830->EXADriverPtr) {
+   if ((pI830->accel_method == ACCEL_EXA) && pI830->EXADriverPtr) {
       ScreenPtr pScreen = screenInfo.screens[pScrn->scrnIndex];
       exaMarkSync(pScreen);
    }

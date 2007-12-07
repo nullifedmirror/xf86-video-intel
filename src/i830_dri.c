@@ -594,8 +594,8 @@ I830DRIScreenInit(ScreenPtr pScreen)
 
 #if DRIINFO_MAJOR_VERSION > 5 || \
     (DRIINFO_MAJOR_VERSION == 5 && DRIINFO_MINOR_VERSION >= 3)
-      if (pI830->useEXA)
-	 pDRIInfo->texOffsetStart = I830TexOffsetStart;
+   if (pI830->accel_method == ACCEL_EXA)
+       pDRIInfo->texOffsetStart = I830TexOffsetStart;
 #endif
 
 #if DRI_SUPPORTS_CLIP_NOTIFY
@@ -1748,7 +1748,7 @@ I830DRISetVBlankInterrupt (ScrnInfoPtr pScrn, Bool on)
     if (!pI830->want_vblank_interrupts)
 	on = FALSE;
 
-    if (pI830->directRenderingEnabled && pI830->drmMinor >= 5) {
+    if (pI830->directRendering && pI830->drmMinor >= 5) {
 	if (on) {
 	    if (xf86_config->num_crtc > 1 && xf86_config->crtc[1]->enabled)
 		if (pI830->drmMinor >= 6)
@@ -1774,7 +1774,7 @@ I830DRILock(ScrnInfoPtr pScrn)
 {
    I830Ptr pI830 = I830PTR(pScrn);
 
-   if (pI830->directRenderingEnabled && !pI830->LockHeld) {
+   if (pI830->directRendering && !pI830->LockHeld) {
       DRILock(screenInfo.screens[pScrn->scrnIndex], 0);
       pI830->LockHeld = 1;
       i830_refresh_ring(pScrn);
@@ -1791,7 +1791,7 @@ I830DRIUnlock(ScrnInfoPtr pScrn)
 {
    I830Ptr pI830 = I830PTR(pScrn);
 
-   if (pI830->directRenderingEnabled && pI830->LockHeld) {
+   if (pI830->directRendering && pI830->LockHeld) {
       DRIUnlock(screenInfo.screens[pScrn->scrnIndex]);
       pI830->LockHeld = 0;
    }

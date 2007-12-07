@@ -68,7 +68,7 @@ intel_get_pixmap_offset(PixmapPtr pPix)
     I830Ptr pI830 = I830PTR(pScrn);
 
 #ifdef I830_USE_EXA
-    if (pI830->useEXA)
+    if (pI830->accel_method == ACCEL_EXA)
 	return exaGetPixmapOffset(pPix);
 #endif
     return (unsigned long)pPix->devPrivate.ptr - (unsigned long)pI830->FbBase;
@@ -82,7 +82,7 @@ intel_get_pixmap_pitch(PixmapPtr pPix)
     I830Ptr pI830 = I830PTR(pScrn);
 
 #ifdef I830_USE_EXA
-    if (pI830->useEXA)
+    if (pI830->accel_method == ACCEL_EXA)
 	return exaGetPixmapPitch(pPix);
 #endif
 #ifdef I830_USE_XAA
@@ -136,7 +136,7 @@ I830WaitLpRing(ScrnInfoPtr pScrn, int n, int timeout_millis)
 	     i830_dump_error_state(pScrn);
 	 ErrorF("space: %d wanted %d\n", ring->space, n);
 #ifdef XF86DRI
-	 if (pI830->directRenderingEnabled) {
+	 if (pI830->directRendering) {
 	    DRIUnlock(screenInfo.screens[pScrn->scrnIndex]);
 	    DRICloseScreen(screenInfo.screens[pScrn->scrnIndex]);
 	 }
@@ -176,7 +176,7 @@ I830Sync(ScrnInfoPtr pScrn)
 #ifdef XF86DRI
    /* VT switching tries to do this.
     */
-   if (!pI830->LockHeld && pI830->directRenderingEnabled) {
+   if (!pI830->LockHeld && pI830->directRendering) {
       return;
    }
 #endif
@@ -260,11 +260,12 @@ I830AccelInit(ScreenPtr pScreen)
     ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
     I830Ptr pI830 = I830PTR(pScrn);
 
-    if (pI830->useEXA)
+    if (pI830->accel_method == ACCEL_EXA)
 	return I830EXAInit(pScreen);
 #endif
 #ifdef I830_USE_XAA
-    return I830XAAInit(pScreen);
+    if (pI830->accel_method == ACCEL_XAA)
+	return I830XAAInit(pScreen);
 #endif
     return FALSE;
 }
