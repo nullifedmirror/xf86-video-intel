@@ -2358,9 +2358,11 @@ i830_fixup_mtrrs(ScrnInfoPtr pScrn)
 }
 
 static Bool
-i830_try_memory_allocation(ScrnInfoPtr pScrn, Bool tiled)
+i830_try_memory_allocation(ScrnInfoPtr pScrn)
 {
     I830Ptr pI830 = I830PTR(pScrn);
+    Bool tiled = pI830->tiling;
+    Bool dri = pI830->directRendering;
 
     xf86DrvMsg(pScrn->scrnIndex, X_INFO,
 	       "Attempting memory allocation with %stiled buffers.\n",
@@ -2369,7 +2371,7 @@ i830_try_memory_allocation(ScrnInfoPtr pScrn, Bool tiled)
     if (!i830_allocate_2d_memory(pScrn))
 	goto failed;
 
-    if (pI830->directRendering && !i830_allocate_3d_memory(pScrn))
+    if (dri && !i830_allocate_3d_memory(pScrn))
 	goto failed;
 
     xf86DrvMsg(pScrn->scrnIndex, X_INFO, "%siled allocation successful.\n",
@@ -2402,7 +2404,7 @@ i830_memory_init(ScrnInfoPtr pScrn)
     /*
      * Adjust the display width to allow for front buffer tiling if possible
      */
-    if (pI830->directRendering && pI830->tiling) {
+    if (pI830->tiling) {
 	if (IS_I965G(pI830)) {
 	    int tile_pixels = 512 / pI830->cpp;
 	    pScrn->displayWidth = (pScrn->displayWidth + tile_pixels - 1) &
@@ -2450,12 +2452,17 @@ i830_memory_init(ScrnInfoPtr pScrn)
 	pI830->CacheLines = -1;
     }
 
-    /* Tiled first */
-    if (tiled && i830_try_memory_allocation(pScrn, TRUE))
+    /* Tiled first if we got a good displayWidth */
+    if (tiled) {
+	if (i830_try_memory_allocation(pScrn))
 	    return TRUE;
+	else {
+	    i830_reset_allocations(pScrn);
+	    pI830->tiling = FALSE;
+	}
+    }  
 
     /* If tiling fails we have to disable page flipping & FBC */
-    pI830->tiling = FALSE;
     pScrn->displayWidth = savedDisplayWidth;
     if (pI830->allowPageFlip)
 	xf86DrvMsg(pScrn->scrnIndex, X_WARNING,
@@ -2469,17 +2476,18 @@ i830_memory_init(ScrnInfoPtr pScrn)
     pI830->fb_compression = FALSE;
 
     /* Try again, but leave DRI enabled */
-    if (i830_try_memory_allocation(pScrn, FALSE))
+    if (pI830->directRendering) {
+	if (i830_try_memory_allocation(pScrn))
 	    return TRUE;
+	else {
+	    i830_reset_allocations(pScrn);
+	    xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Couldn't allocate 3D memory, "
+		       "disabling DRI.\n");
+	    pI830->directRendering = FALSE;
+	}
+    }
 
-    /* Fail, try to disable DRI as a last ditch effort */
-    if (pI830->directRendering)
-	xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Couldn't allocated 3D memory, "
-		   "disabling DRI.\n");
-    pI830->directRendering = FALSE;
-
-    i830_reset_allocations(pScrn);
-    if (i830_allocate_2d_memory(pScrn))
+    if (i830_try_memory_allocation(pScrn))
 	return TRUE;
 
     return FALSE;
