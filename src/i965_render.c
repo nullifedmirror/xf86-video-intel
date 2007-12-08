@@ -436,15 +436,16 @@ typedef struct _gen4_state {
 					    [SAMPLER_STATE_EXTEND_COUNT];
 } gen4_state_t;
 
-#define GEN4_VB_NUM_VERTICES   32
+#define GEN4_VB_NUM_VERTICES	32
+#define GEN4_NUM_SURFACE_STATES	3
+
+typedef struct _brw_surface_state_padded {
+    struct brw_surface_state state;
+    char pad[32 - sizeof (struct brw_surface_state)];
+} brw_surface_state_padded;
 
 typedef struct _gen4_surface_state {
-    struct brw_surface_state dest_surf_state;
-    PAD64 (brw_surface_state, 0);
-    struct brw_surface_state src_surf_state;
-    PAD64 (brw_surface_state, 1);
-    struct brw_surface_state mask_surf_state;
-    PAD64 (brw_surface_state, 2);
+    brw_surface_state_padded surface_state[GEN4_NUM_SURFACE_STATES];
 
     CARD32 binding_table[16];
 
@@ -496,11 +497,11 @@ i965_init_state_offsets(ScrnInfoPtr pScrn, int total_size)
     init = 1;
 
     /* And then the general state: */
-    dest_surf_offset = offsetof (gen4_surface_state_t, dest_surf_state);
+    dest_surf_offset = offsetof (gen4_surface_state_t, surface_state[0]);
 
-    src_surf_offset = offsetof (gen4_surface_state_t, src_surf_state);
+    src_surf_offset = offsetof (gen4_surface_state_t, surface_state[1]);
 
-    mask_surf_offset = offsetof (gen4_surface_state_t, mask_surf_state);
+    mask_surf_offset = offsetof (gen4_surface_state_t, surface_state[2]);
 
     binding_table_offset = offsetof (gen4_surface_state_t, binding_table);
 
