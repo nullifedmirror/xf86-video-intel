@@ -436,6 +436,9 @@ typedef struct _gen4_state {
 					    [SAMPLER_STATE_EXTEND_COUNT];
 } gen4_state_t;
 
+char gen4_state_too_big[(EXASTATE_SZ >=
+			 sizeof(gen4_state_t)) ? 1 : -1];
+
 #define GEN4_VB_NUM_VERTICES	32
 #define GEN4_NUM_SURFACE_STATES	3
 
@@ -452,9 +455,8 @@ typedef struct _gen4_surface_state {
     float vb[GEN4_VB_NUM_VERTICES];
 } gen4_surface_state_t;
 
-char gen4_state_big_enough[(EXA_LINEAR_EXTRA >=
-			    (sizeof(gen4_state_t) +
-			     sizeof(gen4_surface_state_t))) ? 1 : -1];
+char gen4_surface_state_too_big[(EXASTATE_SZ >=
+				 sizeof(gen4_surface_state_t)) ? 1 : -1];
 
 static CARD32 
 i965_get_card_format(PicturePtr pPict)
