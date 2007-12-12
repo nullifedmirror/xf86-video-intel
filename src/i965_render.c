@@ -440,10 +440,14 @@ char gen4_state_too_big[(EXASTATE_SZ >=
 			 sizeof(gen4_state_t)) ? 1 : -1];
 
 /* How many composite operations will we fit in one object. */
-#define GEN4_COMPOSITE_BATCH	16
-#define GEN4_MAX_SURFACE_STATES	(GEN4_COMPOSITE_BATCH * 3)
-#define GEN4_MAX_BINDING_TABLE	(GEN4_COMPOSITE_BATCH * 3)
-#define GEN4_MAX_VERTICES	(GEN4_COMPOSITE_BATCH * 18)
+#define GEN4_MAX_OPS			16
+#define GEN4_SURFACE_STATE_PER_OP	3
+#define GEN4_MAX_SURFACE_STATES		(GEN4_MAX_OPS * GEN4_SURFACE_STATE_PER_OP)
+/* We only need 3, but we use 8 to get the proper alignment. */
+#define GEN4_BINDING_TABLE_PER_OP	3
+#define GEN4_MAX_BINDING_TABLE		(GEN4_MAX_OPS * GEN4_BINDING_TABLE_PER_OP)
+#define GEN4_VERTICES_PER_OP		18
+#define GEN4_MAX_VERTICES		(GEN4_MAX_OPS * GEN4_VERTICES_PER_OP)
 
 typedef struct _brw_surface_state_padded {
     struct brw_surface_state state;
@@ -500,10 +504,6 @@ i965_init_state_offsets(ScrnInfoPtr pScrn, int total_size)
 	return;
 
     init = 1;
-
-    binding_table_offset = offsetof (gen4_surface_state_t, binding_table);
-
-    vb_offset = offsetof (gen4_surface_state_t, vb);
 
     /* Set up a default static partitioning of the URB, which is supposed to
      * allow anything we would want to do, at potentially lower performance.
@@ -802,10 +802,17 @@ gen4_surface_state_init (unsigned char *start_base,
     unsigned int surf_state_offset = offsetof (gen4_surface_state_t,
 					       surface_state);
 
+    vb_offset = (offsetof (gen4_surface_state_t, vb) +
+		 sizeof (float) * GEN4_VERTICES_PER_OP * state->num_ops);
+
+    binding_table_offset = (offsetof (gen4_surface_state_t, binding_table) +
+			    sizeof (CARD32) * GEN4_BINDING_TABLE_PER_OP *
+			    state->num_ops);
+
     /* destination surface state */
     dest_surf_offset = (surf_state_offset +
 			sizeof (brw_surface_state_padded) *
-			state->num_surface_states++);
+			(GEN4_SURFACE_STATE_PER_OP * state->num_ops + 0));
     dest_surf_state = (void *)(start_base + dest_surf_offset);
     dest_surf_state->ss0.surface_type = BRW_SURFACE_2D;
     dest_surf_state->ss0.data_return_format = BRW_SURFACERETURNFORMAT_FLOAT32;
@@ -824,7 +831,7 @@ gen4_surface_state_init (unsigned char *start_base,
     /* source surface state */
     src_surf_offset = (surf_state_offset +
 		       sizeof (brw_surface_state_padded) *
-		       state->num_surface_states++);
+		       (GEN4_SURFACE_STATE_PER_OP * state->num_ops + 1));
     src_surf_state = (void *)(start_base + src_surf_offset);
     src_surf_state->ss0.surface_type = BRW_SURFACE_2D;
     src_surf_state->ss0.writedisable_alpha = 0;
@@ -842,7 +849,7 @@ gen4_surface_state_init (unsigned char *start_base,
     /* mask surface state */
     mask_surf_offset = (surf_state_offset +
 			sizeof (brw_surface_state_padded) *
-			state->num_surface_states++);
+			(GEN4_SURFACE_STATE_PER_OP * state->num_ops + 2));
     mask_surf_state = (void *)(start_base + mask_surf_offset);
     mask_surf_state->ss0.surface_type = BRW_SURFACE_2D;
     mask_surf_state->ss0.writedisable_alpha = 0;
@@ -856,6 +863,8 @@ gen4_surface_state_init (unsigned char *start_base,
     mask_surf_state->ss0.render_cache_read_mode = 0;
     mask_surf_state->ss2.mip_count = 0;
     mask_surf_state->ss2.render_target_rotation = 0;
+
+    state->num_ops++;
 }
 
 static void
@@ -884,7 +893,7 @@ i965_exastate_reset(struct i965_exastate_buffer *state)
 				      EXASTATE_SZ, 4096,
 				      DRM_BO_FLAG_MEM_TT);
     ddx_bo_map(state->surface_buf, TRUE);
-    state->num_surface_states = 0;
+    state->num_ops = 0;
 
     state->surface_map = state->surface_buf->virtual;
     gen4_surface_state_init (state->surface_map, state);
@@ -1058,7 +1067,8 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
 	mask_surf_state->ss3.tiled_surface = mask_tiled;
     }
 
-    binding_table = (void *)(surface_start_base + binding_table_offset);
+    binding_table = (void *)(surface_start_base +
+			     binding_table_offset);
     /* Set up a binding table for our surfaces.  Only the PS will use it */
     binding_table[0] = dest_surf_offset;
     binding_table[1] = src_surf_offset;
