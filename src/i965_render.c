@@ -792,7 +792,8 @@ gen4_state_init (gen4_state_t *state)
 }
 
 static void
-gen4_surface_state_init (ScrnInfoPtr pScrn, unsigned char *start_base)
+gen4_surface_state_init (unsigned char *start_base,
+			 struct i965_exastate_buffer *state)
 {
     struct brw_surface_state *dest_surf_state, *src_surf_state, *mask_surf_state;
     unsigned int surf_state_offset = offsetof (gen4_surface_state_t,
@@ -879,7 +880,7 @@ i965_exastate_reset(struct i965_exastate_buffer *state)
     ddx_bo_map(state->surface_buf, TRUE);
 
     state->surface_map = state->surface_buf->virtual;
-    gen4_surface_state_init (state->pScrn, state->surface_map);
+    gen4_surface_state_init (state->surface_map, state);
 }
 
 static sampler_state_filter_t
