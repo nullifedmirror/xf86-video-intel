@@ -440,7 +440,7 @@ char gen4_state_too_big[(EXASTATE_SZ >=
 			 sizeof(gen4_state_t)) ? 1 : -1];
 
 /* How many composite operations will we fit in one object. */
-#define GEN4_MAX_OPS			16
+#define GEN4_MAX_OPS			1024
 #define GEN4_SURFACE_STATE_PER_OP	3
 #define GEN4_MAX_SURFACE_STATES		(GEN4_MAX_OPS * GEN4_SURFACE_STATE_PER_OP)
 /* We only need 3, but we use 8 to get the proper alignment. */
@@ -461,9 +461,6 @@ typedef struct _gen4_surface_state {
 
     float vb[GEN4_MAX_VERTICES];
 } gen4_surface_state_t;
-
-char gen4_surface_state_too_big[(EXASTATE_SZ >=
-				 sizeof(gen4_surface_state_t)) ? 1 : -1];
 
 static CARD32 
 i965_get_card_format(PicturePtr pPict)
@@ -890,7 +887,7 @@ i965_exastate_reset(struct i965_exastate_buffer *state)
     }
 
     state->surface_buf = ddx_bo_alloc(pI830->bufmgr, "exa surface state buffer",
-				      EXASTATE_SZ, 4096,
+				      sizeof (gen4_surface_state_t), 4096,
 				      DRM_BO_FLAG_MEM_TT);
     ddx_bo_map(state->surface_buf, TRUE);
     state->num_ops = 0;
