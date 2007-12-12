@@ -881,19 +881,21 @@ i965_exastate_reset(struct i965_exastate_buffer *state)
     }
 
     /* Then the surface state buffer */
-    if (state->surface_buf != NULL) {
+    if (state->surface_buf != NULL && state->num_ops) {
 	ddx_bo_unreference(state->surface_buf);
 	state->surface_buf = NULL;
     }
 
-    state->surface_buf = ddx_bo_alloc(pI830->bufmgr, "exa surface state buffer",
-				      sizeof (gen4_surface_state_t), 4096,
-				      DRM_BO_FLAG_MEM_TT);
-    ddx_bo_map(state->surface_buf, TRUE);
-    state->num_ops = 0;
+    if (state->surface_buf == NULL) {
+	state->surface_buf = ddx_bo_alloc(pI830->bufmgr, "exa surface state buffer",
+					  sizeof (gen4_surface_state_t), 4096,
+					  DRM_BO_FLAG_MEM_TT);
+	ddx_bo_map(state->surface_buf, TRUE);
+	state->num_ops = 0;
 
-    state->surface_map = state->surface_buf->virtual;
-    gen4_surface_state_init (state->surface_map, state);
+	state->surface_map = state->surface_buf->virtual;
+	gen4_surface_state_init (state->surface_map, state);
+    }
 }
 
 static sampler_state_filter_t
@@ -1436,7 +1438,7 @@ void i965_done_composite(PixmapPtr pDst)
 	ADVANCE_BATCH();
     }
 
-    if (pI830->use_ttm_batch) {
+    if (pI830->use_ttm_batch && pI830->exa965->num_ops) {
 	ddx_bo_unmap(pI830->exa965->surface_buf);
 	intelddx_batchbuffer_flush(pI830->batch);
     } else {
@@ -1451,6 +1453,7 @@ i965_exastate_alloc(ScrnInfoPtr pScrn)
     struct i965_exastate_buffer *state = calloc(sizeof(*state), 1);
 
     state->pScrn = pScrn;
+    state->num_ops = 0;
     i965_exastate_reset(state);
     return state;
 
