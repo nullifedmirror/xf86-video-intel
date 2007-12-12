@@ -801,7 +801,8 @@ gen4_surface_state_init (unsigned char *start_base,
 
     /* destination surface state */
     dest_surf_offset = (surf_state_offset +
-			sizeof (brw_surface_state_padded) * 0);
+			sizeof (brw_surface_state_padded) *
+			state->num_surface_states++);
     dest_surf_state = (void *)(start_base + dest_surf_offset);
     dest_surf_state->ss0.surface_type = BRW_SURFACE_2D;
     dest_surf_state->ss0.data_return_format = BRW_SURFACERETURNFORMAT_FLOAT32;
@@ -819,7 +820,8 @@ gen4_surface_state_init (unsigned char *start_base,
 
     /* source surface state */
     src_surf_offset = (surf_state_offset +
-		       sizeof (brw_surface_state_padded) * 1);
+		       sizeof (brw_surface_state_padded) *
+		       state->num_surface_states++);
     src_surf_state = (void *)(start_base + src_surf_offset);
     src_surf_state->ss0.surface_type = BRW_SURFACE_2D;
     src_surf_state->ss0.writedisable_alpha = 0;
@@ -836,7 +838,8 @@ gen4_surface_state_init (unsigned char *start_base,
 
     /* mask surface state */
     mask_surf_offset = (surf_state_offset +
-			sizeof (brw_surface_state_padded) * 2);
+			sizeof (brw_surface_state_padded) *
+			state->num_surface_states++);
     mask_surf_state = (void *)(start_base + mask_surf_offset);
     mask_surf_state->ss0.surface_type = BRW_SURFACE_2D;
     mask_surf_state->ss0.writedisable_alpha = 0;
@@ -878,6 +881,7 @@ i965_exastate_reset(struct i965_exastate_buffer *state)
 				      EXASTATE_SZ, 4096,
 				      DRM_BO_FLAG_MEM_TT);
     ddx_bo_map(state->surface_buf, TRUE);
+    state->num_surface_states = 0;
 
     state->surface_map = state->surface_buf->virtual;
     gen4_surface_state_init (state->surface_map, state);

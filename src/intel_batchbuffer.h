@@ -29,6 +29,7 @@ struct i965_exastate_buffer {
 
    ddx_bo *surface_buf;
    unsigned char *surface_map;
+   int num_surface_states;
 
    dri_fence *last_fence;
    ScrnInfoPtr pScrn;
