@@ -439,8 +439,11 @@ typedef struct _gen4_state {
 char gen4_state_too_big[(EXASTATE_SZ >=
 			 sizeof(gen4_state_t)) ? 1 : -1];
 
-#define GEN4_VB_NUM_VERTICES	32
-#define GEN4_NUM_SURFACE_STATES	3
+/* How many composite operations will we fit in one object. */
+#define GEN4_COMPOSITE_BATCH	16
+#define GEN4_MAX_SURFACE_STATES	(GEN4_COMPOSITE_BATCH * 3)
+#define GEN4_MAX_BINDING_TABLE	(GEN4_COMPOSITE_BATCH * 3)
+#define GEN4_MAX_VERTICES	(GEN4_COMPOSITE_BATCH * 18)
 
 typedef struct _brw_surface_state_padded {
     struct brw_surface_state state;
@@ -448,11 +451,11 @@ typedef struct _brw_surface_state_padded {
 } brw_surface_state_padded;
 
 typedef struct _gen4_surface_state {
-    brw_surface_state_padded surface_state[GEN4_NUM_SURFACE_STATES];
+    brw_surface_state_padded surface_state[GEN4_MAX_SURFACE_STATES];
 
-    CARD32 binding_table[16];
+    CARD32 binding_table[GEN4_MAX_BINDING_TABLE];
 
-    float vb[GEN4_VB_NUM_VERTICES];
+    float vb[GEN4_MAX_VERTICES];
 } gen4_surface_state_t;
 
 char gen4_surface_state_too_big[(EXASTATE_SZ >=
@@ -1256,7 +1259,7 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
 	    OUT_BATCH(pI830->exa_965_state->offset + vb_offset);
 	}
 
-        OUT_BATCH(GEN4_VB_NUM_VERTICES); // set max index
+        OUT_BATCH(GEN4_MAX_VERTICES); // set max index
    	OUT_BATCH(0); // ignore for VERTEXDATA, but still there
 
 	/* Set up our vertex elements, sourced from the single vertex buffer.
@@ -1343,7 +1346,7 @@ i965_composite(PixmapPtr pDst, int srcX, int srcY, int maskX, int maskY,
     /* Wait for any existing composite rectangles to land before we overwrite
      * the VB with the next one.
      */
-    if ((vb_index + 18) > GEN4_VB_NUM_VERTICES) {
+    if ((vb_index + 18) > GEN4_MAX_VERTICES) {
       ErrorF("vb index exceeded maximum bailing...");
       return;
     }
