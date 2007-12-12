@@ -444,9 +444,9 @@ char gen4_state_too_big[(EXASTATE_SZ >=
 #define GEN4_SURFACE_STATE_PER_OP	3
 #define GEN4_MAX_SURFACE_STATES		(GEN4_MAX_OPS * GEN4_SURFACE_STATE_PER_OP)
 /* We only need 3, but we use 8 to get the proper alignment. */
-#define GEN4_BINDING_TABLE_PER_OP	3
+#define GEN4_BINDING_TABLE_PER_OP	8
 #define GEN4_MAX_BINDING_TABLE		(GEN4_MAX_OPS * GEN4_BINDING_TABLE_PER_OP)
-#define GEN4_VERTICES_PER_OP		18
+#define GEN4_VERTICES_PER_OP		24
 #define GEN4_MAX_VERTICES		(GEN4_MAX_OPS * GEN4_VERTICES_PER_OP)
 
 typedef struct _brw_surface_state_padded {
