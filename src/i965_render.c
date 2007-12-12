@@ -498,13 +498,6 @@ i965_init_state_offsets(ScrnInfoPtr pScrn, int total_size)
 
     init = 1;
 
-    /* And then the general state: */
-    dest_surf_offset = offsetof (gen4_surface_state_t, surface_state[0]);
-
-    src_surf_offset = offsetof (gen4_surface_state_t, surface_state[1]);
-
-    mask_surf_offset = offsetof (gen4_surface_state_t, surface_state[2]);
-
     binding_table_offset = offsetof (gen4_surface_state_t, binding_table);
 
     vb_offset = offsetof (gen4_surface_state_t, vb);
@@ -802,8 +795,12 @@ static void
 gen4_surface_state_init (ScrnInfoPtr pScrn, unsigned char *start_base)
 {
     struct brw_surface_state *dest_surf_state, *src_surf_state, *mask_surf_state;
+    unsigned int surf_state_offset = offsetof (gen4_surface_state_t,
+					       surface_state);
 
     /* destination surface state */
+    dest_surf_offset = (surf_state_offset +
+			sizeof (brw_surface_state_padded) * 0);
     dest_surf_state = (void *)(start_base + dest_surf_offset);
     dest_surf_state->ss0.surface_type = BRW_SURFACE_2D;
     dest_surf_state->ss0.data_return_format = BRW_SURFACERETURNFORMAT_FLOAT32;
@@ -820,6 +817,8 @@ gen4_surface_state_init (ScrnInfoPtr pScrn, unsigned char *start_base)
     dest_surf_state->ss2.render_target_rotation = 0;
 
     /* source surface state */
+    src_surf_offset = (surf_state_offset +
+		       sizeof (brw_surface_state_padded) * 1);
     src_surf_state = (void *)(start_base + src_surf_offset);
     src_surf_state->ss0.surface_type = BRW_SURFACE_2D;
     src_surf_state->ss0.writedisable_alpha = 0;
@@ -835,6 +834,8 @@ gen4_surface_state_init (ScrnInfoPtr pScrn, unsigned char *start_base)
     src_surf_state->ss2.render_target_rotation = 0;
 
     /* mask surface state */
+    mask_surf_offset = (surf_state_offset +
+			sizeof (brw_surface_state_padded) * 2);
     mask_surf_state = (void *)(start_base + mask_surf_offset);
     mask_surf_state->ss0.surface_type = BRW_SURFACE_2D;
     mask_surf_state->ss0.writedisable_alpha = 0;
