@@ -1455,7 +1455,6 @@ i965_init_exa_state(ScrnInfoPtr pScrn)
     } else {
 	void *map = pI830->FbBase + pI830->exa_965_state->offset;
 	gen4_state_init ((void *) map);
-	gen4_surface_state_init (pScrn, map);
     }
 
     return 0;
