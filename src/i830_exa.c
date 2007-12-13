@@ -165,7 +165,7 @@ I830EXASync(ScreenPtr pScreen, int marker)
 {
     ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
 
-    I830Sync(pScrn);
+//    I830Sync(pScrn);
 }
 
 /**

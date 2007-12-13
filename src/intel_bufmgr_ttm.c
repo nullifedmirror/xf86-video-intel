@@ -61,6 +61,7 @@ struct intel_bo_node
     drmMMListHead head;
     drmBO *buf;
     struct drm_i915_op_arg bo_arg;
+    int index;
     unsigned long arg0;
     unsigned long arg1;
     void (*destroy)(void *);
@@ -162,14 +163,30 @@ intel_setup_validate_list(int fd, struct intel_bo_list *list, struct intel_bo_li
     struct drm_bo_op_req *req;
     uint64_t *prevNext = NULL;
     uint32_t count = 0;
-
+    int pass_num = 0;
+    uint32_t reloc_handle;
     first = NULL;
-
+    
+ repass:
     for (l = list->list.next; l != &list->list; l = l->next) {
         node = DRMLISTENTRY(struct intel_bo_node, l, head);
 
         arg = &node->bo_arg;
         req = &arg->d.req;
+
+	reloc_handle = 0;
+	for (rl = reloc_list->list.next; rl != &reloc_list->list; rl = rl->next) {
+	    rl_node = DRMLISTENTRY(struct intel_bo_reloc_node, rl, head);
+
+	    if (rl_node->handle == node->buf->handle) {
+		reloc_handle = rl_node->type_list.buf.handle;
+	    }
+	}
+
+	if (reloc_handle && pass_num == 0)
+	    continue;
+	if (reloc_handle == 0 && pass_num == 1)
+	    continue;
 
         if (!first)
             first = arg;
@@ -178,25 +195,24 @@ intel_setup_validate_list(int fd, struct intel_bo_list *list, struct intel_bo_li
 	    *prevNext = (unsigned long) arg;
 
 	memset(arg, 0, sizeof(*arg));
+	arg->reloc_handle = reloc_handle;
 	prevNext = &arg->next;
 	req->bo_req.handle = node->buf->handle;
 	req->op = drm_bo_validate;
 	req->bo_req.flags = node->arg0;
 	req->bo_req.hint = 0;
+	req->bo_req.index = node->index;
 	req->bo_req.mask = node->arg1;
 	req->bo_req.fence_class = 0; /* Backwards compat. */
-	arg->reloc_handle = 0;
 
-	for (rl = reloc_list->list.next; rl != &reloc_list->list; rl = rl->next) {
-	    rl_node = DRMLISTENTRY(struct intel_bo_reloc_node, rl, head);
-
-	    if (rl_node->handle == node->buf->handle) {
-		arg->reloc_handle = rl_node->type_list.buf.handle;
-	    }
-	}
 	count++;
     }
 
+    if (pass_num == 0){
+	pass_num = 1;
+	goto repass;
+    }
+	
     if (!first)
 	return 0;
 
@@ -268,6 +284,7 @@ static int intel_add_validate_buffer(struct intel_bo_list *list, ddx_bo *buf, un
 	cur->arg0 = flags;
 	cur->arg1 = mask;
 	cur->destroy = destroy_cb;
+	cur->index = count;
 	ret = 1;
 
 	DRMLISTADDTAIL(&cur->head, &list->list);

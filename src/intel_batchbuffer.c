@@ -206,6 +206,9 @@ intelddx_batchbuffer_flush(struct intelddx_batchbuffer *batch)
       return;
 
    if (IS_I965G(pI830))
+       i965_exastate_flush(pI830->exa965);
+
+   if (IS_I965G(pI830))
 	flags = 0;
    /* Add the MI_BATCH_BUFFER_END.  Always add an MI_FLUSH - this is a
     * performance drain that we would like to avoid.

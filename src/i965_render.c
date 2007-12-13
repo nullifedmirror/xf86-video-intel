@@ -864,6 +864,16 @@ gen4_surface_state_init (unsigned char *start_base,
     state->num_ops++;
 }
 
+void i965_exastate_flush(struct i965_exastate_buffer *state)
+{
+    if (state->surface_buf) {
+	ddx_bo_unmap(state->surface_buf);
+	ddx_bo_unreference(state->surface_buf);
+	state->surface_buf = NULL;
+	state->surface_map = NULL;
+    }
+}
+
 static void
 i965_exastate_reset(struct i965_exastate_buffer *state)
 {
@@ -894,7 +904,6 @@ i965_exastate_reset(struct i965_exastate_buffer *state)
 	state->num_ops = 0;
 
 	state->surface_map = state->surface_buf->virtual;
-	gen4_surface_state_init (state->surface_map, state);
     }
 }
 
@@ -944,6 +953,7 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     if (pI830->use_ttm_batch) {
 	i965_exastate_reset(pI830->exa965);
 	surface_map = pI830->exa965->surface_map;
+	gen4_surface_state_init (surface_map, pI830->exa965);
     }else{
 	surface_map = pI830->exa_965_state->offset + pI830->FbBase;
     }
@@ -1439,12 +1449,8 @@ void i965_done_composite(PixmapPtr pDst)
     }
 
     if (pI830->use_ttm_batch && pI830->exa965->num_ops) {
-	ddx_bo_unmap(pI830->exa965->surface_buf);
 	intelddx_batchbuffer_flush(pI830->batch);
-    } else {
-	I830Sync(pScrn);
     }
-
 }
 
 static struct i965_exastate_buffer *

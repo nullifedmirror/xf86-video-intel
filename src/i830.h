@@ -813,6 +813,7 @@ void i965_composite(PixmapPtr pDst, int srcX, int srcY,
 		    int maskX, int maskY, int dstX, int dstY, int w, int h);
 void i965_done_composite(PixmapPtr pDst);
 int i965_init_exa_state(ScrnInfoPtr pScrn);
+void i965_exastate_flush(struct i965_exastate_buffer *state);
 void
 i830_get_transformed_coordinates(int x, int y, PictTransformPtr transform,
 				 float *x_out, float *y_out);
