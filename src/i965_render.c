@@ -873,7 +873,7 @@ i965_exastate_reset(struct i965_exastate_buffer *state)
     if (state->buf == NULL) {
 	state->buf = ddx_bo_alloc(pI830->bufmgr, "exa state buffer",
 				  EXASTATE_SZ, 4096,
-				  DRM_BO_FLAG_MEM_TT);
+				  DRM_BO_FLAG_MEM_LOCAL | DRM_BO_FLAG_CACHED | DRM_BO_FLAG_CACHED_MAPPED);
 	ddx_bo_map(state->buf, TRUE);
 	state->map = state->buf->virtual;
 	gen4_state_init ((void *) state->map);
@@ -889,7 +889,7 @@ i965_exastate_reset(struct i965_exastate_buffer *state)
     if (state->surface_buf == NULL) {
 	state->surface_buf = ddx_bo_alloc(pI830->bufmgr, "exa surface state buffer",
 					  sizeof (gen4_surface_state_t), 4096,
-					  DRM_BO_FLAG_MEM_TT);
+					  DRM_BO_FLAG_MEM_LOCAL | DRM_BO_FLAG_CACHED | DRM_BO_FLAG_CACHED_MAPPED);
 	ddx_bo_map(state->surface_buf, TRUE);
 	state->num_ops = 0;
 
@@ -1017,7 +1017,7 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     if (pI830->use_ttm_batch) {
     	intelddx_batchbuffer_emit_pixmap(pDst,
 				     DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_WRITE,
-				     DRM_BO_MASK_MEM | DRM_BO_FLAG_WRITE | DRM_BO_FLAG_CACHED,
+				     DRM_BO_MASK_MEM | DRM_BO_FLAG_WRITE,
 				     pI830->exa965->surface_buf, dest_surf_offset + 4, 0);
     } else {
         dest_surf_state->ss1.base_addr = intel_get_pixmap_offset(pDst);
@@ -1036,7 +1036,7 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     if (pI830->use_ttm_batch) {
         intelddx_batchbuffer_emit_pixmap(pSrc,
 				 DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
-				 DRM_BO_MASK_MEM | DRM_BO_FLAG_READ | DRM_BO_FLAG_CACHED,
+				 DRM_BO_MASK_MEM | DRM_BO_FLAG_READ,
 				 pI830->exa965->surface_buf, src_surf_offset + 4, 0);
     } else {
         src_surf_state->ss1.base_addr = intel_get_pixmap_offset(pSrc);
@@ -1054,7 +1054,7 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
         if (pI830->use_ttm_batch) {
 	   intelddx_batchbuffer_emit_pixmap(pMask, 
 				     DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
-				     DRM_BO_MASK_MEM | DRM_BO_FLAG_READ | DRM_BO_FLAG_CACHED,
+				     DRM_BO_MASK_MEM | DRM_BO_FLAG_READ,
 				     pI830->exa965->surface_buf, mask_surf_offset + 4, 0);
         } else {
 	    mask_surf_state->ss1.base_addr = intel_get_pixmap_offset(pMask);
