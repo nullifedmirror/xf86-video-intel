@@ -440,7 +440,7 @@ char gen4_state_too_big[(EXASTATE_SZ >=
 			 sizeof(gen4_state_t)) ? 1 : -1];
 
 /* How many composite operations will we fit in one object. */
-#define GEN4_MAX_OPS			1024
+#define GEN4_MAX_OPS			1
 #define GEN4_SURFACE_STATE_PER_OP	3
 #define GEN4_MAX_SURFACE_STATES		(GEN4_MAX_OPS * GEN4_SURFACE_STATE_PER_OP)
 /* We only need 3, but we use 8 to get the proper alignment. */
@@ -891,7 +891,7 @@ i965_exastate_reset(struct i965_exastate_buffer *state)
     }
 
     /* Then the surface state buffer */
-    if (state->surface_buf != NULL && state->num_ops) {
+    if (state->surface_buf != NULL && state->num_ops >= GEN4_MAX_OPS) {
 	ddx_bo_unreference(state->surface_buf);
 	state->surface_buf = NULL;
     }
@@ -1448,7 +1448,7 @@ void i965_done_composite(PixmapPtr pDst)
 	ADVANCE_BATCH();
     }
 
-    if (pI830->use_ttm_batch && pI830->exa965->num_ops) {
+    if (pI830->use_ttm_batch && pI830->exa965->num_ops >= GEN4_MAX_OPS) {
 	intelddx_batchbuffer_flush(pI830->batch);
     }
 }
