@@ -440,7 +440,7 @@ char gen4_state_too_big[(EXASTATE_SZ >=
 			 sizeof(gen4_state_t)) ? 1 : -1];
 
 /* How many composite operations will we fit in one object. */
-#define GEN4_MAX_OPS			1
+#define GEN4_MAX_OPS			32
 #define GEN4_SURFACE_STATE_PER_OP	3
 #define GEN4_MAX_SURFACE_STATES		(GEN4_MAX_OPS * GEN4_SURFACE_STATE_PER_OP)
 /* We only need 3, but we use 8 to get the proper alignment. */
