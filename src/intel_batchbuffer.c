@@ -192,7 +192,7 @@ do_flush_locked(struct intelddx_batchbuffer *batch,
       
    dri_post_submit(batch->buf, &batch->last_fence);
 
-   I830RefreshRing(batch->pScrn);
+   i830_refresh_ring(batch->pScrn);
 }
 
 void

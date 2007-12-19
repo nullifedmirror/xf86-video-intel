@@ -232,7 +232,7 @@ union intfloat {
 
 #define BEGIN_LP_RING(n)						\
 	RING_LOCALS							\
-	DO_LP_RING(n)							\
+	DO_LP_RING(n)
 
 /* Memory mapped register access macros */
 #define INREG8(addr)        *(volatile CARD8  *)(RecPtr->MMIOBase + (addr))

@@ -523,7 +523,14 @@ I830InitBufMgr(ScreenPtr pScreen)
 	return;
    }
 
-   pI830->maxBatchSize = BATCH_SZ;
+   /* 865G appears to have a problem with large batchbuffer sizes,
+    * according to comments in Mesa code. It fixes problems on the hardware.
+    * - airlied */
+   if (IS_I865G(pI830))
+   	pI830->maxBatchSize = 4096;
+   else
+   	pI830->maxBatchSize = BATCH_SZ;
+
    pI830->bufmgr = intelddx_bufmgr_ttm_init(pI830->drmSubFD, DRM_FENCE_TYPE_EXE,
 			DRM_FENCE_TYPE_EXE | DRM_I915_FENCE_TYPE_RW,
 			BATCH_SZ);
@@ -1124,7 +1131,7 @@ I830DRISwapContext(ScreenPtr pScreen, DRISyncType syncType,
       if (!pScrn->vtSema)
      	 return;
       pI830->LockHeld = 1;
-      I830RefreshRing(pScrn);
+      i830_refresh_ring(pScrn);
 
       I830EmitFlush(pScrn);
 
@@ -1793,7 +1800,6 @@ I830DRISetVBlankInterrupt (ScrnInfoPtr pScrn, Bool on)
 	}
 	if (drmCommandWrite(pI830->drmSubFD, DRM_I830_SET_VBLANK_PIPE,
 			    &pipe, sizeof (pipe))) {
-	    xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "I830 Vblank Pipe Setup Failed %d\n", pipe.pipe);
 	    return FALSE;
 	}
     }
@@ -1809,7 +1815,7 @@ I830DRILock(ScrnInfoPtr pScrn)
    if (pI830->directRenderingEnabled && !pI830->LockHeld) {
       DRILock(screenInfo.screens[pScrn->scrnIndex], 0);
       pI830->LockHeld = 1;
-      I830RefreshRing(pScrn);
+      i830_refresh_ring(pScrn);
       return TRUE;
    }
    else

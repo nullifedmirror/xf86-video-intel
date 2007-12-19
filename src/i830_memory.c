@@ -106,7 +106,6 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "i830.h"
 #include "i810_reg.h"
-#include "i830_reg.h"
 
 #define ALIGN(i,m)    (((i) + (m) - 1) & ~((m) - 1))
 
@@ -348,7 +347,6 @@ i830_reset_allocations(ScrnInfoPtr pScrn)
     pI830->exa_offscreen = NULL;
     pI830->exa_965_state = NULL;
     pI830->overlay_regs = NULL;
-    pI830->logical_context = NULL;
 #ifdef XF86DRI
     pI830->back_buffer = NULL;
     pI830->third_buffer = NULL;
@@ -389,7 +387,6 @@ i830_allocator_init(ScrnInfoPtr pScrn, unsigned long offset, unsigned long size)
 {
     I830Ptr pI830 = I830PTR(pScrn);
     i830_memory *start, *end;
-    int ret;
 #ifdef XF86DRI_MM
     int dri_major, dri_minor, dri_patch;
 #endif
@@ -477,6 +474,8 @@ i830_allocator_init(ScrnInfoPtr pScrn, unsigned long offset, unsigned long size)
 				   ALIGN_BOTH_ENDS | NEED_NON_STOLEN);
 
 	if (pI830->memory_manager != NULL) {
+	    int ret;
+
 	    /* Tell the kernel to manage it */
 	    ret = drmMMInit(pI830->drmSubFD,
 			    pI830->memory_manager->offset / GTT_PAGE_SIZE,
@@ -824,10 +823,11 @@ i830_memory *
 i830_allocate_memory(ScrnInfoPtr pScrn, const char *name,
 		     unsigned long size, unsigned long alignment, int flags)
 {
-    I830Ptr pI830 = I830PTR(pScrn);
     i830_memory *mem;
 
 #ifdef XF86DRI_MM
+    I830Ptr pI830 = I830PTR(pScrn);
+
     if (pI830->memory_manager && !(flags & NEED_PHYSICAL_ADDR) &&
 	!(flags & NEED_LIFETIME_FIXED))
     {
@@ -1353,15 +1353,6 @@ i830_allocate_2d_memory(ScrnInfoPtr pScrn)
 		   "Disabling HW cursor because the cursor memory "
 		   "allocation failed.\n");
 	pI830->SWCursor = TRUE;
-    }
-
-    /* Space for the X Server's 3D context.  32k is fine for right now. */
-    pI830->logical_context = i830_allocate_memory(pScrn, "logical 3D context",
-						  KB(32), GTT_PAGE_SIZE, 0);
-    if (pI830->logical_context == NULL) {
-	xf86DrvMsg(pScrn->scrnIndex, X_WARNING,
-		   "Failed to allocate logical context space.\n");
-	return FALSE;
     }
 
     /* even in XAA, 965G needs state mem buffer for rendering */
