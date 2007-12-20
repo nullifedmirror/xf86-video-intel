@@ -58,6 +58,24 @@ do { 							\
 } while(0)
 #endif
 
+/* Set up a default static partitioning of the URB, which is supposed to
+ * allow anything we would want to do, at potentially lower performance.
+ */
+#define URB_CS_ENTRY_SIZE     0
+#define URB_CS_ENTRIES	      0
+
+#define URB_VS_ENTRY_SIZE     1	  // each 512-bit row
+#define URB_VS_ENTRIES	      8	  // we needs at least 8 entries
+
+#define URB_GS_ENTRY_SIZE     0
+#define URB_GS_ENTRIES	      0
+
+#define URB_CLIP_ENTRY_SIZE   0
+#define URB_CLIP_ENTRIES      0
+
+#define URB_SF_ENTRY_SIZE     2
+#define URB_SF_ENTRIES	      1
+
 struct blendinfo {
     Bool dst_alpha;
     Bool src_alpha;
@@ -250,26 +268,13 @@ i965_check_composite(int op, PicturePtr pSrcPicture, PicturePtr pMaskPicture,
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
 #define BRW_GRF_BLOCKS(nreg)    ((nreg + 15) / 16 - 1)
 
-static int urb_vs_start, urb_vs_size;
-static int urb_gs_start, urb_gs_size;
-static int urb_clip_start, urb_clip_size;
-static int urb_sf_start, urb_sf_size;
-static int urb_cs_start, urb_cs_size;
-
-static struct brw_surface_state *dest_surf_state;
-static struct brw_surface_state *src_surf_state;
-static struct brw_surface_state *mask_surf_state;
-
-static CARD32 *binding_table;
-
 /* these offsets will remain the same for all buffers post allocation */
 static int dest_surf_offset, src_surf_offset, mask_surf_offset;
 static int vb_offset;
 static int binding_table_offset;
+
 static float *vb;
 static int vb_index;
-
-static CARD32 src_blend, dst_blend;
 
 static const CARD32 sip_kernel_static[][4] = {
 /*    wait (1) a0<1>UW a145<0,1,0>UW { align1 +  } */
@@ -312,12 +317,6 @@ static const CARD32 sf_kernel_mask_static[][4] = {
 
 static const CARD32 sf_kernel_rotation_static[][4] = {
 #include "exa_sf_rotation_prog.h"
-};
-
-struct i965_kernels {
-    void *kernel;
-    int size;
-
 };
 
 /* ps kernels */
@@ -489,49 +488,6 @@ i965_check_rotation_transform(PictTransformPtr t)
 	return TRUE;
     else
 	return FALSE;
-}
-
-/* initialise the state offsets these should not change at runtime */
-static void
-i965_init_state_offsets(ScrnInfoPtr pScrn, int total_size)
-{
-    static int init = 0;
-
-    if (init)
-	return;
-
-    init = 1;
-
-    /* Set up a default static partitioning of the URB, which is supposed to
-     * allow anything we would want to do, at potentially lower performance.
-     */
-#define URB_CS_ENTRY_SIZE     0
-#define URB_CS_ENTRIES	      0
-
-#define URB_VS_ENTRY_SIZE     1	  // each 512-bit row
-#define URB_VS_ENTRIES	      8	  // we needs at least 8 entries
-
-#define URB_GS_ENTRY_SIZE     0
-#define URB_GS_ENTRIES	      0
-
-#define URB_CLIP_ENTRY_SIZE   0
-#define URB_CLIP_ENTRIES      0
-
-#define URB_SF_ENTRY_SIZE     2
-#define URB_SF_ENTRIES	      1
-
-    urb_vs_start = 0;
-    urb_vs_size = URB_VS_ENTRIES * URB_VS_ENTRY_SIZE;
-    urb_gs_start = urb_vs_start + urb_vs_size;
-    urb_gs_size = URB_GS_ENTRIES * URB_GS_ENTRY_SIZE;
-    urb_clip_start = urb_gs_start + urb_gs_size;
-    urb_clip_size = URB_CLIP_ENTRIES * URB_CLIP_ENTRY_SIZE;
-    urb_sf_start = urb_clip_start + urb_clip_size;
-    urb_sf_size = URB_SF_ENTRIES * URB_SF_ENTRY_SIZE;
-    urb_cs_start = urb_sf_start + urb_sf_size;
-    urb_cs_size = URB_CS_ENTRIES * URB_CS_ENTRY_SIZE;
-
-    //    assert(total_state_size < pI830->exa_965_state->size);
 }
 
 static void
@@ -942,13 +898,18 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     Bool rotation_program = FALSE;
     int wm_state_offset, sip_kernel_offset;
     int sf_state_offset, cc_state_offset;
-    char *start_base;
-    void *map;
-    gen4_state_t *gen4_state;
     char *surface_start_base;
     void *surface_map;
     sampler_state_filter_t src_filter, mask_filter;
     sampler_state_extend_t src_extend, mask_extend;
+    struct brw_surface_state *dest_surf_state, *src_surf_state, *mask_surf_state;
+    CARD32 *binding_table;
+    int urb_vs_start, urb_vs_size;
+    int urb_gs_start, urb_gs_size;
+    int urb_clip_start, urb_clip_size;
+    int urb_sf_start, urb_sf_size;
+    int urb_cs_start, urb_cs_size;
+    CARD32 src_blend, dst_blend;
 
     if (pI830->use_ttm_batch) {
 	i965_exastate_reset(pI830->exa965);
@@ -1150,6 +1111,17 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     
     cc_state_offset = offsetof (gen4_state_t,
 				cc_state[src_blend][dst_blend]);
+
+    urb_vs_start = 0;
+    urb_vs_size = URB_VS_ENTRIES * URB_VS_ENTRY_SIZE;
+    urb_gs_start = urb_vs_start + urb_vs_size;
+    urb_gs_size = URB_GS_ENTRIES * URB_GS_ENTRY_SIZE;
+    urb_clip_start = urb_gs_start + urb_gs_size;
+    urb_clip_size = URB_CLIP_ENTRIES * URB_CLIP_ENTRY_SIZE;
+    urb_sf_start = urb_clip_start + urb_clip_size;
+    urb_sf_size = URB_SF_ENTRIES * URB_SF_ENTRY_SIZE;
+    urb_cs_start = urb_sf_start + urb_sf_size;
+    urb_cs_size = URB_CS_ENTRIES * URB_CS_ENTRY_SIZE;
 
     /* Begin the long sequence of commands needed to set up the 3D
      * rendering pipe
@@ -1470,11 +1442,7 @@ i965_init_exa_state(ScrnInfoPtr pScrn)
 {
     I830Ptr pI830 = I830PTR(pScrn);
 
-    i965_init_state_offsets(pScrn, EXASTATE_SZ);
-
     if (pI830->use_ttm_batch) {
-
-	
 	pI830->exa965 = i965_exastate_alloc(pScrn);
     } else {
 	void *map = pI830->FbBase + pI830->exa_965_state->offset;
