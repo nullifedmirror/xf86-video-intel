@@ -880,6 +880,100 @@ sampler_state_extend_from_picture (int repeat)
 	return SAMPLER_STATE_EXTEND_NONE;
 }
 
+static void
+gen4_emit_batch_header (ScrnInfoPtr pScrn)
+{
+    I830Ptr pI830 = I830PTR(pScrn);
+    int sip_kernel_offset;
+    int urb_vs_start, urb_vs_size;
+    int urb_gs_start, urb_gs_size;
+    int urb_clip_start, urb_clip_size;
+    int urb_sf_start, urb_sf_size;
+    int urb_cs_start, urb_cs_size;
+
+    urb_vs_start = 0;
+    urb_vs_size = URB_VS_ENTRIES * URB_VS_ENTRY_SIZE;
+    urb_gs_start = urb_vs_start + urb_vs_size;
+    urb_gs_size = URB_GS_ENTRIES * URB_GS_ENTRY_SIZE;
+    urb_clip_start = urb_gs_start + urb_gs_size;
+    urb_clip_size = URB_CLIP_ENTRIES * URB_CLIP_ENTRY_SIZE;
+    urb_sf_start = urb_clip_start + urb_clip_size;
+    urb_sf_size = URB_SF_ENTRIES * URB_SF_ENTRY_SIZE;
+    urb_cs_start = urb_sf_start + urb_sf_size;
+    urb_cs_size = URB_CS_ENTRIES * URB_CS_ENTRY_SIZE;
+
+    IntelEmitInvarientState(pScrn);
+
+    sip_kernel_offset = offsetof (gen4_state_t, sip_kernel);
+
+    /* Begin the long sequence of commands needed to set up the 3D
+     * rendering pipe
+     */
+    {
+	BEGIN_BATCH(2);
+	OUT_BATCH(MI_FLUSH |
+		  MI_STATE_INSTRUCTION_CACHE_FLUSH |
+		  BRW_MI_GLOBAL_SNAPSHOT_RESET);
+	OUT_BATCH(MI_NOOP);
+	ADVANCE_BATCH();
+    }
+    {
+	BEGIN_BATCH(16);
+
+/* Match Mesa driver setup */
+	OUT_BATCH(BRW_PIPELINE_SELECT | PIPELINE_SELECT_3D);
+
+	OUT_BATCH(BRW_CS_URB_STATE | 0);
+	OUT_BATCH((0 << 4) |  /* URB Entry Allocation Size */
+		  (0 << 0));  /* Number of URB Entries */
+
+	/* Zero out the two base address registers so all offsets are
+	 * absolute.
+	 */
+	OUT_BATCH(BRW_STATE_BASE_ADDRESS | 4);
+
+	if (pI830->use_ttm_batch) {
+	    OUT_RELOC(pI830->exa965->buf, DRM_BO_FLAG_MEM_TT, BASE_ADDRESS_MODIFY);
+
+	    OUT_RELOC(pI830->exa965->surface_buf, DRM_BO_FLAG_MEM_TT, BASE_ADDRESS_MODIFY);
+	} else {
+	    OUT_BATCH(pI830->exa_965_state->offset | BASE_ADDRESS_MODIFY);
+	    OUT_BATCH(pI830->exa_965_state->offset | BASE_ADDRESS_MODIFY);
+	}
+
+	OUT_BATCH(0 | BASE_ADDRESS_MODIFY);  /* media base addr, don't care */
+	/* general state max addr, disabled */
+	OUT_BATCH(0x10000000 | BASE_ADDRESS_MODIFY);
+	/* media object state max addr, disabled */
+	OUT_BATCH(0x10000000 | BASE_ADDRESS_MODIFY);
+
+	/* Set system instruction pointer */
+	OUT_BATCH(BRW_STATE_SIP | 0);
+	OUT_BATCH(sip_kernel_offset);
+
+	/* URB fence */
+	OUT_BATCH(BRW_URB_FENCE |
+		  UF0_CS_REALLOC |
+		  UF0_SF_REALLOC |
+		  UF0_CLIP_REALLOC |
+		  UF0_GS_REALLOC |
+		  UF0_VS_REALLOC |
+		  1);
+	OUT_BATCH(((urb_clip_start + urb_clip_size) << UF1_CLIP_FENCE_SHIFT) |
+		  ((urb_gs_start + urb_gs_size) << UF1_GS_FENCE_SHIFT) |
+		  ((urb_vs_start + urb_vs_size) << UF1_VS_FENCE_SHIFT));
+	OUT_BATCH(((urb_cs_start + urb_cs_size) << UF2_CS_FENCE_SHIFT) |
+		  ((urb_sf_start + urb_sf_size) << UF2_SF_FENCE_SHIFT));
+
+	/* Constant buffer state */
+	OUT_BATCH(BRW_CS_URB_STATE | 0);
+	OUT_BATCH(((URB_CS_ENTRY_SIZE - 1) << 4) |
+		  (URB_CS_ENTRIES << 0));
+
+	ADVANCE_BATCH();
+    }
+}
+
 Bool
 i965_prepare_composite(int op, PicturePtr pSrcPicture,
 		       PicturePtr pMaskPicture, PicturePtr pDstPicture,
@@ -891,7 +985,7 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     CARD32 mask_pitch = 0, mask_tile_format = 0, mask_tiled = 0;
     CARD32 dst_format, dst_pitch, dst_tile_format = 0, dst_tiled = 0;
     Bool rotation_program = FALSE;
-    int wm_state_offset, sip_kernel_offset;
+    int wm_state_offset;
     int sf_state_offset, cc_state_offset;
     char *surface_start_base;
     void *surface_map;
@@ -899,11 +993,6 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     sampler_state_extend_t src_extend, mask_extend;
     struct brw_surface_state *dest_surf_state, *src_surf_state, *mask_surf_state;
     CARD32 *binding_table;
-    int urb_vs_start, urb_vs_size;
-    int urb_gs_start, urb_gs_size;
-    int urb_clip_start, urb_clip_size;
-    int urb_sf_start, urb_sf_size;
-    int urb_cs_start, urb_cs_size;
     CARD32 src_blend, dst_blend;
 
     if (pI830->use_ttm_batch) {
@@ -916,7 +1005,6 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
 
     surface_start_base = surface_map;
 
-    IntelEmitInvarientState(pScrn);
     *pI830->last_3d = LAST_3D_RENDER;
 
     src_pitch = intel_get_pixmap_pitch(pSrc);
@@ -1102,71 +1190,17 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
 				    [mask_extend]);
     }
 
-    sip_kernel_offset = offsetof (gen4_state_t, sip_kernel);
-    
     cc_state_offset = offsetof (gen4_state_t,
 				cc_state[src_blend][dst_blend]);
 
-    urb_vs_start = 0;
-    urb_vs_size = URB_VS_ENTRIES * URB_VS_ENTRY_SIZE;
-    urb_gs_start = urb_vs_start + urb_vs_size;
-    urb_gs_size = URB_GS_ENTRIES * URB_GS_ENTRY_SIZE;
-    urb_clip_start = urb_gs_start + urb_gs_size;
-    urb_clip_size = URB_CLIP_ENTRIES * URB_CLIP_ENTRY_SIZE;
-    urb_sf_start = urb_clip_start + urb_clip_size;
-    urb_sf_size = URB_SF_ENTRIES * URB_SF_ENTRY_SIZE;
-    urb_cs_start = urb_sf_start + urb_sf_size;
-    urb_cs_size = URB_CS_ENTRIES * URB_CS_ENTRY_SIZE;
+    /* Any commands that don't change from one composite operation to
+     * the next we simply emit once at the beginning of the entire
+     * batch. */
+    if (pI830->exa965->num_ops == 0)
+	gen4_emit_batch_header (pScrn);
 
-    /* Begin the long sequence of commands needed to set up the 3D
-     * rendering pipe
-     */
     {
-	BEGIN_BATCH(2);
-   	OUT_BATCH(MI_FLUSH |
-		  MI_STATE_INSTRUCTION_CACHE_FLUSH |
-		  BRW_MI_GLOBAL_SNAPSHOT_RESET);
-	OUT_BATCH(MI_NOOP);
-	ADVANCE_BATCH();
-    }
-    {
-        BEGIN_BATCH(12);
-
-        /* Match Mesa driver setup */
-        OUT_BATCH(BRW_PIPELINE_SELECT | PIPELINE_SELECT_3D);
-
-   	OUT_BATCH(BRW_CS_URB_STATE | 0);
-   	OUT_BATCH((0 << 4) |  /* URB Entry Allocation Size */
-		 (0 << 0));  /* Number of URB Entries */
-
-	/* Zero out the two base address registers so all offsets are
-	 * absolute.
-	 */
-   	OUT_BATCH(BRW_STATE_BASE_ADDRESS | 4);
-
-	if (pI830->use_ttm_batch) {
-	    OUT_RELOC(pI830->exa965->buf, DRM_BO_FLAG_MEM_TT, BASE_ADDRESS_MODIFY);
-
-	    OUT_RELOC(pI830->exa965->surface_buf, DRM_BO_FLAG_MEM_TT, BASE_ADDRESS_MODIFY);
-	} else {
-	    OUT_BATCH(pI830->exa_965_state->offset | BASE_ADDRESS_MODIFY);
-	    OUT_BATCH(pI830->exa_965_state->offset | BASE_ADDRESS_MODIFY);
-	}
-
-   	OUT_BATCH(0 | BASE_ADDRESS_MODIFY);  /* media base addr, don't care */
-	/* general state max addr, disabled */
-   	OUT_BATCH(0x10000000 | BASE_ADDRESS_MODIFY);
-	/* media object state max addr, disabled */
-   	OUT_BATCH(0x10000000 | BASE_ADDRESS_MODIFY);
-
-	/* Set system instruction pointer */
-   	OUT_BATCH(BRW_STATE_SIP | 0);
-   	OUT_BATCH(sip_kernel_offset);
-	OUT_BATCH(MI_NOOP);
-	ADVANCE_BATCH();
-    }
-    {
-	BEGIN_BATCH(26);
+	BEGIN_BATCH(22);
 	/* Pipe control */
    	OUT_BATCH(BRW_PIPE_CONTROL |
 		 BRW_PIPE_CONTROL_NOWRITE |
@@ -1207,25 +1241,6 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
 	OUT_BATCH(sf_state_offset); /* 32 byte aligned */
 	OUT_BATCH(wm_state_offset); /* 32 byte aligned */
 	OUT_BATCH(cc_state_offset); /* 64 byte aligned */
-
-	/* URB fence */
-   	OUT_BATCH(BRW_URB_FENCE |
-        	 UF0_CS_REALLOC |
-	    	 UF0_SF_REALLOC |
-	    	 UF0_CLIP_REALLOC |
-	         UF0_GS_REALLOC |
-	         UF0_VS_REALLOC |
-	    	 1);
-   	OUT_BATCH(((urb_clip_start + urb_clip_size) << UF1_CLIP_FENCE_SHIFT) |
-	    	 ((urb_gs_start + urb_gs_size) << UF1_GS_FENCE_SHIFT) |
-	    	 ((urb_vs_start + urb_vs_size) << UF1_VS_FENCE_SHIFT));
-   	OUT_BATCH(((urb_cs_start + urb_cs_size) << UF2_CS_FENCE_SHIFT) |
-	     	 ((urb_sf_start + urb_sf_size) << UF2_SF_FENCE_SHIFT));
-
-	/* Constant buffer state */
-   	OUT_BATCH(BRW_CS_URB_STATE | 0);
-   	OUT_BATCH(((URB_CS_ENTRY_SIZE - 1) << 4) |
-	    	 (URB_CS_ENTRIES << 0));
 	ADVANCE_BATCH();
     }
     {
