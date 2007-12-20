@@ -813,8 +813,6 @@ gen4_surface_state_init (unsigned char *start_base,
     mask_surf_state->ss0.render_cache_read_mode = 0;
     mask_surf_state->ss2.mip_count = 0;
     mask_surf_state->ss2.render_target_rotation = 0;
-
-    state->num_ops++;
 }
 
 void i965_exastate_flush(struct i965_exastate_buffer *state)
@@ -1386,6 +1384,8 @@ i965_composite(PixmapPtr pDst, int srcX, int srcY, int maskX, int maskY,
     }
 
     vb_index = i;
+
+    pI830->exa965->num_ops++;
 
 #ifdef I830DEBUG
     ErrorF("sync after 3dprimitive");
