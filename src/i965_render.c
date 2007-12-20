@@ -435,9 +435,6 @@ typedef struct _gen4_state {
 					    [SAMPLER_STATE_EXTEND_COUNT];
 } gen4_state_t;
 
-char gen4_state_too_big[(EXASTATE_SZ >=
-			 sizeof(gen4_state_t)) ? 1 : -1];
-
 /* How many composite operations will we fit in one object. */
 #define GEN4_MAX_OPS			32
 #define GEN4_SURFACE_STATE_PER_OP	3
@@ -838,7 +835,7 @@ i965_exastate_reset(struct i965_exastate_buffer *state)
     /* First the general state buffer. */
     if (state->buf == NULL) {
 	state->buf = ddx_bo_alloc(pI830->bufmgr, "exa state buffer",
-				  EXASTATE_SZ, 4096,
+				  sizeof (gen4_state_t), 4096,
 				  DRM_BO_FLAG_MEM_LOCAL | DRM_BO_FLAG_CACHED | DRM_BO_FLAG_CACHED_MAPPED);
 	ddx_bo_map(state->buf, TRUE);
 	state->map = state->buf->virtual;
