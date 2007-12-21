@@ -918,7 +918,7 @@ gen4_emit_batch_header (ScrnInfoPtr pScrn)
 	ADVANCE_BATCH();
     }
     {
-	BEGIN_BATCH(16);
+	BEGIN_BATCH(20);
 
 /* Match Mesa driver setup */
 	OUT_BATCH(BRW_PIPELINE_SELECT | PIPELINE_SELECT_3D);
@@ -969,6 +969,15 @@ gen4_emit_batch_header (ScrnInfoPtr pScrn)
 	OUT_BATCH(BRW_CS_URB_STATE | 0);
 	OUT_BATCH(((URB_CS_ENTRY_SIZE - 1) << 4) |
 		  (URB_CS_ENTRIES << 0));
+
+	/* Pipe control */
+	OUT_BATCH(BRW_PIPE_CONTROL |
+		  BRW_PIPE_CONTROL_NOWRITE |
+		  BRW_PIPE_CONTROL_IS_FLUSH |
+		  2);
+	OUT_BATCH(0);			       /* Destination address */
+	OUT_BATCH(0);			       /* Immediate data low DW */
+	OUT_BATCH(0);			       /* Immediate data high DW */
 
 	ADVANCE_BATCH();
     }
@@ -1200,16 +1209,7 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
 	gen4_emit_batch_header (pScrn);
 
     {
-	BEGIN_BATCH(22);
-	/* Pipe control */
-   	OUT_BATCH(BRW_PIPE_CONTROL |
-		 BRW_PIPE_CONTROL_NOWRITE |
-		 BRW_PIPE_CONTROL_IS_FLUSH |
-		 2);
-   	OUT_BATCH(0);			       /* Destination address */
-   	OUT_BATCH(0);			       /* Immediate data low DW */
-   	OUT_BATCH(0);			       /* Immediate data high DW */
-
+	BEGIN_BATCH(18);
 	/* Binding table pointers */
    	OUT_BATCH(BRW_3DSTATE_BINDING_TABLE_POINTERS | 4);
    	OUT_BATCH(0); /* vs */
