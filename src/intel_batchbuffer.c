@@ -148,8 +148,8 @@ intel_exec_ioctl(ScrnInfoPtr pScrn,
    execbuf.batch.DR1 = 0;
    execbuf.batch.DR4 = 0;
 
-   execbuf.ops_list = (unsigned)start;
-   execbuf.fence_arg.flags = DRM_I915_FENCE_FLAG_FLUSHED;
+   execbuf.ops_list = (unsigned long)start;
+   execbuf.fence_arg.flags = DRM_FENCE_FLAG_SHAREABLE | DRM_I915_FENCE_FLAG_FLUSHED;
 
    if (drmCommandWriteRead(pI830->drmSubFD, DRM_I915_EXECBUFFER, &execbuf,
                        sizeof(execbuf))) {
@@ -175,6 +175,7 @@ do_flush_locked(struct intelddx_batchbuffer *batch,
    void *start;
    uint32_t count;
 
+   ddx_bo_unmap(batch->buf);
    start = dri_process_relocs(batch->buf, &count);
 
    batch->map = NULL;
@@ -221,6 +222,7 @@ intelddx_batchbuffer_flush(struct intelddx_batchbuffer *batch)
       ((int *) batch->ptr)[1] = MI_BATCH_BUFFER_END;
       used += 8;
    }
+   batch->ptr = batch->map;
 
    do_flush_locked(batch, used, 0, FALSE);
      
@@ -246,7 +248,7 @@ intelddx_batchbuffer_emit_reloc(struct intelddx_batchbuffer *batch,
                              uint32_t flags, uint32_t delta)
 {
    dri_emit_reloc(batch->buf, flags, delta, batch->ptr - batch->map, buffer);
-   batch->ptr += 4;
+   intelddx_batchbuffer_emit_dword (batch, buffer->offset + delta);
 
    return TRUE;
 }
@@ -261,8 +263,7 @@ intelddx_batchbuffer_data(struct intelddx_batchbuffer *batch,
    batch->ptr += bytes;
 }
 
-Bool
-intelddx_batchbuffer_emit_pixmap(PixmapPtr pPixmap, unsigned int flags,
+uint32_t intelddx_batchbuffer_emit_pixmap(PixmapPtr pPixmap, unsigned int flags,
 			      unsigned int mask, ddx_bo *reloc_buf,
 			      unsigned int offset, unsigned int delta)
 {
@@ -276,5 +277,5 @@ intelddx_batchbuffer_emit_pixmap(PixmapPtr pPixmap, unsigned int flags,
 	driver_priv->flags &= ~I830_EXA_PIXMAP_IS_MAPPED;
     }
     dri_emit_reloc(reloc_buf, flags, delta, offset, driver_priv->bo);
-    return TRUE;
+    return driver_priv->bo->offset;
 }

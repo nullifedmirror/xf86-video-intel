@@ -34,7 +34,7 @@
 
 ddx_bo *
 ddx_bo_alloc(ddx_bufmgr *bufmgr, const char *name, unsigned long size,
-	     unsigned int alignment, unsigned int location_mask)
+	     unsigned int alignment, uint64_t location_mask)
 {
    assert((location_mask & ~(DRM_BO_FLAG_MEM_LOCAL | DRM_BO_FLAG_MEM_TT |
 			     DRM_BO_FLAG_MEM_VRAM | DRM_BO_FLAG_MEM_PRIV0 |
@@ -47,7 +47,7 @@ ddx_bo_alloc(ddx_bufmgr *bufmgr, const char *name, unsigned long size,
 ddx_bo *
 ddx_bo_alloc_static(ddx_bufmgr *bufmgr, const char *name, unsigned long offset,
 		    unsigned long size, void *virtual,
-		    unsigned int location_mask)
+		    uint64_t location_mask)
 {
    assert((location_mask & ~(DRM_BO_FLAG_MEM_LOCAL | DRM_BO_FLAG_MEM_TT |
 			     DRM_BO_FLAG_MEM_VRAM | DRM_BO_FLAG_MEM_PRIV0 |
@@ -138,7 +138,7 @@ ddx_bufmgr_destroy(ddx_bufmgr *bufmgr)
 }
 
 
-void dri_emit_reloc(ddx_bo *batch_buf, uint32_t flags, uint32_t delta, uint32_t offset, ddx_bo *relocatee)
+void dri_emit_reloc(ddx_bo *batch_buf, uint64_t flags, uint32_t delta, uint32_t offset, ddx_bo *relocatee)
 {
    batch_buf->bufmgr->emit_reloc(batch_buf, flags, delta, offset, relocatee);
 }
@@ -151,4 +151,10 @@ void *dri_process_relocs(ddx_bo *batch_buf, uint32_t *count)
 void dri_post_submit(ddx_bo *batch_buf, dri_fence **last_fence)
 {
    batch_buf->bufmgr->post_submit(batch_buf, last_fence);
+}
+
+void
+dri_bufmgr_set_debug(ddx_bufmgr *bufmgr, Bool enable_debug)
+{
+   bufmgr->debug = enable_debug;
 }

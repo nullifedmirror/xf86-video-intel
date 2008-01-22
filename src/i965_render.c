@@ -809,10 +809,12 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     dest_surf_state->ss0.surface_format = dst_format;
 
     if (pI830->use_ttm_batch) {
-    	intelddx_batchbuffer_emit_pixmap(pDst,
-				     DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_WRITE,
-				     DRM_BO_MASK_MEM | DRM_BO_FLAG_WRITE | DRM_BO_FLAG_CACHED,
-				     pI830->exa965->buf, dest_surf_offset + 4, 0);
+	uint32_t _ret;
+	_ret = intelddx_batchbuffer_emit_pixmap(pDst,
+						DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_WRITE,
+						DRM_BO_MASK_MEM | DRM_BO_FLAG_WRITE | DRM_BO_FLAG_CACHED,
+						pI830->exa965->buf, dest_surf_offset + 4, 0);
+	dest_surf_state->ss1.base_addr = _ret;
     } else {
         dest_surf_state->ss1.base_addr = intel_get_pixmap_offset(pDst);
     }
@@ -828,10 +830,12 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     src_surf_state->ss0.surface_format = i965_get_card_format(pSrcPicture);
 
     if (pI830->use_ttm_batch) {
-        intelddx_batchbuffer_emit_pixmap(pSrc,
-				 DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
-				 DRM_BO_MASK_MEM | DRM_BO_FLAG_READ | DRM_BO_FLAG_CACHED,
-				 pI830->exa965->buf, src_surf_offset + 4, 0);
+	uint32_t _ret;
+        _ret = intelddx_batchbuffer_emit_pixmap(pSrc,
+						DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
+						DRM_BO_MASK_MEM | DRM_BO_FLAG_READ | DRM_BO_FLAG_CACHED,
+						pI830->exa965->buf, src_surf_offset + 4, 0);
+	src_surf_state->ss1.base_addr = _ret;
     } else {
         src_surf_state->ss1.base_addr = intel_get_pixmap_offset(pSrc);
     }
@@ -846,10 +850,12 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
 	mask_surf_state = (void *)(start_base + mask_surf_offset);
    	mask_surf_state->ss0.surface_format = i965_get_card_format(pMaskPicture);
         if (pI830->use_ttm_batch) {
-	   intelddx_batchbuffer_emit_pixmap(pMask, 
+	  uint32_t _ret;
+	  _ret = intelddx_batchbuffer_emit_pixmap(pMask, 
 				     DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
 				     DRM_BO_MASK_MEM | DRM_BO_FLAG_READ | DRM_BO_FLAG_CACHED,
 				     pI830->exa965->buf, mask_surf_offset + 4, 0);
+	  mask_surf_state->ss1.base_addr = _ret;
         } else {
 	    mask_surf_state->ss1.base_addr = intel_get_pixmap_offset(pMask);
 	}
