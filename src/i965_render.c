@@ -982,7 +982,11 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
         BEGIN_BATCH(12);
 
         /* Match Mesa driver setup */
-        OUT_BATCH(BRW_PIPELINE_SELECT | PIPELINE_SELECT_3D);
+	if (IS_IGD_GM(pI830)) {
+	    OUT_BATCH(NEW_PIPELINE_SELECT | PIPELINE_SELECT_3D);
+	} else {
+	    OUT_BATCH(BRW_PIPELINE_SELECT | PIPELINE_SELECT_3D);
+	}
 
    	OUT_BATCH(BRW_CS_URB_STATE | 0);
    	OUT_BATCH((0 << 4) |  /* URB Entry Allocation Size */

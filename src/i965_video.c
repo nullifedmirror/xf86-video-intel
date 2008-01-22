@@ -509,7 +509,11 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
     {
 	BEGIN_BATCH(12);
 	/* Match Mesa driver setup */
-	OUT_BATCH(BRW_PIPELINE_SELECT | PIPELINE_SELECT_3D);
+	if (IS_IGD_GM(pI830)) {
+	    OUT_BATCH(NEW_PIPELINE_SELECT | PIPELINE_SELECT_3D);
+	} else {
+	    OUT_BATCH(BRW_PIPELINE_SELECT | PIPELINE_SELECT_3D);
+	}
 
 	/* Mesa does this. Who knows... */
 	OUT_BATCH(BRW_CS_URB_STATE | 0);
