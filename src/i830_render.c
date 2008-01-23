@@ -319,7 +319,7 @@ i830_texture_setup(PicturePtr pPict, PixmapPtr pPix, int unit)
 	OUT_BATCH(_3DSTATE_LOAD_STATE_IMMEDIATE_2 | LOAD_TEXTURE_MAP(unit) | 4);
 	OUT_PIXMAP_RELOC(pPix,
 			 DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
-			 DRM_BO_MASK_MEM | DRM_BO_FLAG_WRITE, TM0S0_USE_FENCE);
+			 TM0S0_USE_FENCE);
 	OUT_BATCH(((pPix->drawable.height - 1) << TM0S1_HEIGHT_SHIFT) |
 		((pPix->drawable.width - 1) << TM0S1_WIDTH_SHIFT) | format);
 	OUT_BATCH((pitch/4 - 1) << TM0S2_PITCH_SHIFT | TM0S2_MAP_2D);
@@ -429,8 +429,10 @@ i830_prepare_composite(int op, PicturePtr pSrcPicture,
 	OUT_BATCH(BUF_3D_ID_COLOR_BACK| BUF_3D_USE_FENCE |
 			BUF_3D_PITCH(dst_pitch));
 	OUT_PIXMAP_RELOC(pDst,
-			 DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_WRITE,
-			 DRM_BO_MASK_MEM | DRM_BO_FLAG_WRITE, 0);
+			 DRM_BO_FLAG_MEM_TT |
+			 DRM_BO_FLAG_READ |
+			 DRM_BO_FLAG_WRITE,
+			 0);
 	OUT_BATCH(MI_NOOP);
 
 	OUT_BATCH(_3DSTATE_DST_BUF_VARS_CMD);

@@ -35,9 +35,8 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "xaarop.h"
 #include "i830.h"
 #include "i810_reg.h"
-#include <string.h>
-
 #include "intel_bufmgr_ttm.h"
+#include <string.h>
 
 #ifdef I830DEBUG
 #define DEBUG_I830FALLBACK 1
@@ -239,7 +238,7 @@ I830EXASolid(PixmapPtr pPixmap, int x1, int y1, int x2, int y2)
 	OUT_BATCH((y2 << 16) | (x2 & 0xffff));
 	OUT_PIXMAP_RELOC(pPixmap,
 			 DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_WRITE,
-			 DRM_BO_MASK_MEM | DRM_BO_FLAG_WRITE, 0);
+			 0);
 	OUT_BATCH(pI830->BR[16]);
 	ADVANCE_BATCH();
     }
@@ -331,12 +330,12 @@ I830EXACopy(PixmapPtr pDstPixmap, int src_x1, int src_y1, int dst_x1,
 	OUT_BATCH((dst_y2 << 16) | (dst_x2 & 0xffff));
 	OUT_PIXMAP_RELOC(pDstPixmap,
 			 DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_WRITE,
-			 DRM_BO_MASK_MEM | DRM_BO_FLAG_WRITE, 0);
+			 0);
 	OUT_BATCH((src_y1 << 16) | (src_x1 & 0xffff));
 	OUT_BATCH(src_pitch);
 	OUT_PIXMAP_RELOC(pI830->pSrcPixmap,
 			 DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
-			 DRM_BO_MASK_MEM | DRM_BO_FLAG_READ, 0);
+			 0);
 
 	ADVANCE_BATCH();
     }
@@ -398,7 +397,7 @@ static void *I830EXACreatePixmap(ScreenPtr pScreen, int size, int align)
     if (size == 0)
 	return new_priv;
 
-    new_priv->bo = ddx_bo_alloc(pI830->bufmgr, "pixmap",
+    new_priv->bo = dri_bo_alloc(pI830->bufmgr, "pixmap",
 				size, 4096, DRM_BO_FLAG_MEM_LOCAL | DRM_BO_FLAG_CACHED | DRM_BO_FLAG_CACHED_MAPPED);
 
     return new_priv;
@@ -411,9 +410,9 @@ static void I830EXADestroyPixmap(ScreenPtr pScreen, void *driverPriv)
     struct i830_exa_pixmap_priv *driver_priv = driverPriv;
 
     if (driver_priv->flags & I830_EXA_PIXMAP_IS_MAPPED)
-        ddx_bo_unmap(driver_priv->bo);
+        dri_bo_unmap(driver_priv->bo);
 
-    ddx_bo_unreference(driver_priv->bo);
+    dri_bo_unreference(driver_priv->bo);
     xfree(driverPriv);
 }
 
@@ -453,7 +452,7 @@ static Bool I830EXAPrepareAccess(PixmapPtr pPix, int index)
 	if ((driver_priv->flags & I830_EXA_PIXMAP_IS_MAPPED))
 	    return TRUE;
 
-	ret = ddx_bo_map(driver_priv->bo, 1);
+	ret = dri_bo_map(driver_priv->bo, 1);
 	if (ret)
 	    return FALSE;
 
@@ -480,7 +479,9 @@ static Bool I830EXAModifyPixmapHeader(PixmapPtr pPixmap, int width, int height,
         driver_priv->flags |= I830_EXA_PIXMAP_IS_FRONTBUFFER;
 
 	/* get a reference to the front buffer handle */
-	driver_priv->bo = intelddx_ttm_bo_create_from_handle(pI830->bufmgr, "front", pI830->front_buffer->bo.handle);
+	driver_priv->bo =
+	    intel_ttm_bo_create_from_handle(pI830->bufmgr, "front",
+					    pI830->front_buffer->bo.handle);
 	miModifyPixmapHeader(pPixmap, width, height, depth,
 			     bitsPerPixel, devKind, NULL);
 

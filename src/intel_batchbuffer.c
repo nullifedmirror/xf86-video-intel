@@ -82,14 +82,14 @@ intelddx_batchbuffer_reset(struct intelddx_batchbuffer *batch)
    I830Ptr pI830 = I830PTR(batch->pScrn);
 
    if (batch->buf != NULL) {
-      ddx_bo_unreference(batch->buf);
+      dri_bo_unreference(batch->buf);
       batch->buf = NULL;
    }
 
-   batch->buf = ddx_bo_alloc(pI830->bufmgr, "batchbuffer",
+   batch->buf = dri_bo_alloc(pI830->bufmgr, "batchbuffer",
 			     pI830->maxBatchSize, 4096,
 			     DRM_BO_FLAG_MEM_LOCAL | DRM_BO_FLAG_CACHED | DRM_BO_FLAG_CACHED_MAPPED);
-   ddx_bo_map(batch->buf, TRUE);
+   dri_bo_map(batch->buf, TRUE);
    batch->map = batch->buf->virtual;
    batch->size = pI830->maxBatchSize;
    batch->ptr = batch->map;
@@ -116,10 +116,10 @@ intelddx_batchbuffer_free(struct intelddx_batchbuffer *batch)
       batch->last_fence = NULL;
    }
    if (batch->map) {
-      ddx_bo_unmap(batch->buf);
+      dri_bo_unmap(batch->buf);
       batch->map = NULL;
    }
-   ddx_bo_unreference(batch->buf);
+   dri_bo_unreference(batch->buf);
    batch->buf = NULL;
    free(batch);
 }
@@ -157,7 +157,7 @@ intel_exec_ioctl(ScrnInfoPtr pScrn,
       exit(1);
    }
 
-   fo = intelddx_ttm_fence_create_from_arg(pI830->bufmgr, "fence buffers",
+   fo = intel_ttm_fence_create_from_arg(pI830->bufmgr, "fence buffers",
                                         &execbuf.fence_arg);
    if (!fo) {
       fprintf(stderr, "failed to fence handle: %08x\n", execbuf.fence_arg.handle);
@@ -175,7 +175,7 @@ do_flush_locked(struct intelddx_batchbuffer *batch,
    void *start;
    uint32_t count;
 
-   ddx_bo_unmap(batch->buf);
+   dri_bo_unmap(batch->buf);
    start = dri_process_relocs(batch->buf, &count);
 
    batch->map = NULL;
@@ -244,7 +244,7 @@ intelddx_batchbuffer_finish(struct intelddx_batchbuffer *batch)
  */
 Bool
 intelddx_batchbuffer_emit_reloc(struct intelddx_batchbuffer *batch,
-                             ddx_bo *buffer,
+                             dri_bo *buffer,
                              uint32_t flags, uint32_t delta)
 {
    dri_emit_reloc(batch->buf, flags, delta, batch->ptr - batch->map, buffer);
@@ -263,9 +263,11 @@ intelddx_batchbuffer_data(struct intelddx_batchbuffer *batch,
    batch->ptr += bytes;
 }
 
-uint32_t intelddx_batchbuffer_emit_pixmap(PixmapPtr pPixmap, unsigned int flags,
-			      unsigned int mask, ddx_bo *reloc_buf,
-			      unsigned int offset, unsigned int delta)
+uint32_t intelddx_batchbuffer_emit_pixmap(PixmapPtr pPixmap,
+					  unsigned int flags,
+					  dri_bo *reloc_buf,
+					  unsigned int offset,
+					  unsigned int delta)
 {
     ScreenPtr pScreen = pPixmap->drawable.pScreen;
     ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
@@ -273,7 +275,7 @@ uint32_t intelddx_batchbuffer_emit_pixmap(PixmapPtr pPixmap, unsigned int flags,
     struct i830_exa_pixmap_priv *driver_priv = exaGetPixmapDriverPrivate(pPixmap);
 
     if (driver_priv->flags & I830_EXA_PIXMAP_IS_MAPPED) {
-	ddx_bo_unmap(driver_priv->bo);
+	dri_bo_unmap(driver_priv->bo);
 	driver_priv->flags &= ~I830_EXA_PIXMAP_IS_MAPPED;
     }
     dri_emit_reloc(reloc_buf, flags, delta, offset, driver_priv->bo);

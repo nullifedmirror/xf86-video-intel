@@ -697,20 +697,20 @@ i965_update_ps_kernel(ScrnInfoPtr pScrn, char *start_base,
     memcpy(start_base + ps_kernel_offset, ps_kernels[need_ps_kernel].kernel, ps_kernels[need_ps_kernel].size);
 }
 
-void
+static void
 i965_exastate_reset(struct i965_exastate_buffer *state)
 {
     I830Ptr pI830 = I830PTR(state->pScrn);
 
     if (state->buf != NULL) {
-	ddx_bo_unreference(state->buf);
+	dri_bo_unreference(state->buf);
 	state->buf = NULL;
     }
 
-    state->buf = ddx_bo_alloc(pI830->bufmgr, "exa state buffer",
+    state->buf = dri_bo_alloc(pI830->bufmgr, "exa state buffer",
 			      EXASTATE_SZ, 4096,
 			      DRM_BO_FLAG_MEM_TT);
-    ddx_bo_map(state->buf, TRUE);
+    dri_bo_map(state->buf, TRUE);
 
     state->map = state->buf->virtual;
     i965_init_state_objects(state->pScrn, state->map);
@@ -811,8 +811,9 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     if (pI830->use_ttm_batch) {
 	uint32_t _ret;
 	_ret = intelddx_batchbuffer_emit_pixmap(pDst,
-						DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_WRITE,
-						DRM_BO_MASK_MEM | DRM_BO_FLAG_WRITE | DRM_BO_FLAG_CACHED,
+						DRM_BO_FLAG_MEM_TT |
+						DRM_BO_FLAG_READ |
+						DRM_BO_FLAG_WRITE,
 						pI830->exa965->buf, dest_surf_offset + 4, 0);
 	dest_surf_state->ss1.base_addr = _ret;
     } else {
@@ -832,9 +833,10 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     if (pI830->use_ttm_batch) {
 	uint32_t _ret;
         _ret = intelddx_batchbuffer_emit_pixmap(pSrc,
-						DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
-						DRM_BO_MASK_MEM | DRM_BO_FLAG_READ | DRM_BO_FLAG_CACHED,
-						pI830->exa965->buf, src_surf_offset + 4, 0);
+						DRM_BO_FLAG_MEM_TT |
+						DRM_BO_FLAG_READ,
+						pI830->exa965->buf,
+						src_surf_offset + 4, 0);
 	src_surf_state->ss1.base_addr = _ret;
     } else {
         src_surf_state->ss1.base_addr = intel_get_pixmap_offset(pSrc);
@@ -851,10 +853,11 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
    	mask_surf_state->ss0.surface_format = i965_get_card_format(pMaskPicture);
         if (pI830->use_ttm_batch) {
 	  uint32_t _ret;
-	  _ret = intelddx_batchbuffer_emit_pixmap(pMask, 
-				     DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
-				     DRM_BO_MASK_MEM | DRM_BO_FLAG_READ | DRM_BO_FLAG_CACHED,
-				     pI830->exa965->buf, mask_surf_offset + 4, 0);
+	  _ret = intelddx_batchbuffer_emit_pixmap(pMask,
+						  DRM_BO_FLAG_MEM_TT |
+						  DRM_BO_FLAG_READ,
+						  pI830->exa965->buf,
+						  mask_surf_offset + 4, 0);
 	  mask_surf_state->ss1.base_addr = _ret;
         } else {
 	    mask_surf_state->ss1.base_addr = intel_get_pixmap_offset(pMask);
@@ -1004,9 +1007,13 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
    	OUT_BATCH(BRW_STATE_BASE_ADDRESS | 4);
 
 	if (pI830->use_ttm_batch) {
-	    OUT_RELOC(pI830->exa965->buf, DRM_BO_FLAG_MEM_TT, BASE_ADDRESS_MODIFY);
+	    OUT_RELOC(pI830->exa965->buf,
+		      DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
+		      BASE_ADDRESS_MODIFY);
 
-	    OUT_RELOC(pI830->exa965->buf, DRM_BO_FLAG_MEM_TT, BASE_ADDRESS_MODIFY);
+	    OUT_RELOC(pI830->exa965->buf,
+		      DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
+		      BASE_ADDRESS_MODIFY);
 	} else {
 	    OUT_BATCH(pI830->exa_965_state->offset | BASE_ADDRESS_MODIFY);
 	    OUT_BATCH(pI830->exa_965_state->offset | BASE_ADDRESS_MODIFY);
@@ -1098,7 +1105,8 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
 	    	 ((4 * 2 * nelem) << VB0_BUFFER_PITCH_SHIFT));
 
 	if (pI830->use_ttm_batch) {
-	    OUT_RELOC(pI830->exa965->buf, DRM_BO_FLAG_MEM_TT, vb_offset);
+	    OUT_RELOC(pI830->exa965->buf,
+		      DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ, vb_offset);
 
 	} else {
 	    OUT_BATCH(pI830->exa_965_state->offset + vb_offset);
@@ -1275,7 +1283,7 @@ void i965_done_composite(PixmapPtr pDst)
     }
 
     if (pI830->use_ttm_batch) {
-	ddx_bo_unmap(pI830->exa965->buf);
+	dri_bo_unmap(pI830->exa965->buf);
 	intelddx_batchbuffer_flush(pI830->batch);
     } else {
 	I830Sync(pScrn);

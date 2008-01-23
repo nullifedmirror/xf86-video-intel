@@ -13,7 +13,7 @@ struct intelddx_batchbuffer
 {
    ScrnInfoPtr pScrn;
 
-   ddx_bo *buf;
+   dri_bo *buf;
    dri_fence *last_fence;
    uint32_t flags;
 
@@ -26,7 +26,7 @@ struct intelddx_batchbuffer
 };
 
 struct i965_exastate_buffer {
-   ddx_bo *buf;
+   dri_bo *buf;
    dri_fence *last_fence;
    ScrnInfoPtr pScrn;
    unsigned char *map;
@@ -55,8 +55,8 @@ void intelddx_batchbuffer_release_space(struct intelddx_batchbuffer *batch,
                                      uint32_t bytes);
 
 Bool intelddx_batchbuffer_emit_reloc(struct intelddx_batchbuffer *batch,
-                                       ddx_bo *buffer,
-                                       uint32_t flags, uint32_t offset);
+				     dri_bo *buffer,
+				     uint32_t flags, uint32_t offset);
 
 /* Inline functions - might actually be better off with these
  * non-inlined.  Certainly better off switching all command packets to
@@ -93,8 +93,7 @@ intelddx_batchbuffer_require_space(struct intelddx_batchbuffer *batch,
 
 extern uint32_t intelddx_batchbuffer_emit_pixmap(PixmapPtr pPixmap,
 					     unsigned int flags,
-					     unsigned int mask,
-					     ddx_bo *reloc_buf,
+					     dri_bo *reloc_buf,
 					     unsigned int offset,
 					     unsigned int delta);
 
@@ -124,8 +123,8 @@ extern uint32_t intelddx_batchbuffer_emit_pixmap(PixmapPtr pPixmap,
    intelddx_batchbuffer_emit_reloc(pI830->batch, buf, flags, delta);	\
 } while (0)
 
-#define OUT_PIXMAP_RELOC(pixmap, flags, mask, delta) if (pI830->use_ttm_batch) { \
-    uint32_t _retval = intelddx_batchbuffer_emit_pixmap((pixmap), (flags), (mask),		\
+#define OUT_PIXMAP_RELOC(pixmap, flags, delta) if (pI830->use_ttm_batch) { \
+    uint32_t _retval = intelddx_batchbuffer_emit_pixmap((pixmap), (flags),		\
                                  pI830->batch->buf, (pI830->batch->ptr - pI830->batch->map), (delta)); \
     intelddx_batchbuffer_emit_dword (pI830->batch, _retval + (delta)); \
   } else {								\

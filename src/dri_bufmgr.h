@@ -34,16 +34,16 @@
 
 #ifndef _DRI_BUFMGR_H_
 #define _DRI_BUFMGR_H_
-#include <stdint.h>
 #include <xf86drm.h>
 
-#include "xf86str.h"
+#include <GL/gl.h>
+#include "dri_bufmgr_remap.h"
 
-typedef struct _ddx_bufmgr ddx_bufmgr;
-typedef struct _ddx_bo ddx_bo;
+typedef struct _dri_bufmgr dri_bufmgr;
+typedef struct _dri_bo dri_bo;
 typedef struct _dri_fence dri_fence;
 
-struct _ddx_bo {
+struct _dri_bo {
    /** Size in bytes of the buffer object. */
    unsigned long size;
    /**
@@ -56,7 +56,7 @@ struct _ddx_bo {
     */
    void *virtual;
    /** Buffer manager context associated with this buffer object */
-   ddx_bufmgr *bufmgr;
+   dri_bufmgr *bufmgr;
 };
 
 struct _dri_fence {
@@ -68,7 +68,7 @@ struct _dri_fence {
     */
    unsigned int type;
    /** Buffer manager context associated with this fence */
-   ddx_bufmgr *bufmgr;
+   dri_bufmgr *bufmgr;
 };
 
 /**
@@ -76,7 +76,7 @@ struct _dri_fence {
  *
  * Contains public methods followed by private storage for the buffer manager.
  */
-struct _ddx_bufmgr {
+struct _dri_bufmgr {
    /**
     * Allocate a buffer object.
     *
@@ -85,9 +85,9 @@ struct _ddx_bufmgr {
     * bo_map() to be used by the CPU, and validated for use using bo_validate()
     * to be used from the graphics device.
     */
-   ddx_bo *(*bo_alloc)(ddx_bufmgr *bufmgr_ctx, const char *name,
+   dri_bo *(*bo_alloc)(dri_bufmgr *bufmgr_ctx, const char *name,
 		       unsigned long size, unsigned int alignment,
-		       unsigned int location_mask);
+		       uint64_t location_mask);
 
    /**
     * Allocates a buffer object for a static allocation.
@@ -95,18 +95,18 @@ struct _ddx_bufmgr {
     * Static allocations are ones such as the front buffer that are offered by
     * the X Server, which are never evicted and never moved.
     */
-   ddx_bo *(*bo_alloc_static)(ddx_bufmgr *bufmgr_ctx, const char *name,
+   dri_bo *(*bo_alloc_static)(dri_bufmgr *bufmgr_ctx, const char *name,
 			      unsigned long offset, unsigned long size,
-			      void *virtual, unsigned int location_mask);
+			      void *virtual, uint64_t location_mask);
 
    /** Takes a reference on a buffer object */
-   void (*bo_reference)(ddx_bo *bo);
+   void (*bo_reference)(dri_bo *bo);
 
    /**
     * Releases a reference on a buffer object, freeing the data if
     * rerefences remain.
     */
-   void (*bo_unreference)(ddx_bo *bo);
+   void (*bo_unreference)(dri_bo *bo);
 
    /**
     * Maps the buffer into userspace.
@@ -114,10 +114,10 @@ struct _ddx_bufmgr {
     * This function will block waiting for any existing fence on the buffer to
     * clear, first.  The resulting mapping is available at buf->virtual.
 \    */
-   int (*bo_map)(ddx_bo *buf, Bool write_enable);
+   int (*bo_map)(dri_bo *buf, GLboolean write_enable);
 
    /** Reduces the refcount on the userspace mapping of the buffer object. */
-   int (*bo_unmap)(ddx_bo *buf);
+   int (*bo_unmap)(dri_bo *buf);
 
    /** Takes a reference on a fence object */
    void (*fence_reference)(dri_fence *fence);
@@ -136,55 +136,87 @@ struct _ddx_bufmgr {
    /**
     * Tears down the buffer manager instance.
     */
-   void (*destroy)(ddx_bufmgr *bufmgr);
-   
+   void (*destroy)(dri_bufmgr *bufmgr);
+
    /**
-    * Add relocation
+    * Add relocation entry in reloc_buf, which will be updated with the
+    * target buffer's real offset on on command submission.
+    *
+    * Relocations remain in place for the lifetime of the buffer object.
+    *
+    * \param reloc_buf Buffer to write the relocation into.
+    * \param flags BO flags to be used in validating the target buffer.
+    *	     Applicable flags include:
+    *	     - DRM_BO_FLAG_READ: The buffer will be read in the process of
+    *	       command execution.
+    *	     - DRM_BO_FLAG_WRITE: The buffer will be written in the process of
+    *	       command execution.
+    *	     - DRM_BO_FLAG_MEM_TT: The buffer should be validated in TT memory.
+    *	     - DRM_BO_FLAG_MEM_VRAM: The buffer should be validated in video
+    *	       memory.
+    * \param delta Constant value to be added to the relocation target's offset.
+    * \param offset Byte offset within batch_buf of the relocated pointer.
+    * \param target Buffer whose offset should be written into the relocation
+    *	     entry.
     */
-   void (*emit_reloc)(ddx_bo *batch_buf, uint64_t flags, uint32_t delta, uint32_t offset, ddx_bo *relocatee);
+   void (*emit_reloc)(dri_bo *reloc_buf, uint64_t flags, GLuint delta,
+		      GLuint offset, dri_bo *target);
 
-  void *(*process_relocs)(ddx_bo *batch_buf, uint32_t *count);
+   /**
+    * Processes the relocations, either in userland or by converting the list
+    * for use in batchbuffer submission.
+    *
+    * Kernel-based implementations will return a pointer to the arguments
+    * to be handed with batchbuffer submission to the kernel.  The userland
+    * implementation performs the buffer validation and emits relocations
+    * into them the appopriate order.
+    *
+    * \param batch_buf buffer at the root of the tree of relocations
+    * \param count returns the number of buffers validated.
+    * \return relocation record for use in command submission.
+    * */
+   void *(*process_relocs)(dri_bo *batch_buf, GLuint *count);
 
-   void (*post_submit)(ddx_bo *batch_buf, dri_fence **fence);
+   void (*post_submit)(dri_bo *batch_buf, dri_fence **fence);
 
-   Bool debug; /**< Enables verbose debugging printouts */
+   GLboolean debug; /**< Enables verbose debugging printouts */
 };
 
-ddx_bo *ddx_bo_alloc(ddx_bufmgr *bufmgr, const char *name, unsigned long size,
+dri_bo *dri_bo_alloc(dri_bufmgr *bufmgr, const char *name, unsigned long size,
 		     unsigned int alignment, uint64_t location_mask);
-ddx_bo *ddx_bo_alloc_static(ddx_bufmgr *bufmgr, const char *name,
+dri_bo *dri_bo_alloc_static(dri_bufmgr *bufmgr, const char *name,
 			    unsigned long offset, unsigned long size,
 			    void *virtual, uint64_t location_mask);
-void ddx_bo_reference(ddx_bo *bo);
-void ddx_bo_unreference(ddx_bo *bo);
-int ddx_bo_map(ddx_bo *buf, Bool write_enable);
-int ddx_bo_unmap(ddx_bo *buf);
+void dri_bo_reference(dri_bo *bo);
+void dri_bo_unreference(dri_bo *bo);
+int dri_bo_map(dri_bo *buf, GLboolean write_enable);
+int dri_bo_unmap(dri_bo *buf);
 void dri_fence_wait(dri_fence *fence);
 void dri_fence_reference(dri_fence *fence);
 void dri_fence_unreference(dri_fence *fence);
 
-void ddx_bo_subdata(ddx_bo *bo, unsigned long offset,
+void dri_bo_subdata(dri_bo *bo, unsigned long offset,
 		    unsigned long size, const void *data);
-void ddx_bo_get_subdata(ddx_bo *bo, unsigned long offset,
+void dri_bo_get_subdata(dri_bo *bo, unsigned long offset,
 			unsigned long size, void *data);
 
-ddx_bufmgr *ddx_bufmgr_ttm_init(int fd, unsigned int fence_type,
-				unsigned int fence_type_flush);
-
-void ddx_bufmgr_fake_contended_lock_take(ddx_bufmgr *bufmgr);
-ddx_bufmgr *ddx_bufmgr_fake_init(unsigned long low_offset, void *low_virtual,
+void dri_bufmgr_fake_contended_lock_take(dri_bufmgr *bufmgr);
+dri_bufmgr *dri_bufmgr_fake_init(unsigned long low_offset, void *low_virtual,
 				 unsigned long size,
 				 unsigned int (*fence_emit)(void *private),
 				 int (*fence_wait)(void *private,
 						   unsigned int cookie),
 				 void *driver_priv);
-void ddx_bufmgr_destroy(ddx_bufmgr *bufmgr);
-ddx_bo *dri_ttm_bo_create_from_handle(ddx_bufmgr *bufmgr, const char *name,
-				      unsigned int handle);
+void dri_bufmgr_set_debug(dri_bufmgr *bufmgr, GLboolean enable_debug);
+void dri_bo_fake_disable_backing_store(dri_bo *bo,
+				       void (*invalidate_cb)(dri_bo *bo,
+							     void *ptr),
+				       void *ptr);
+void dri_bufmgr_destroy(dri_bufmgr *bufmgr);
 
-void dri_emit_reloc(ddx_bo *batch_buf, uint64_t flags, uint32_t delta, uint32_t offset, ddx_bo *relocatee);
-void *dri_process_relocs(ddx_bo *batch_buf, uint32_t *count);
-void dri_post_process_relocs(ddx_bo *batch_buf);
-void dri_post_submit(ddx_bo *batch_buf, dri_fence **last_fence);
-void dri_bufmgr_set_debug(ddx_bufmgr *bufmgr, Bool enable_debug);
+void dri_emit_reloc(dri_bo *reloc_buf, uint64_t flags, GLuint delta,
+		    GLuint offset, dri_bo *target_buf);
+void *dri_process_relocs(dri_bo *batch_buf, uint32_t *count);
+void dri_post_process_relocs(dri_bo *batch_buf);
+void dri_post_submit(dri_bo *batch_buf, dri_fence **last_fence);
 #endif

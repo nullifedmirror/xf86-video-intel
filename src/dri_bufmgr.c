@@ -25,6 +25,9 @@
  *
  */
 
+#include <string.h>
+#include <stdlib.h>
+#include <assert.h>
 #include "dri_bufmgr.h"
 
 /** @file dri_bufmgr.c
@@ -32,8 +35,8 @@
  * Convenience functions for buffer management methods.
  */
 
-ddx_bo *
-ddx_bo_alloc(ddx_bufmgr *bufmgr, const char *name, unsigned long size,
+dri_bo *
+dri_bo_alloc(dri_bufmgr *bufmgr, const char *name, unsigned long size,
 	     unsigned int alignment, uint64_t location_mask)
 {
    assert((location_mask & ~(DRM_BO_FLAG_MEM_LOCAL | DRM_BO_FLAG_MEM_TT |
@@ -44,8 +47,8 @@ ddx_bo_alloc(ddx_bufmgr *bufmgr, const char *name, unsigned long size,
    return bufmgr->bo_alloc(bufmgr, name, size, alignment, location_mask);
 }
 
-ddx_bo *
-ddx_bo_alloc_static(ddx_bufmgr *bufmgr, const char *name, unsigned long offset,
+dri_bo *
+dri_bo_alloc_static(dri_bufmgr *bufmgr, const char *name, unsigned long offset,
 		    unsigned long size, void *virtual,
 		    uint64_t location_mask)
 {
@@ -60,13 +63,13 @@ ddx_bo_alloc_static(ddx_bufmgr *bufmgr, const char *name, unsigned long offset,
 }
 
 void
-ddx_bo_reference(ddx_bo *bo)
+dri_bo_reference(dri_bo *bo)
 {
    bo->bufmgr->bo_reference(bo);
 }
 
 void
-ddx_bo_unreference(ddx_bo *bo)
+dri_bo_unreference(dri_bo *bo)
 {
    if (bo == NULL)
       return;
@@ -75,13 +78,13 @@ ddx_bo_unreference(ddx_bo *bo)
 }
 
 int
-ddx_bo_map(ddx_bo *buf, Bool write_enable)
+dri_bo_map(dri_bo *buf, GLboolean write_enable)
 {
    return buf->bufmgr->bo_map(buf, write_enable);
 }
 
 int
-ddx_bo_unmap(ddx_bo *buf)
+dri_bo_unmap(dri_bo *buf)
 {
    return buf->bufmgr->bo_unmap(buf);
 }
@@ -108,53 +111,54 @@ dri_fence_unreference(dri_fence *fence)
 }
 
 void
-ddx_bo_subdata(ddx_bo *bo, unsigned long offset,
+dri_bo_subdata(dri_bo *bo, unsigned long offset,
 	       unsigned long size, const void *data)
 {
    if (size == 0 || data == NULL)
       return;
 
-   ddx_bo_map(bo, TRUE);
+   dri_bo_map(bo, GL_TRUE);
    memcpy((unsigned char *)bo->virtual + offset, data, size);
-   ddx_bo_unmap(bo);
+   dri_bo_unmap(bo);
 }
 
 void
-ddx_bo_get_subdata(ddx_bo *bo, unsigned long offset,
+dri_bo_get_subdata(dri_bo *bo, unsigned long offset,
 		   unsigned long size, void *data)
 {
    if (size == 0 || data == NULL)
       return;
 
-   ddx_bo_map(bo, FALSE);
+   dri_bo_map(bo, GL_FALSE);
    memcpy(data, (unsigned char *)bo->virtual + offset, size);
-   ddx_bo_unmap(bo);
+   dri_bo_unmap(bo);
 }
 
 void
-ddx_bufmgr_destroy(ddx_bufmgr *bufmgr)
+dri_bufmgr_destroy(dri_bufmgr *bufmgr)
 {
    bufmgr->destroy(bufmgr);
 }
 
 
-void dri_emit_reloc(ddx_bo *batch_buf, uint64_t flags, uint32_t delta, uint32_t offset, ddx_bo *relocatee)
+void dri_emit_reloc(dri_bo *reloc_buf, uint64_t flags, GLuint delta,
+		    GLuint offset, dri_bo *target_buf)
 {
-   batch_buf->bufmgr->emit_reloc(batch_buf, flags, delta, offset, relocatee);
+   reloc_buf->bufmgr->emit_reloc(reloc_buf, flags, delta, offset, target_buf);
 }
 
-void *dri_process_relocs(ddx_bo *batch_buf, uint32_t *count)
+void *dri_process_relocs(dri_bo *batch_buf, GLuint *count)
 {
    return batch_buf->bufmgr->process_relocs(batch_buf, count);
 }
 
-void dri_post_submit(ddx_bo *batch_buf, dri_fence **last_fence)
+void dri_post_submit(dri_bo *batch_buf, dri_fence **last_fence)
 {
    batch_buf->bufmgr->post_submit(batch_buf, last_fence);
 }
 
 void
-dri_bufmgr_set_debug(ddx_bufmgr *bufmgr, Bool enable_debug)
+dri_bufmgr_set_debug(dri_bufmgr *bufmgr, GLboolean enable_debug)
 {
    bufmgr->debug = enable_debug;
 }
