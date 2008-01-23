@@ -666,9 +666,20 @@ extern void ExaOffscreenMarkUsed(PixmapPtr);
 unsigned long long
 I830TexOffsetStart(PixmapPtr pPix)
 {
-    exaMoveInPixmap(pPix);
-    ExaOffscreenMarkUsed(pPix);
+    ScreenPtr pScreen = pPix->drawable.pScreen;
+    ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+    I830Ptr pI830 = I830PTR(pScrn);
 
-    return exaGetPixmapOffset(pPix);
+    if (pI830->use_ttm_batch) {
+	struct i830_exa_pixmap_priv *driver_priv;
+	driver_priv = exaGetPixmapDriverPrivate(pPix);
+
+	return driver_priv->bo->offset;
+    } else {
+        exaMoveInPixmap(pPix);
+        ExaOffscreenMarkUsed(pPix);
+
+        return exaGetPixmapOffset(pPix);
+    }
 }
 #endif
