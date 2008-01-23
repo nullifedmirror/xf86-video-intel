@@ -628,7 +628,7 @@ typedef struct _I830Rec {
    /* batchbuffer support */
    struct i965_exastate_buffer *exa965;
    struct intelddx_batchbuffer *batch;
-   ddx_bufmgr *bufmgr;
+   dri_bufmgr *bufmgr;
    unsigned int maxBatchSize;
    Bool use_ttm_batch;
 } I830Rec;
@@ -645,7 +645,7 @@ typedef struct _I830Rec {
 
 /* i830 pixmap private for TTM */
 struct i830_exa_pixmap_priv {
-    ddx_bo *bo;
+    dri_bo *bo;
     dri_fence *fence;
     int flags;
 };

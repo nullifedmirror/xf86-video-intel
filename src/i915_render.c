@@ -344,7 +344,7 @@ i915_prepare_composite(int op, PicturePtr pSrcPicture,
 	OUT_BATCH(0x00000001); /* map 0 */
 	OUT_PIXMAP_RELOC(pI830->texture_pixmaps[0],
 			 DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
-			 DRM_BO_MASK_MEM | DRM_BO_FLAG_READ, 0);
+			 0);
 	OUT_BATCH(pI830->mapstate[1]);
 	OUT_BATCH(pI830->mapstate[2]);
 
@@ -360,12 +360,12 @@ i915_prepare_composite(int op, PicturePtr pSrcPicture,
 	OUT_BATCH(0x00000003); /* map 0,1 */
 	OUT_PIXMAP_RELOC(pI830->texture_pixmaps[0],
 			 DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
-			 DRM_BO_MASK_MEM | DRM_BO_FLAG_READ, 0);
+			 0);
 	OUT_BATCH(pI830->mapstate[1]);
 	OUT_BATCH(pI830->mapstate[2]);
 	OUT_PIXMAP_RELOC(pI830->texture_pixmaps[1],
 			 DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
-			 DRM_BO_MASK_MEM | DRM_BO_FLAG_READ, 0);
+			 0);
 	OUT_BATCH(pI830->mapstate[4]);
 	OUT_BATCH(pI830->mapstate[5]);
 
@@ -387,7 +387,7 @@ i915_prepare_composite(int op, PicturePtr pSrcPicture,
 	OUT_BATCH(BUF_3D_ID_COLOR_BACK| BUF_3D_USE_FENCE|
 		BUF_3D_PITCH(dst_pitch));
 	OUT_PIXMAP_RELOC(pDst, DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
-			 DRM_BO_MASK_MEM | DRM_BO_FLAG_READ, 0);
+			 0);
 	OUT_BATCH(_3DSTATE_DST_BUF_VARS_CMD);
 	OUT_BATCH(dst_format);
 

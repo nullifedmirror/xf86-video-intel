@@ -119,7 +119,9 @@ intel_drv_la_SOURCES = \
 	 dri_bufmgr.c \
          dri_bufmgr.h \
          intel_bufmgr_ttm.c \
-         intel_batchbuffer.c
+         intel_bufmgr_ttm.h \
+         intel_batchbuffer.c \
+         intel_batchbuffer.h
 
 INTEL_G4A =				\
 	packed_yuv_sf.g4a		\
@@ -200,3 +202,7 @@ install-data-local: install-intel_drv_laLTLIBRARIES
 
 uninstall-local:
 	(cd $(DESTDIR)$(intel_drv_ladir) && rm -f i810_drv.so)
+
+TESTS_ENVIRONMENT = srcdir="$(srcdir)"
+TESTS = check-remap.sh
+EXTRA_DIST += $(TESTS)
