@@ -36,6 +36,7 @@
 #include "xf86.h"
 #include "i830.h"
 #include "i915_reg.h"
+#include "i965_render.h"
 
 /* bring in brw structs */
 #include "brw_defines.h"
@@ -270,11 +271,7 @@ i965_check_composite(int op, PicturePtr pSrcPicture, PicturePtr pMaskPicture,
 
 /* these offsets will remain the same for all buffers post allocation */
 static int dest_surf_offset, src_surf_offset, mask_surf_offset;
-static int vb_offset;
 static int binding_table_offset;
-
-static float *vb;
-static int vb_index;
 
 static const CARD32 sip_kernel_static[][4] = {
 /*    wait (1) a0<1>UW a145<0,1,0>UW { align1 +  } */
@@ -454,8 +451,6 @@ typedef struct _gen4_surface_state {
     brw_surface_state_padded surface_state[GEN4_MAX_SURFACE_STATES];
 
     CARD32 binding_table[GEN4_MAX_BINDING_TABLE];
-
-    float vb[GEN4_MAX_VERTICES];
 } gen4_surface_state_t;
 
 static CARD32 
@@ -753,9 +748,6 @@ gen4_surface_state_init (unsigned char *start_base,
     unsigned int surf_state_offset = offsetof (gen4_surface_state_t,
 					       surface_state);
 
-    vb_offset = (offsetof (gen4_surface_state_t, vb) +
-		 sizeof (float) * GEN4_VERTICES_PER_OP * state->num_ops);
-
     binding_table_offset = (offsetof (gen4_surface_state_t, binding_table) +
 			    sizeof (CARD32) * GEN4_BINDING_TABLE_PER_OP *
 			    state->num_ops);
@@ -816,16 +808,31 @@ gen4_surface_state_init (unsigned char *start_base,
     mask_surf_state->ss2.render_target_rotation = 0;
 }
 
+/**
+ * Called from intel_batchbuffer_flush when we're about to flush a batch
+ * buffer and start a new one.
+ */
 void i965_exastate_flush(struct i965_exastate_buffer *state)
 {
+    I830Ptr pI830 = I830PTR(state->pScrn);
+
     if (state->surface_buf) {
 	dri_bo_unmap(state->surface_buf);
 	dri_bo_unreference(state->surface_buf);
 	state->surface_buf = NULL;
 	state->surface_map = NULL;
+
+	if (pI830->exa965->vbo != NULL) {
+	    dri_bo_unmap(pI830->exa965->vbo);
+	    dri_bo_unreference(pI830->exa965->vbo);
+	    pI830->exa965->vbo = NULL;
+	}
     }
 }
 
+/**
+ * Called at the start of prepare_composite to allocate our state buffers.
+ */
 static void
 i965_exastate_reset(struct i965_exastate_buffer *state)
 {
@@ -1072,12 +1079,6 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     else
 	sf_state_offset = offsetof (gen4_state_t, sf_state);
 
-    /* Because we only have a single static buffer for our state currently,
-     * we have to sync before updating it every time.
-     */
-    vb = (void *)(surface_start_base + vb_offset);
-    vb_index = 0;
-
     i965_get_blend_cntl(op, pMaskPicture, pDstPicture->format,
 			&src_blend, &dst_blend);
 
@@ -1262,27 +1263,13 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     {
         int nelem = pMask ? 3: 2;
 
-   	BEGIN_BATCH(pMask?12:10);
-	/* Set up the pointer to our vertex buffer */
-   	OUT_BATCH(BRW_3DSTATE_VERTEX_BUFFERS | 3);
-   	OUT_BATCH((0 << VB0_BUFFER_INDEX_SHIFT) |
-	    	 VB0_VERTEXDATA |
-	    	 ((4 * 2 * nelem) << VB0_BUFFER_PITCH_SHIFT));
-
-	if (pI830->use_ttm_batch) {
-	    OUT_RELOC(pI830->exa965->surface_buf,
-		      DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
-		      vb_offset);
-
-	} else {
-	    OUT_BATCH(pI830->exa_965_state->offset + vb_offset);
-	}
-
-        OUT_BATCH(GEN4_MAX_VERTICES); // set max index
-   	OUT_BATCH(0); // ignore for VERTEXDATA, but still there
+	pI830->exa965->element_size = nelem * 4 * 2;
+	pI830->exa965->vbo_prim_start = pI830->exa965->vbo_used;
 
 	/* Set up our vertex elements, sourced from the single vertex buffer.
+	 * The vertex buffer will be set up later at primitive emit time.
 	 */
+	BEGIN_BATCH(pMask ? 9 : 7);
    	OUT_BATCH(BRW_3DSTATE_VERTEX_ELEMENTS | ((2 * nelem) - 1));
 	/* vertex coordinates */
    	OUT_BATCH((0 << VE0_VERTEX_BUFFER_INDEX_SHIFT) |
@@ -1326,7 +1313,87 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
 #endif
     return TRUE;
 }
-		       
+
+/**
+ * Flushes the accumulated primitives in the VBO, according to the
+ * setup that had been done in PrepareComposite.
+ */
+static void
+i965_composite_flush_prims(ScrnInfoPtr pScrn)
+{
+    I830Ptr pI830 = I830PTR(pScrn);
+
+    if (pI830->exa965->vbo_used == pI830->exa965->vbo_prim_start)
+	return;
+
+    BEGIN_BATCH(9);
+    /* Set up the pointer to our vertex buffer.  We could emit this a lot
+     * less often (as long as element_size and vbo haven't changed).
+     */
+    OUT_BATCH(BRW_3DSTATE_VERTEX_BUFFERS | 3);
+    OUT_BATCH((0 << VB0_BUFFER_INDEX_SHIFT) |
+	      VB0_VERTEXDATA |
+	      pI830->exa965->element_size << VB0_BUFFER_PITCH_SHIFT);
+    OUT_RELOC(pI830->exa965->vbo,
+	      DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ, 0);
+    OUT_BATCH(GEN4_MAX_VERTICES); // set max index
+    OUT_BATCH(0); // ignore for VERTEXDATA, but still there
+
+    OUT_BATCH(BRW_3DPRIMITIVE |
+	      BRW_3DPRIMITIVE_VERTEX_SEQUENTIAL |
+	      (_3DPRIM_RECTLIST << BRW_3DPRIMITIVE_TOPOLOGY_SHIFT) |
+	      (0 << 9) |  /* CTG - indirect vertex count */
+	      4);
+    OUT_BATCH((pI830->exa965->vbo_used - pI830->exa965->vbo_prim_start) /
+	      pI830->exa965->element_size); /* vertex count */
+    OUT_BATCH(pI830->exa965->vbo_prim_start /
+	      pI830->exa965->element_size); /* start vertex offset */
+    OUT_BATCH(1); /* single instance - mbz in docs */
+    OUT_BATCH(0); /* start instance location */
+    OUT_BATCH(0); /* index buffer offset, ignored */
+    ADVANCE_BATCH();
+}
+
+/**
+ * Allocates space in a VBO for size bytes of vertex data, flushing the
+ * current primitive and allocating a new VBO as necessary.
+ *
+ * Returns a pointer to the space the vertex data should be written to.
+ */
+static void *
+i965_composite_get_vbo_space(ScrnInfoPtr pScrn, int size)
+{
+    I830Ptr pI830 = I830PTR(pScrn);
+
+    /* Check if we would overflow the VBO, and flush if so. */
+    if (pI830->exa965->vbo != NULL) {
+	if (pI830->exa965->vbo_used + size > pI830->exa965->vbo->size) {
+	    i965_composite_flush_prims(pScrn);
+
+	    dri_bo_unmap(pI830->exa965->vbo);
+	    dri_bo_unreference(pI830->exa965->vbo);
+	    pI830->exa965->vbo = NULL;
+	}
+    }
+
+    /* Allocate a new VBO if we don't have one */
+    if (pI830->exa965->vbo == NULL) {
+	pI830->exa965->vbo = dri_bo_alloc(pI830->bufmgr, "exa vertex buffer",
+					  4096, 4096,
+					  DRM_BO_FLAG_MEM_LOCAL |
+					  DRM_BO_FLAG_CACHED |
+					  DRM_BO_FLAG_CACHED_MAPPED);
+	dri_bo_map(pI830->exa965->vbo, TRUE);
+	pI830->exa965->vbo_used = 0;
+	pI830->exa965->vbo_prim_start = 0;
+    }
+
+    pI830->exa965->vbo_used += size;
+
+    return (char *)pI830->exa965->vbo->virtual + pI830->exa965->vbo_used - size;
+}
+
+
 void
 i965_composite(PixmapPtr pDst, int srcX, int srcY, int maskX, int maskY,
 	       int dstX, int dstY, int w, int h)
@@ -1335,7 +1402,8 @@ i965_composite(PixmapPtr pDst, int srcX, int srcY, int maskX, int maskY,
     I830Ptr pI830 = I830PTR(pScrn);
     Bool has_mask;
     float src_x[3], src_y[3], mask_x[3], mask_y[3];
-    int i;
+    float *vb;
+    int i = 0;
 
     i830_get_transformed_coordinates(srcX, srcY,
 				     pI830->transform[0],
@@ -1362,15 +1430,8 @@ i965_composite(PixmapPtr pDst, int srcX, int srcY, int maskX, int maskY,
 					 &mask_x[2], &mask_y[2]);
     }
 
-    /* Wait for any existing composite rectangles to land before we overwrite
-     * the VB with the next one.
-     */
-    if ((vb_index + 18) > GEN4_MAX_VERTICES) {
-      ErrorF("vb index exceeded maximum bailing...");
-      return;
-    }
+    vb = i965_composite_get_vbo_space(pScrn, 3 * (has_mask ? 6 : 4) * 4);
 
-    i = vb_index;
     /* rect (x2,y2) */
     vb[i++] = (float)(dstX + w);
     vb[i++] = (float)(dstY + h);
@@ -1401,26 +1462,11 @@ i965_composite(PixmapPtr pDst, int srcX, int srcY, int maskX, int maskY,
         vb[i++] = mask_y[0] / pI830->scale_units[1][1];
     }
 
-    {
-      BEGIN_BATCH(6);
-      OUT_BATCH(BRW_3DPRIMITIVE |
-	       BRW_3DPRIMITIVE_VERTEX_SEQUENTIAL |
-	       (_3DPRIM_RECTLIST << BRW_3DPRIMITIVE_TOPOLOGY_SHIFT) |
-	       (0 << 9) |  /* CTG - indirect vertex count */
-	       4);
-      OUT_BATCH(3);  /* vertex count per instance */
-      OUT_BATCH(vb_index); /* start vertex offset */
-      OUT_BATCH(1); /* single instance - mbz in docs */
-      OUT_BATCH(0); /* start instance location */
-      OUT_BATCH(0); /* index buffer offset, ignored */
-      ADVANCE_BATCH();
-    }
-
-    vb_index = i;
-
     pI830->exa965->num_ops++;
 
 #ifdef I830DEBUG
+    i965_composite_flush_prims(pScrn);
+
     ErrorF("sync after 3dprimitive");
     I830Sync(pScrn);
 #endif
@@ -1435,6 +1481,8 @@ void i965_done_composite(PixmapPtr pDst)
 {
     ScrnInfoPtr pScrn = xf86Screens[pDst->drawable.pScreen->myNum];
     I830Ptr pI830 = I830PTR(pScrn);
+
+    i965_composite_flush_prims(pScrn);
 
     {
 	BEGIN_BATCH(4);
