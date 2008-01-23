@@ -94,12 +94,19 @@ extern uint32_t intelddx_batchbuffer_emit_pixmap(PixmapPtr pPixmap,
  */
 #define BATCH_LOCALS
 
-#define BEGIN_BATCH(n)  							\
-	RING_LOCALS 								\
-	if (pI830->use_ttm_batch)						\
-   		intelddx_batchbuffer_require_space(pI830->batch, (n)*4, 0);	\
-	 else { \
-   DO_LP_RING(n) ; }
+#define BEGIN_BATCH(n)  						\
+    RING_LOCALS 							\
+    if (pI830->use_ttm_batch) {						\
+	intelddx_batchbuffer_require_space(pI830->batch,		\
+					   (((n) + 1) & ~1) * 4, 0);	\
+    } else {								\
+	DO_LP_RING((((n) + 1) & ~1));					\
+    }									\
+    if ((n) & 1) {							\
+	OUT_BATCH(MI_NOOP);						\
+    }
+
+
 
 #define OUT_BATCH(d) \
 	 if (pI830->use_ttm_batch) \
