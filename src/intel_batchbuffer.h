@@ -27,9 +27,14 @@ struct intelddx_batchbuffer
 
 struct i965_exastate_buffer {
    dri_bo *buf;
+   unsigned char *map;
+
+   dri_bo *surface_buf;
+   unsigned char *surface_map;
+   int num_ops;
+
    dri_fence *last_fence;
    ScrnInfoPtr pScrn;
-   unsigned char *map;
 };
 
 struct intelddx_batchbuffer *intelddx_batchbuffer_alloc(ScrnInfoPtr pScrn);

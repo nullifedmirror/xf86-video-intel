@@ -207,6 +207,9 @@ intelddx_batchbuffer_flush(struct intelddx_batchbuffer *batch)
       return;
 
    if (IS_I965G(pI830))
+       i965_exastate_flush(pI830->exa965);
+
+   if (IS_I965G(pI830))
 	flags = 0;
    /* Add the MI_BATCH_BUFFER_END.  Always add an MI_FLUSH - this is a
     * performance drain that we would like to avoid.
@@ -269,9 +272,6 @@ uint32_t intelddx_batchbuffer_emit_pixmap(PixmapPtr pPixmap,
 					  unsigned int offset,
 					  unsigned int delta)
 {
-    ScreenPtr pScreen = pPixmap->drawable.pScreen;
-    ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
-    I830Ptr pI830 = I830PTR(pScrn);
     struct i830_exa_pixmap_priv *driver_priv = exaGetPixmapDriverPrivate(pPixmap);
 
     if (driver_priv->flags & I830_EXA_PIXMAP_IS_MAPPED) {
