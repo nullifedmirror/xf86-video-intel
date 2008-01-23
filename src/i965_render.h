@@ -9,6 +9,8 @@ struct i965_exastate_buffer {
     unsigned int vbo_used;
     unsigned int element_size;
 
+    Bool no_flush;
+
     dri_bo *surface_buf;
     unsigned char *surface_map;
     int num_ops;

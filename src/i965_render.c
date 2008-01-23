@@ -816,6 +816,9 @@ void i965_exastate_flush(struct i965_exastate_buffer *state)
 {
     I830Ptr pI830 = I830PTR(state->pScrn);
 
+    if (pI830->exa965->no_flush)
+	FatalError("Flushed batchbuffer during 965 Composite\n");
+
     if (state->surface_buf) {
 	dri_bo_unmap(state->surface_buf);
 	dri_bo_unreference(state->surface_buf);
@@ -1219,6 +1222,11 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     cc_state_offset = offsetof (gen4_state_t,
 				cc_state[src_blend][dst_blend]);
 
+    /* Before emitting any batch commands to set up our batchbuffer, flag that
+     * we may not flush the batchbuffer until donecomposite.
+     */
+    pI830->exa965->no_flush = TRUE;
+
     /* Any commands that don't change from one composite operation to
      * the next we simply emit once at the beginning of the entire
      * batch. */
@@ -1483,6 +1491,8 @@ void i965_done_composite(PixmapPtr pDst)
     I830Ptr pI830 = I830PTR(pScrn);
 
     i965_composite_flush_prims(pScrn);
+
+    pI830->exa965->no_flush = FALSE;
 
     {
 	BEGIN_BATCH(4);
