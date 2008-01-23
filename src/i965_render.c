@@ -439,8 +439,6 @@ typedef struct _gen4_state {
 /* We only need 3, but we use 8 to get the proper alignment. */
 #define GEN4_BINDING_TABLE_PER_OP	8
 #define GEN4_MAX_BINDING_TABLE		(GEN4_MAX_OPS * GEN4_BINDING_TABLE_PER_OP)
-#define GEN4_VERTICES_PER_OP		24
-#define GEN4_MAX_VERTICES		(GEN4_MAX_OPS * GEN4_VERTICES_PER_OP)
 
 typedef struct _brw_surface_state_padded {
     struct brw_surface_state state;
@@ -1277,7 +1275,7 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
 	/* Set up our vertex elements, sourced from the single vertex buffer.
 	 * The vertex buffer will be set up later at primitive emit time.
 	 */
-	BEGIN_BATCH(pMask ? 9 : 7);
+	BEGIN_BATCH(pMask ? 7 : 5);
    	OUT_BATCH(BRW_3DSTATE_VERTEX_ELEMENTS | ((2 * nelem) - 1));
 	/* vertex coordinates */
    	OUT_BATCH((0 << VE0_VERTEX_BUFFER_INDEX_SHIFT) |
@@ -1344,8 +1342,8 @@ i965_composite_flush_prims(ScrnInfoPtr pScrn)
 	      pI830->exa965->element_size << VB0_BUFFER_PITCH_SHIFT);
     OUT_RELOC(pI830->exa965->vbo,
 	      DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ, 0);
-    OUT_BATCH(GEN4_MAX_VERTICES); // set max index
-    OUT_BATCH(0); // ignore for VERTEXDATA, but still there
+    OUT_BATCH(0xffff); /* set max index */
+    OUT_BATCH(0); /* ignore for VERTEXDATA, but still there */
 
     OUT_BATCH(BRW_3DPRIMITIVE |
 	      BRW_3DPRIMITIVE_VERTEX_SEQUENTIAL |
@@ -1470,8 +1468,6 @@ i965_composite(PixmapPtr pDst, int srcX, int srcY, int maskX, int maskY,
         vb[i++] = mask_y[0] / pI830->scale_units[1][1];
     }
 
-    pI830->exa965->num_ops++;
-
 #ifdef I830DEBUG
     i965_composite_flush_prims(pScrn);
 
@@ -1508,6 +1504,7 @@ void i965_done_composite(PixmapPtr pDst)
 	ADVANCE_BATCH();
     }
 
+    pI830->exa965->num_ops++;
     if (pI830->use_ttm_batch && pI830->exa965->num_ops >= GEN4_MAX_OPS) {
 	intelddx_batchbuffer_flush(pI830->batch);
     }
