@@ -1269,7 +1269,7 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     {
         int nelem = pMask ? 3: 2;
 
-	pI830->exa965->element_size = nelem * 4 * 2;
+	pI830->exa965->vertex_size = nelem * 4 * 2;
 	pI830->exa965->vbo_prim_start = pI830->exa965->vbo_used;
 
 	/* Set up our vertex elements, sourced from the single vertex buffer.
@@ -1334,12 +1334,12 @@ i965_composite_flush_prims(ScrnInfoPtr pScrn)
 
     BEGIN_BATCH(9);
     /* Set up the pointer to our vertex buffer.  We could emit this a lot
-     * less often (as long as element_size and vbo haven't changed).
+     * less often (as long as vertex_size and vbo haven't changed).
      */
     OUT_BATCH(BRW_3DSTATE_VERTEX_BUFFERS | 3);
     OUT_BATCH((0 << VB0_BUFFER_INDEX_SHIFT) |
 	      VB0_VERTEXDATA |
-	      pI830->exa965->element_size << VB0_BUFFER_PITCH_SHIFT);
+	      pI830->exa965->vertex_size << VB0_BUFFER_PITCH_SHIFT);
     OUT_RELOC(pI830->exa965->vbo,
 	      DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ, 0);
     OUT_BATCH(0xffff); /* set max index */
@@ -1351,13 +1351,15 @@ i965_composite_flush_prims(ScrnInfoPtr pScrn)
 	      (0 << 9) |  /* CTG - indirect vertex count */
 	      4);
     OUT_BATCH((pI830->exa965->vbo_used - pI830->exa965->vbo_prim_start) /
-	      pI830->exa965->element_size); /* vertex count */
+	      pI830->exa965->vertex_size); /* vertex count */
     OUT_BATCH(pI830->exa965->vbo_prim_start /
-	      pI830->exa965->element_size); /* start vertex offset */
+	      pI830->exa965->vertex_size); /* start vertex offset */
     OUT_BATCH(1); /* single instance - mbz in docs */
     OUT_BATCH(0); /* start instance location */
     OUT_BATCH(0); /* index buffer offset, ignored */
     ADVANCE_BATCH();
+
+    pI830->exa965->vbo_prim_start = pI830->exa965->vbo_used;
 }
 
 /**
@@ -1436,7 +1438,7 @@ i965_composite(PixmapPtr pDst, int srcX, int srcY, int maskX, int maskY,
 					 &mask_x[2], &mask_y[2]);
     }
 
-    vb = i965_composite_get_vbo_space(pScrn, 3 * (has_mask ? 6 : 4) * 4);
+    vb = i965_composite_get_vbo_space(pScrn, 3 * pI830->exa965->vertex_size);
 
     /* rect (x2,y2) */
     vb[i++] = (float)(dstX + w);

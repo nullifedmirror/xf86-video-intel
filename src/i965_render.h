@@ -7,7 +7,7 @@ struct i965_exastate_buffer {
     dri_bo *vbo;
     unsigned int vbo_prim_start;
     unsigned int vbo_used;
-    unsigned int element_size;
+    unsigned int vertex_size;
 
     Bool no_flush;
 
