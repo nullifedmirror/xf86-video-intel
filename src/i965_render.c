@@ -1332,7 +1332,7 @@ i965_composite_flush_prims(ScrnInfoPtr pScrn)
     if (pI830->exa965->vbo_used == pI830->exa965->vbo_prim_start)
 	return;
 
-    BEGIN_BATCH(9);
+    BEGIN_BATCH(11);
     /* Set up the pointer to our vertex buffer.  We could emit this a lot
      * less often (as long as vertex_size and vbo haven't changed).
      */
