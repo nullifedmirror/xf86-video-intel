@@ -1016,6 +1016,26 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     CARD32 *binding_table;
     CARD32 src_blend, dst_blend;
 
+    /* We cannot handle a flush occuring anytime during the
+     * prepare_composite/composite/done_composite handling. So make
+     * sure there's plenty of room left in the batch buffer. That is,
+     * if we're going to flush, let's do it *now*.
+     *
+     * The amount of space we need depends on how many composite calls
+     * we might get between prepare_composite and done_composite. That
+     * in turn depends on how many clip rects there might be in an
+     * expose region. Imagining a shaped window, there could be a
+     * lot. With 2kbytes reserved, this should be enough to handle a
+     * region with over 2000 clip rectangles in it, (given 51 dwords
+     * needed in prepare composite and 11 for each vertex buffer of 4k
+     * which means each vertex buffer holds enough for about 50
+     * composite calls).
+     *
+     * And with a 16k batchbuffer, this means we'll be wasting at most
+     * 1/8 of the total batchbuffer.
+     */
+    intelddx_batchbuffer_require_space (pI830->batch, 2048, 0);
+
     i965_exastate_reset(pI830->exa965);
     surface_map = pI830->exa965->surface_map;
     gen4_surface_state_init (surface_map, pI830->exa965);
