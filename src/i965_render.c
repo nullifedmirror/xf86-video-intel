@@ -945,18 +945,13 @@ gen4_emit_batch_header (ScrnInfoPtr pScrn)
 	 */
 	OUT_BATCH(BRW_STATE_BASE_ADDRESS | 4);
 
-	if (pI830->use_ttm_batch) {
-	    OUT_RELOC(pI830->exa965->buf,
-		      DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
-		      BASE_ADDRESS_MODIFY);
+	OUT_RELOC(pI830->exa965->buf,
+		  DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
+		  BASE_ADDRESS_MODIFY);
 
-	    OUT_RELOC(pI830->exa965->surface_buf,
-		      DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
-		      BASE_ADDRESS_MODIFY);
-	} else {
-	    OUT_BATCH(pI830->exa_965_state->offset | BASE_ADDRESS_MODIFY);
-	    OUT_BATCH(pI830->exa_965_state->offset | BASE_ADDRESS_MODIFY);
-	}
+	OUT_RELOC(pI830->exa965->surface_buf,
+		  DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
+		  BASE_ADDRESS_MODIFY);
 
 	OUT_BATCH(0 | BASE_ADDRESS_MODIFY);  /* media base addr, don't care */
 	/* general state max addr, disabled */
@@ -1021,13 +1016,29 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     CARD32 *binding_table;
     CARD32 src_blend, dst_blend;
 
-    if (pI830->use_ttm_batch) {
-	i965_exastate_reset(pI830->exa965);
-	surface_map = pI830->exa965->surface_map;
-	gen4_surface_state_init (surface_map, pI830->exa965);
-    }else{
-	surface_map = pI830->exa_965_state->offset + pI830->FbBase;
-    }
+    /* We cannot handle a flush occuring anytime during the
+     * prepare_composite/composite/done_composite handling. So make
+     * sure there's plenty of room left in the batch buffer. That is,
+     * if we're going to flush, let's do it *now*.
+     *
+     * The amount of space we need depends on how many composite calls
+     * we might get between prepare_composite and done_composite. That
+     * in turn depends on how many clip rects there might be in an
+     * expose region. Imagining a shaped window, there could be a
+     * lot. With 2kbytes reserved, this should be enough to handle a
+     * region with over 2000 clip rectangles in it, (given 51 dwords
+     * needed in prepare composite and 11 for each vertex buffer of 4k
+     * which means each vertex buffer holds enough for about 50
+     * composite calls).
+     *
+     * And with a 16k batchbuffer, this means we'll be wasting at most
+     * 1/8 of the total batchbuffer.
+     */
+    intelddx_batchbuffer_require_space (pI830->batch, 2048, 0);
+
+    i965_exastate_reset(pI830->exa965);
+    surface_map = pI830->exa965->surface_map;
+    gen4_surface_state_init (surface_map, pI830->exa965);
 
     surface_start_base = surface_map;
 
@@ -1088,17 +1099,13 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     i965_get_dest_format(pDstPicture, &dst_format);
     dest_surf_state->ss0.surface_format = dst_format;
 
-    if (pI830->use_ttm_batch) {
-    	dest_surf_state->ss1.base_addr =
-	    intelddx_batchbuffer_emit_pixmap(pDst,
-					     DRM_BO_FLAG_MEM_TT |
-					     DRM_BO_FLAG_WRITE |
-					     DRM_BO_FLAG_READ,
-					     pI830->exa965->surface_buf,
-					     dest_surf_offset + 4, 0);
-    } else {
-        dest_surf_state->ss1.base_addr = intel_get_pixmap_offset(pDst);
-    }
+    dest_surf_state->ss1.base_addr =
+	intelddx_batchbuffer_emit_pixmap(pDst,
+					 DRM_BO_FLAG_MEM_TT |
+					 DRM_BO_FLAG_WRITE |
+					 DRM_BO_FLAG_READ,
+					 pI830->exa965->surface_buf,
+					 dest_surf_offset + 4, 0);
 
     dest_surf_state->ss2.height = pDst->drawable.height - 1;
     dest_surf_state->ss2.width = pDst->drawable.width - 1;
@@ -1110,16 +1117,13 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     src_surf_state = (void *)(surface_start_base + src_surf_offset);
     src_surf_state->ss0.surface_format = i965_get_card_format(pSrcPicture);
 
-    if (pI830->use_ttm_batch) {
-        src_surf_state->ss1.base_addr =
-	    intelddx_batchbuffer_emit_pixmap(pSrc,
-					     DRM_BO_FLAG_MEM_TT |
-					     DRM_BO_FLAG_READ,
-					     pI830->exa965->surface_buf,
-					     src_surf_offset + 4, 0);
-    } else {
-        src_surf_state->ss1.base_addr = intel_get_pixmap_offset(pSrc);
-    }
+    src_surf_state->ss1.base_addr =
+	intelddx_batchbuffer_emit_pixmap(pSrc,
+					 DRM_BO_FLAG_MEM_TT |
+					 DRM_BO_FLAG_READ,
+					 pI830->exa965->surface_buf,
+					 src_surf_offset + 4, 0);
+
     src_surf_state->ss2.width = pSrc->drawable.width - 1;
     src_surf_state->ss2.height = pSrc->drawable.height - 1;
     src_surf_state->ss3.pitch = src_pitch - 1;
@@ -1130,16 +1134,12 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     if (pMask) {
 	mask_surf_state = (void *)(surface_start_base + mask_surf_offset);
    	mask_surf_state->ss0.surface_format = i965_get_card_format(pMaskPicture);
-        if (pI830->use_ttm_batch) {
-	   mask_surf_state->ss1.base_addr =
-	       intelddx_batchbuffer_emit_pixmap(pMask,
-						DRM_BO_FLAG_MEM_TT |
-						DRM_BO_FLAG_READ,
-						pI830->exa965->surface_buf,
-						mask_surf_offset + 4, 0);
-        } else {
-	    mask_surf_state->ss1.base_addr = intel_get_pixmap_offset(pMask);
-	}
+	mask_surf_state->ss1.base_addr =
+	    intelddx_batchbuffer_emit_pixmap(pMask,
+					     DRM_BO_FLAG_MEM_TT |
+					     DRM_BO_FLAG_READ,
+					     pI830->exa965->surface_buf,
+					     mask_surf_offset + 4, 0);
    	mask_surf_state->ss2.width = pMask->drawable.width - 1;
    	mask_surf_state->ss2.height = pMask->drawable.height - 1;
    	mask_surf_state->ss3.pitch = mask_pitch - 1;
@@ -1507,7 +1507,7 @@ void i965_done_composite(PixmapPtr pDst)
     }
 
     pI830->exa965->num_ops++;
-    if (pI830->use_ttm_batch && pI830->exa965->num_ops >= GEN4_MAX_OPS) {
+    if (pI830->exa965->num_ops >= GEN4_MAX_OPS) {
 	intelddx_batchbuffer_flush(pI830->batch);
     }
 }
@@ -1529,12 +1529,7 @@ i965_init_exa_state(ScrnInfoPtr pScrn)
 {
     I830Ptr pI830 = I830PTR(pScrn);
 
-    if (pI830->use_ttm_batch) {
-	pI830->exa965 = i965_exastate_alloc(pScrn);
-    } else {
-	void *map = pI830->FbBase + pI830->exa_965_state->offset;
-	gen4_state_init ((void *) map);
-    }
+    pI830->exa965 = i965_exastate_alloc(pScrn);
 
     return 0;
 }
