@@ -1341,7 +1341,8 @@ i965_composite_flush_prims(ScrnInfoPtr pScrn)
 	      VB0_VERTEXDATA |
 	      pI830->exa965->vertex_size << VB0_BUFFER_PITCH_SHIFT);
     OUT_RELOC(pI830->exa965->vbo,
-	      DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ, 0);
+	      DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
+	      pI830->exa965->vbo_prim_start);
     OUT_BATCH(0xffff); /* set max index */
     OUT_BATCH(0); /* ignore for VERTEXDATA, but still there */
 
@@ -1352,8 +1353,7 @@ i965_composite_flush_prims(ScrnInfoPtr pScrn)
 	      4);
     OUT_BATCH((pI830->exa965->vbo_used - pI830->exa965->vbo_prim_start) /
 	      pI830->exa965->vertex_size); /* vertex count */
-    OUT_BATCH(pI830->exa965->vbo_prim_start /
-	      pI830->exa965->vertex_size); /* start vertex offset */
+    OUT_BATCH(0); /* start vertex offset */
     OUT_BATCH(1); /* single instance - mbz in docs */
     OUT_BATCH(0); /* start instance location */
     OUT_BATCH(0); /* index buffer offset, ignored */
