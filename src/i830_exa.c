@@ -155,16 +155,20 @@ i830_exa_pixmap_is_offscreen(PixmapPtr pPixmap)
  * @pScreen: current screen
  * @marker: marker command to wait for
  *
- * Wait for the command specified by @marker to finish, then return.  We don't
- * actually do marker waits, though we might in the future.  For now, just
- * wait for a full idle.
+ * Wait for the command specified by @marker to finish, then return.
+ *
+ * Since this is only called through EXA's PrepareAccess/FinishAccess path
+ * and dri_bo_map handles waiting when necessary, we no longer need to
+ * implement this one.
  */
 static void
 I830EXASync(ScreenPtr pScreen, int marker)
 {
     ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
 
-//    I830Sync(pScrn);
+#if 0
+    I830Sync(pScrn);
+#endif
 }
 
 /**
@@ -440,12 +444,10 @@ static Bool I830EXAPrepareAccess(PixmapPtr pPix, int index)
     if (!driver_priv)
 	return FALSE;
 
-    /* TODO : make this more conditional */
-    intelddx_batchbuffer_flush(pI830->batch);
-    dri_fence_wait(pI830->batch->last_fence);
-
     if (driver_priv->bo) {
 	mmDebug("mapping %p %d %dx%d\n", pPix, driver_priv->flags, pPix->drawable.width, pPix->drawable.height);
+
+	intelddx_batchbuffer_flush(pI830->batch);
 
 	if ((driver_priv->flags & I830_EXA_PIXMAP_IS_MAPPED))
 	    return TRUE;
