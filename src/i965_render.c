@@ -883,9 +883,9 @@ gen4_emit_batch_header (ScrnInfoPtr pScrn)
 
 	OUT_BATCH(0 | BASE_ADDRESS_MODIFY);  /* media base addr, don't care */
 	/* general state max addr, disabled */
-	OUT_BATCH(0x10000000 | BASE_ADDRESS_MODIFY);
+	OUT_BATCH(0 | BASE_ADDRESS_MODIFY);
 	/* media object state max addr, disabled */
-	OUT_BATCH(0x10000000 | BASE_ADDRESS_MODIFY);
+	OUT_BATCH(0 | BASE_ADDRESS_MODIFY);
 
 	/* Set system instruction pointer */
 	OUT_BATCH(BRW_STATE_SIP | 0);
