@@ -166,7 +166,7 @@ static void i965_get_blend_cntl(int op, PicturePtr pMask, CARD32 dst_format,
 
 }
 
-static Bool i965_get_dest_format(PicturePtr pDstPicture, CARD32 *dst_format)
+static Bool i965_get_dest_format(PicturePtr pDstPicture, uint32_t *dst_format)
 {
     switch (pDstPicture->format) {
     case PICT_a8r8g8b8:
@@ -233,7 +233,7 @@ Bool
 i965_check_composite(int op, PicturePtr pSrcPicture, PicturePtr pMaskPicture,
 		     PicturePtr pDstPicture)
 {
-    CARD32 tmp1;
+    uint32_t tmp1;
 
     /* Check for unsupported compositing operations. */
     if (op >= sizeof(i965_blend_op) / sizeof(i965_blend_op[0]))
@@ -268,10 +268,6 @@ i965_check_composite(int op, PicturePtr pSrcPicture, PicturePtr pMaskPicture,
 #define ALIGN(i,m)    (((i) + (m) - 1) & ~((m) - 1))
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
 #define BRW_GRF_BLOCKS(nreg)    ((nreg + 15) / 16 - 1)
-
-/* these offsets will remain the same for all buffers post allocation */
-static int dest_surf_offset, src_surf_offset, mask_surf_offset;
-static int binding_table_offset;
 
 static const CARD32 sip_kernel_static[][4] = {
 /*    wait (1) a0<1>UW a145<0,1,0>UW { align1 +  } */
@@ -738,74 +734,6 @@ gen4_state_init (gen4_state_t *state)
 	    sizeof (ps_kernel_rotation_static));
 }
 
-static void
-gen4_surface_state_init (unsigned char *start_base,
-			 struct i965_exastate_buffer *state)
-{
-    struct brw_surface_state *dest_surf_state, *src_surf_state, *mask_surf_state;
-    unsigned int surf_state_offset = offsetof (gen4_surface_state_t,
-					       surface_state);
-
-    binding_table_offset = (offsetof (gen4_surface_state_t, binding_table) +
-			    sizeof (CARD32) * GEN4_BINDING_TABLE_PER_OP *
-			    state->num_ops);
-
-    /* destination surface state */
-    dest_surf_offset = (surf_state_offset +
-			sizeof (brw_surface_state_padded) *
-			(GEN4_SURFACE_STATE_PER_OP * state->num_ops + 0));
-    dest_surf_state = (void *)(start_base + dest_surf_offset);
-    dest_surf_state->ss0.surface_type = BRW_SURFACE_2D;
-    dest_surf_state->ss0.data_return_format = BRW_SURFACERETURNFORMAT_FLOAT32;
-    dest_surf_state->ss0.writedisable_alpha = 0;
-    dest_surf_state->ss0.writedisable_red = 0;
-    dest_surf_state->ss0.writedisable_green = 0;
-    dest_surf_state->ss0.writedisable_blue = 0;
-    dest_surf_state->ss0.color_blend = 1;
-    dest_surf_state->ss0.vert_line_stride = 0;
-    dest_surf_state->ss0.vert_line_stride_ofs = 0;
-    dest_surf_state->ss0.mipmap_layout_mode = 0;
-    dest_surf_state->ss0.render_cache_read_mode = 0;
-    dest_surf_state->ss2.mip_count = 0;
-    dest_surf_state->ss2.render_target_rotation = 0;
-
-    /* source surface state */
-    src_surf_offset = (surf_state_offset +
-		       sizeof (brw_surface_state_padded) *
-		       (GEN4_SURFACE_STATE_PER_OP * state->num_ops + 1));
-    src_surf_state = (void *)(start_base + src_surf_offset);
-    src_surf_state->ss0.surface_type = BRW_SURFACE_2D;
-    src_surf_state->ss0.writedisable_alpha = 0;
-    src_surf_state->ss0.writedisable_red = 0;
-    src_surf_state->ss0.writedisable_green = 0;
-    src_surf_state->ss0.writedisable_blue = 0;
-    src_surf_state->ss0.color_blend = 1;
-    src_surf_state->ss0.vert_line_stride = 0;
-    src_surf_state->ss0.vert_line_stride_ofs = 0;
-    src_surf_state->ss0.mipmap_layout_mode = 0;
-    src_surf_state->ss0.render_cache_read_mode = 0;
-    src_surf_state->ss2.mip_count = 0;
-    src_surf_state->ss2.render_target_rotation = 0;
-
-    /* mask surface state */
-    mask_surf_offset = (surf_state_offset +
-			sizeof (brw_surface_state_padded) *
-			(GEN4_SURFACE_STATE_PER_OP * state->num_ops + 2));
-    mask_surf_state = (void *)(start_base + mask_surf_offset);
-    mask_surf_state->ss0.surface_type = BRW_SURFACE_2D;
-    mask_surf_state->ss0.writedisable_alpha = 0;
-    mask_surf_state->ss0.writedisable_red = 0;
-    mask_surf_state->ss0.writedisable_green = 0;
-    mask_surf_state->ss0.writedisable_blue = 0;
-    mask_surf_state->ss0.color_blend = 1;
-    mask_surf_state->ss0.vert_line_stride = 0;
-    mask_surf_state->ss0.vert_line_stride_ofs = 0;
-    mask_surf_state->ss0.mipmap_layout_mode = 0;
-    mask_surf_state->ss0.render_cache_read_mode = 0;
-    mask_surf_state->ss2.mip_count = 0;
-    mask_surf_state->ss2.render_target_rotation = 0;
-}
-
 /**
  * Called from intel_batchbuffer_flush when we're about to flush a batch
  * buffer and start a new one.
@@ -995,6 +923,63 @@ gen4_emit_batch_header (ScrnInfoPtr pScrn)
     }
 }
 
+/**
+ * Sets up the common fields for a surface state buffer for the given picture
+ * in the surface state buffer at index, and returns the offset within the
+ * surface state buffer for this entry.
+ */
+static unsigned int
+i965_set_picture_surface_state(ScrnInfoPtr pScrn, unsigned int index,
+			       PicturePtr pPicture, PixmapPtr pPixmap,
+			       Bool is_dst)
+{
+    I830Ptr pI830 = I830PTR(pScrn);
+    struct brw_surface_state *ss;
+    unsigned int offset;
+
+
+    offset = offsetof(gen4_surface_state_t,
+		      surface_state[GEN4_SURFACE_STATE_PER_OP *
+				    pI830->exa965->num_ops + index]);
+
+    ss = (void *)((char *)pI830->exa965->surface_buf->virtual + offset);
+    ss->ss0.surface_type = BRW_SURFACE_2D;
+    if (is_dst) {
+	uint32_t dst_format;
+
+	i965_get_dest_format(pPicture, &dst_format);
+	ss->ss0.surface_format = dst_format;
+	ss->ss0.data_return_format = BRW_SURFACERETURNFORMAT_FLOAT32;
+    } else {
+	ss->ss0.surface_format = i965_get_card_format(pPicture);
+    }
+    ss->ss0.writedisable_alpha = 0;
+    ss->ss0.writedisable_red = 0;
+    ss->ss0.writedisable_green = 0;
+    ss->ss0.writedisable_blue = 0;
+    ss->ss0.color_blend = 1;
+    ss->ss0.vert_line_stride = 0;
+    ss->ss0.vert_line_stride_ofs = 0;
+    ss->ss0.mipmap_layout_mode = 0;
+    ss->ss0.render_cache_read_mode = 0;
+    ss->ss1.base_addr =
+	intelddx_batchbuffer_emit_pixmap(pPixmap,
+					 DRM_BO_FLAG_MEM_TT |
+					 (is_dst ? DRM_BO_FLAG_WRITE : 0) |
+					 DRM_BO_FLAG_READ,
+					 pI830->exa965->surface_buf,
+					 offset + 4, 0);
+    ss->ss2.mip_count = 0;
+    ss->ss2.render_target_rotation = 0;
+    ss->ss2.height = pPixmap->drawable.height - 1;
+    ss->ss2.width = pPixmap->drawable.width - 1;
+    ss->ss3.pitch = intel_get_pixmap_pitch(pPixmap) - 1;
+    ss->ss3.tile_walk = 0; /* Tiled X */
+    ss->ss3.tiled_surface = i830_pixmap_tiled(pPixmap);
+
+    return offset;
+}
+
 Bool
 i965_prepare_composite(int op, PicturePtr pSrcPicture,
 		       PicturePtr pMaskPicture, PicturePtr pDstPicture,
@@ -1002,9 +987,6 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
 {
     ScrnInfoPtr pScrn = xf86Screens[pSrcPicture->pDrawable->pScreen->myNum];
     I830Ptr pI830 = I830PTR(pScrn);
-    CARD32 src_pitch, src_tile_format = 0, src_tiled = 0;
-    CARD32 mask_pitch = 0, mask_tile_format = 0, mask_tiled = 0;
-    CARD32 dst_format, dst_pitch, dst_tile_format = 0, dst_tiled = 0;
     Bool rotation_program = FALSE;
     int wm_state_offset;
     int sf_state_offset, cc_state_offset;
@@ -1012,9 +994,9 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     void *surface_map;
     sampler_state_filter_t src_filter, mask_filter;
     sampler_state_extend_t src_extend, mask_extend;
-    struct brw_surface_state *dest_surf_state, *src_surf_state, *mask_surf_state;
     CARD32 *binding_table;
     CARD32 src_blend, dst_blend;
+    int binding_table_offset;
 
     /* We cannot handle a flush occuring anytime during the
      * prepare_composite/composite/done_composite handling. So make
@@ -1038,31 +1020,11 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
 
     i965_exastate_reset(pI830->exa965);
     surface_map = pI830->exa965->surface_map;
-    gen4_surface_state_init (surface_map, pI830->exa965);
 
     surface_start_base = surface_map;
 
     *pI830->last_3d = LAST_3D_RENDER;
 
-    src_pitch = intel_get_pixmap_pitch(pSrc);
-    if (i830_pixmap_tiled(pSrc)) {
-        src_tiled = 1;
-	src_tile_format = 0; /* Tiled X */
-    }
-
-    dst_pitch = intel_get_pixmap_pitch(pDst);
-    if (i830_pixmap_tiled(pDst)) {
-        dst_tiled = 1;
-	dst_tile_format = 0; /* Tiled X */
-    }
-
-    if (pMask) {
-	mask_pitch = intel_get_pixmap_pitch(pMask);
-	if (i830_pixmap_tiled(pMask)) {
-  	    mask_tiled = 1;
-	    mask_tile_format = 0;
-	}
-    }
     pI830->scale_units[0][0] = pSrc->drawable.width;
     pI830->scale_units[0][1] = pSrc->drawable.height;
 
@@ -1094,68 +1056,28 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     i965_get_blend_cntl(op, pMaskPicture, pDstPicture->format,
 			&src_blend, &dst_blend);
 
-    /* Set up the state buffer for the destination surface */
-    dest_surf_state = (void *)(surface_start_base + dest_surf_offset);
-    i965_get_dest_format(pDstPicture, &dst_format);
-    dest_surf_state->ss0.surface_format = dst_format;
-
-    dest_surf_state->ss1.base_addr =
-	intelddx_batchbuffer_emit_pixmap(pDst,
-					 DRM_BO_FLAG_MEM_TT |
-					 DRM_BO_FLAG_WRITE |
-					 DRM_BO_FLAG_READ,
-					 pI830->exa965->surface_buf,
-					 dest_surf_offset + 4, 0);
-
-    dest_surf_state->ss2.height = pDst->drawable.height - 1;
-    dest_surf_state->ss2.width = pDst->drawable.width - 1;
-    dest_surf_state->ss3.pitch = dst_pitch - 1;
-    dest_surf_state->ss3.tile_walk = dst_tile_format;
-    dest_surf_state->ss3.tiled_surface = dst_tiled;
-
-    /* Set up the source surface state buffer */
-    src_surf_state = (void *)(surface_start_base + src_surf_offset);
-    src_surf_state->ss0.surface_format = i965_get_card_format(pSrcPicture);
-
-    src_surf_state->ss1.base_addr =
-	intelddx_batchbuffer_emit_pixmap(pSrc,
-					 DRM_BO_FLAG_MEM_TT |
-					 DRM_BO_FLAG_READ,
-					 pI830->exa965->surface_buf,
-					 src_surf_offset + 4, 0);
-
-    src_surf_state->ss2.width = pSrc->drawable.width - 1;
-    src_surf_state->ss2.height = pSrc->drawable.height - 1;
-    src_surf_state->ss3.pitch = src_pitch - 1;
-    src_surf_state->ss3.tile_walk = src_tile_format;
-    src_surf_state->ss3.tiled_surface = src_tiled;
-
-    /* setup mask surface */
-    if (pMask) {
-	mask_surf_state = (void *)(surface_start_base + mask_surf_offset);
-   	mask_surf_state->ss0.surface_format = i965_get_card_format(pMaskPicture);
-	mask_surf_state->ss1.base_addr =
-	    intelddx_batchbuffer_emit_pixmap(pMask,
-					     DRM_BO_FLAG_MEM_TT |
-					     DRM_BO_FLAG_READ,
-					     pI830->exa965->surface_buf,
-					     mask_surf_offset + 4, 0);
-   	mask_surf_state->ss2.width = pMask->drawable.width - 1;
-   	mask_surf_state->ss2.height = pMask->drawable.height - 1;
-   	mask_surf_state->ss3.pitch = mask_pitch - 1;
-	mask_surf_state->ss3.tile_walk = mask_tile_format;
-	mask_surf_state->ss3.tiled_surface = mask_tiled;
-    }
-
+    binding_table_offset = (offsetof (gen4_surface_state_t, binding_table) +
+			    sizeof (CARD32) * GEN4_BINDING_TABLE_PER_OP *
+			    pI830->exa965->num_ops);
     binding_table = (void *)(surface_start_base +
 			     binding_table_offset);
-    /* Set up a binding table for our surfaces.  Only the PS will use it */
-    binding_table[0] = dest_surf_offset;
-    binding_table[1] = src_surf_offset;
-    if (pMask)
-   	binding_table[2] = mask_surf_offset;
-    else
+
+    /* Set up and bind the state buffer for the destination surface */
+    binding_table[0] = i965_set_picture_surface_state(pScrn, 0,
+						      pDstPicture, pDst, TRUE);
+
+    /* Set up and bind the source surface state buffer */
+    binding_table[1] = i965_set_picture_surface_state(pScrn, 1,
+						      pSrcPicture, pSrc, FALSE);
+
+    if (pMask) {
+	/* Set up and bind the mask surface state buffer */
+	binding_table[2] = i965_set_picture_surface_state(pScrn, 2,
+							  pMaskPicture, pMask,
+							  FALSE);
+    } else {
 	binding_table[2] = 0;
+    }
 
     src_filter = sampler_state_filter_from_picture (pSrcPicture->filter);
     if (src_filter < 0)
