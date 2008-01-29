@@ -64,6 +64,10 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "xf86RandR12.h"
 
 #include "xorg-server.h"
+/* The X Server tries to disable our assert()s. Knock that off. */
+#undef NDEBUG
+#include <assert.h>
+
 #ifdef XSERVER_LIBPCIACCESS
 #include <pciaccess.h>
 #endif

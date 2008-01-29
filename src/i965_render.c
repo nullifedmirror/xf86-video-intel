@@ -508,6 +508,7 @@ sf_state_init (struct brw_sf_unit_state *sf_state, int kernel_offset)
     sf_state->sf6.dest_org_vbias = 0x8;
     sf_state->sf6.dest_org_hbias = 0x8;
 
+    assert((kernel_offset & 63) == 0);
     sf_state->thread0.kernel_start_pointer = kernel_offset >> 6;
 }
 
@@ -549,6 +550,7 @@ sampler_state_init (struct brw_sampler_state *sampler_state,
 	break;
     }
 
+    assert((default_color_offset & 31) == 0);
     sampler_state->ss2.default_color_pointer = default_color_offset >> 5;
 
     sampler_state->ss3.chroma_key_enable = 0; /* disable chromakey */
@@ -565,6 +567,7 @@ wm_state_init (struct brw_wm_unit_state *wm_state,
     wm_state->thread0.grf_reg_count = BRW_GRF_BLOCKS(PS_KERNEL_NUM_GRF);
     wm_state->thread1.single_program_flow = 1;
 
+    assert((scratch_offset & 1023) == 0);
     wm_state->thread2.scratch_space_base_pointer = scratch_offset >> 10;
 
     wm_state->thread2.per_thread_scratch_space = 0;
@@ -576,6 +579,7 @@ wm_state_init (struct brw_wm_unit_state *wm_state,
     wm_state->thread3.dispatch_grf_start_reg = 3; /* must match kernel */
 
     wm_state->wm4.stats_enable = 1;  /* statistic */
+    assert((sampler_state_offset & 31) == 0);
     wm_state->wm4.sampler_state_pointer = sampler_state_offset >> 5;
     wm_state->wm4.sampler_count = 1; /* 1-4 samplers used */
     wm_state->wm5.max_threads = PS_MAX_THREADS - 1;
@@ -588,6 +592,7 @@ wm_state_init (struct brw_wm_unit_state *wm_state,
     wm_state->wm5.enable_8_pix = 0;
     wm_state->wm5.early_depth_test = 1;
 
+    assert((kernel_offset & 63) == 0);
     wm_state->thread0.kernel_start_pointer = kernel_offset >> 6;
 
     /* Each pair of attributes (src/mask coords) is one URB entry */
@@ -614,6 +619,7 @@ cc_state_init (struct brw_cc_unit_state *cc_state,
     cc_state->cc3.blend_enable = 1;     /* enable color blend */
     cc_state->cc3.alpha_test = 0;       /* disable alpha test */
 
+    assert((cc_viewport_offset & 31) == 0);
     cc_state->cc4.cc_viewport_state_offset = cc_viewport_offset >> 5;
 
     cc_state->cc5.dither_enable = 0;    /* disable dither */
@@ -887,6 +893,7 @@ gen4_emit_batch_header (ScrnInfoPtr pScrn)
 
 	/* Set system instruction pointer */
 	OUT_BATCH(BRW_STATE_SIP | 0);
+	assert((sip_kernel_offset & 63) == 0);
 	OUT_BATCH(sip_kernel_offset);
 
 	/* URB fence */
@@ -966,7 +973,10 @@ i965_set_picture_surface_state(ScrnInfoPtr pScrn, unsigned int index,
 					 (is_dst ? DRM_BO_FLAG_WRITE : 0) |
 					 DRM_BO_FLAG_READ,
 					 pI830->exa965->surface_buf,
-					 offset + 4, 0);
+					 offset +
+					 offsetof(struct brw_surface_state,
+						  ss1),
+					 0);
     ss->ss2.mip_count = 0;
     ss->ss2.render_target_rotation = 0;
     ss->ss2.height = pPixmap->drawable.height - 1;
@@ -988,7 +998,6 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     Bool rotation_program = FALSE;
     int wm_state_offset;
     int sf_state_offset, cc_state_offset;
-    char *surface_start_base;
     void *surface_map;
     sampler_state_filter_t src_filter, mask_filter;
     sampler_state_extend_t src_extend, mask_extend;
@@ -1018,8 +1027,6 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
 
     i965_exastate_reset(pI830->exa965);
     surface_map = pI830->exa965->surface_map;
-
-    surface_start_base = surface_map;
 
     IntelEmitInvarientState(pScrn);
     *pI830->last_3d = LAST_3D_RENDER;
@@ -1058,8 +1065,7 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     binding_table_offset = (offsetof (gen4_surface_state_t, binding_table) +
 			    sizeof (CARD32) * GEN4_BINDING_TABLE_PER_OP *
 			    pI830->exa965->num_ops);
-    binding_table = (void *)(surface_start_base +
-			     binding_table_offset);
+    binding_table = (void *)((char *)surface_map + binding_table_offset);
 
     /* Set up and bind the state buffer for the destination surface */
     binding_table[0] = i965_set_picture_surface_state(pScrn, 0,
@@ -1171,6 +1177,7 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
    	OUT_BATCH(0); /* clip */
    	OUT_BATCH(0); /* sf */
 	/* Only the PS uses the binding table */
+	assert((binding_table_offset & 31) == 0);
    	OUT_BATCH(binding_table_offset); /* ps */
 
 	/* The drawing rectangle clipping is always on.  Set it to values that
@@ -1189,11 +1196,15 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
 
 	/* Set the pointers to the 3d pipeline state */
    	OUT_BATCH(BRW_3DSTATE_PIPELINED_POINTERS | 5);
+	assert((offsetof (gen4_state_t, vs_state) & 31) == 0);
 	OUT_BATCH(offsetof (gen4_state_t, vs_state));  /* 32 byte aligned */
    	OUT_BATCH(BRW_GS_DISABLE);   /* disable GS, resulting in passthrough */
    	OUT_BATCH(BRW_CLIP_DISABLE); /* disable CLIP, resulting in passthrough */
+	assert((sf_state_offset & 31) == 0);
 	OUT_BATCH(sf_state_offset); /* 32 byte aligned */
+	assert((wm_state_offset & 31) == 0);
 	OUT_BATCH(wm_state_offset); /* 32 byte aligned */
+	assert((cc_state_offset & 63) == 0);
 	OUT_BATCH(cc_state_offset); /* 64 byte aligned */
 	ADVANCE_BATCH();
     }
