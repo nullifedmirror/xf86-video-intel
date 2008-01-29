@@ -411,9 +411,6 @@ static void I830EXADestroyPixmap(ScreenPtr pScreen, void *driverPriv)
 {
     struct i830_exa_pixmap_priv *driver_priv = driverPriv;
 
-    if (driver_priv->flags & I830_EXA_PIXMAP_IS_MAPPED)
-        dri_bo_unmap(driver_priv->bo);
-
     dri_bo_unreference(driver_priv->bo);
     xfree(driverPriv);
 }
@@ -449,18 +446,35 @@ static Bool I830EXAPrepareAccess(PixmapPtr pPix, int index)
 
 	intelddx_batchbuffer_flush(pI830->batch);
 
-	if ((driver_priv->flags & I830_EXA_PIXMAP_IS_MAPPED))
-	    return TRUE;
-
-	ret = dri_bo_map(driver_priv->bo, 1);
+	ret = dri_bo_map(driver_priv->bo, TRUE);
 	if (ret)
 	    return FALSE;
 
-	driver_priv->flags |= I830_EXA_PIXMAP_IS_MAPPED;
 	pPix->devPrivate.ptr = driver_priv->bo->virtual;
     }
 
     return TRUE;
+}
+
+static void I830EXAFinishAccess(PixmapPtr pPix, int index)
+{
+    struct i830_exa_pixmap_priv *driver_priv;
+    int ret;
+
+    driver_priv = exaGetPixmapDriverPrivate(pPix);
+
+    if (!driver_priv)
+	return;
+
+    if (driver_priv->bo) {
+	mmDebug("numapping %p %d %dx%d\n", pPix, driver_priv->flags, pPix->drawable.width, pPix->drawable.height);
+
+	ret = dri_bo_unmap(driver_priv->bo);
+	if (ret)
+	    return;
+
+	pPix->devPrivate.ptr = driver_priv->bo->virtual;
+    }
 }
 
 static Bool I830EXAModifyPixmapHeader(PixmapPtr pPixmap, int width, int height,
@@ -537,6 +551,7 @@ I830EXAInit(ScreenPtr pScreen)
     } else {
 	pI830->EXADriverPtr->flags = EXA_OFFSCREEN_PIXMAPS | EXA_HANDLES_PIXMAPS;
 	pI830->EXADriverPtr->PrepareAccess = I830EXAPrepareAccess;
+	pI830->EXADriverPtr->FinishAccess = I830EXAFinishAccess;
     }
 
     DPRINTF(PFX, "EXA Mem: memoryBase 0x%x, end 0x%x, offscreen base 0x%x, "

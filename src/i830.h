@@ -645,7 +645,6 @@ typedef struct _I830Rec {
 #define I830_SELECT_THIRD	3
 
 #define I830_EXA_PIXMAP_IS_FRONTBUFFER 1
-#define I830_EXA_PIXMAP_IS_MAPPED 2
 
 /* i830 pixmap private for TTM */
 struct i830_exa_pixmap_priv {

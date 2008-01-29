@@ -786,6 +786,7 @@ i965_exastate_reset(struct i965_exastate_buffer *state)
 
     /* Then the surface state buffer */
     if (state->surface_buf != NULL && state->num_ops >= GEN4_MAX_OPS) {
+	dri_bo_unmap(state->surface_buf);
 	dri_bo_unreference(state->surface_buf);
 	state->surface_buf = NULL;
     }
@@ -1449,9 +1450,6 @@ void i965_done_composite(PixmapPtr pDst)
     }
 
     pI830->exa965->num_ops++;
-    if (pI830->exa965->num_ops >= GEN4_MAX_OPS) {
-	intelddx_batchbuffer_flush(pI830->batch);
-    }
 }
 
 static struct i965_exastate_buffer *

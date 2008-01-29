@@ -274,10 +274,6 @@ uint32_t intelddx_batchbuffer_emit_pixmap(PixmapPtr pPixmap,
 {
     struct i830_exa_pixmap_priv *driver_priv = exaGetPixmapDriverPrivate(pPixmap);
 
-    if (driver_priv->flags & I830_EXA_PIXMAP_IS_MAPPED) {
-	dri_bo_unmap(driver_priv->bo);
-	driver_priv->flags &= ~I830_EXA_PIXMAP_IS_MAPPED;
-    }
     dri_emit_reloc(reloc_buf, flags, delta, offset, driver_priv->bo);
     return driver_priv->bo->offset;
 }
