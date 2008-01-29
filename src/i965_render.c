@@ -839,8 +839,6 @@ gen4_emit_batch_header (ScrnInfoPtr pScrn)
     urb_cs_start = urb_sf_start + urb_sf_size;
     urb_cs_size = URB_CS_ENTRIES * URB_CS_ENTRY_SIZE;
 
-    IntelEmitInvarientState(pScrn);
-
     sip_kernel_offset = offsetof (gen4_state_t, sip_kernel);
 
     /* Begin the long sequence of commands needed to set up the 3D
@@ -1023,6 +1021,7 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
 
     surface_start_base = surface_map;
 
+    IntelEmitInvarientState(pScrn);
     *pI830->last_3d = LAST_3D_RENDER;
 
     pI830->scale_units[0][0] = pSrc->drawable.width;
@@ -1153,8 +1152,18 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     if (pI830->exa965->num_ops == 0)
 	gen4_emit_batch_header (pScrn);
 
-    {
-	BEGIN_BATCH(18);
+     {
+	BEGIN_BATCH(19);
+	/* Flush the map (texture) cache.  The rendering cache covers the blit
+	 * and 3D destination parts of the engine and automatically flushes
+	 * between them, but the map cache has to be flushed separately.
+	 *
+	 * The remaining caches (in particular vertex and instruction) only
+	 * need to be flushed at the start of the batchbuffer, which we do.
+	 * A bare MI_FLUSH does happen to flush vertex cache anyway.
+	 */
+	OUT_BATCH(MI_FLUSH);
+
 	/* Binding table pointers */
    	OUT_BATCH(BRW_3DSTATE_BINDING_TABLE_POINTERS | 4);
    	OUT_BATCH(0); /* vs */
