@@ -447,8 +447,10 @@ static Bool I830EXAPrepareAccess(PixmapPtr pPix, int index)
 	intelddx_batchbuffer_flush(pI830->batch);
 
 	ret = dri_bo_map(driver_priv->bo, TRUE);
-	if (ret)
+	if (ret) {
+	    FatalError("Failed to map pixmap: %s\n", strerror(-ret));
 	    return FALSE;
+	}
 
 	pPix->devPrivate.ptr = driver_priv->bo->virtual;
     }
@@ -470,8 +472,10 @@ static void I830EXAFinishAccess(PixmapPtr pPix, int index)
 	mmDebug("numapping %p %d %dx%d\n", pPix, driver_priv->flags, pPix->drawable.width, pPix->drawable.height);
 
 	ret = dri_bo_unmap(driver_priv->bo);
-	if (ret)
+	if (ret) {
+	    FatalError("Failed to unmap pixmap: %s\n", strerror(-ret));
 	    return;
+	}
 
 	pPix->devPrivate.ptr = driver_priv->bo->virtual;
     }
