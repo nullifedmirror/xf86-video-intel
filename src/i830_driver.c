@@ -2342,6 +2342,7 @@ I830BlockHandler(int i,
 
     (*pScreen->BlockHandler) (i, blockData, pTimeout, pReadmask);
 
+    pI830->BlockHandler = pScreen->BlockHandler;
     pScreen->BlockHandler = I830BlockHandler;
 
     if (pI830->batch)
@@ -2927,8 +2928,24 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
       pI830->directRenderingEnabled = I830DRIFinishScreenInit(pScreen);
 #endif
 
+   /* Must force it before EnterVT, so we are in control of VT and
+    * later memory should be bound when allocating, e.g rotate_mem */
+   pScrn->vtSema = TRUE;
+
    if (!I830EnterVT(scrnIndex, 0))
       return FALSE;
+
+   pI830->BlockHandler = pScreen->BlockHandler;
+   pScreen->BlockHandler = I830BlockHandler;
+
+   pScreen->SaveScreen = xf86SaveScreen;
+   pI830->CloseScreen = pScreen->CloseScreen;
+   pScreen->CloseScreen = I830CloseScreen;
+   pI830->CreateScreenResources = pScreen->CreateScreenResources;
+   pScreen->CreateScreenResources = i830CreateScreenResources;
+
+   if (!xf86CrtcScreenInit (pScreen))
+       return FALSE;
 
    DPRINTF(PFX, "assert( if(!miCreateDefColormap(pScreen)) )\n");
    if (!miCreateDefColormap(pScreen))
@@ -2966,18 +2983,7 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
    xf86DrvMsg(pScrn->scrnIndex, X_INFO, "direct rendering: Not available\n");
 #endif
 
-   pI830->BlockHandler = pScreen->BlockHandler;
-   pScreen->BlockHandler = I830BlockHandler;
 
-   pScreen->SaveScreen = xf86SaveScreen;
-   pI830->CloseScreen = pScreen->CloseScreen;
-   pScreen->CloseScreen = I830CloseScreen;
-   pI830->CreateScreenResources = pScreen->CreateScreenResources;
-   pScreen->CreateScreenResources = i830CreateScreenResources;
-
-   if (!xf86CrtcScreenInit (pScreen))
-       return FALSE;
-       
    /* Wrap pointer motion to flip touch screen around */
    pI830->PointerMoved = pScrn->PointerMoved;
    pScrn->PointerMoved = I830PointerMoved;
@@ -3177,6 +3183,22 @@ I830EnterVT(int scrnIndex, int flags)
 
 #ifdef XF86DRI
    if (pI830->directRenderingEnabled) {
+       /* HW status is fixed, we need to set it up before any drm
+	* operation which accessing that page, like irq install, etc.
+	*/
+       if (pI830->starting) {
+	   if (HWS_NEED_GFX(pI830) && !I830DRISetHWS(pScrn)) {
+		   xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
+			   "Fail to setup hardware status page.\n");
+		   I830DRICloseScreen(pScrn->pScreen);
+		   return FALSE;
+	   }
+	   if (!I830DRIInstIrqHandler(pScrn)) {
+	       I830DRICloseScreen(pScrn->pScreen);
+	       return FALSE;
+	   }
+       }
+
       /* Update buffer offsets in sarea and mappings, since buffer offsets
        * may have changed.
        */
