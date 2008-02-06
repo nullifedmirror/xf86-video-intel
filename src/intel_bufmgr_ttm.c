@@ -541,6 +541,14 @@ dri_ttm_bo_unmap(dri_bo *buf)
     return drmBOUnmap(bufmgr_ttm->fd, &ttm_buf->drm_bo);
 }
 
+static unsigned int
+dri_ttm_bo_get_handle(dri_bo *buf)
+{
+   dri_bo_ttm *ttm_buf = (dri_bo_ttm *)buf;
+
+   return ttm_buf->drm_bo.handle;
+}
+
 /**
  * Returns a dri_bo wrapping the given buffer object handle.
  *
@@ -850,6 +858,7 @@ intel_bufmgr_ttm_init(int fd, unsigned int fence_type,
     bufmgr_ttm->bufmgr.bo_unreference = dri_ttm_bo_unreference;
     bufmgr_ttm->bufmgr.bo_map = dri_ttm_bo_map;
     bufmgr_ttm->bufmgr.bo_unmap = dri_ttm_bo_unmap;
+    bufmgr_ttm->bufmgr.bo_get_handle = dri_ttm_bo_get_handle;
     bufmgr_ttm->bufmgr.fence_reference = dri_ttm_fence_reference;
     bufmgr_ttm->bufmgr.fence_unreference = dri_ttm_fence_unreference;
     bufmgr_ttm->bufmgr.fence_wait = dri_ttm_fence_wait;

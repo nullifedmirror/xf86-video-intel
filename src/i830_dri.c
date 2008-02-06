@@ -85,6 +85,10 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "intel_bufmgr_ttm.h"
 
+#ifdef DRI2
+#include "dri2.h"
+#endif
+
 /* This block and the corresponding configure test can be removed when
  * libdrm >= 2.3.1 is required.
  */
@@ -149,13 +153,13 @@ static Bool
 I830CleanupDma(ScrnInfoPtr pScrn)
 {
    I830Ptr pI830 = I830PTR(pScrn);
-   drmI830Init info;
+   drm_i915_init_t info;
 
-   memset(&info, 0, sizeof(drmI830Init));
-   info.func = I830_CLEANUP_DMA;
+   memset(&info, 0, sizeof(info));
+   info.func = I915_CLEANUP_DMA;
 
    if (drmCommandWrite(pI830->drmSubFD, DRM_I830_INIT,
-		       &info, sizeof(drmI830Init))) {
+		       &info, sizeof(info))) {
       xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "I830 Dma Cleanup Failed\n");
       return FALSE;
    }
@@ -169,10 +173,10 @@ I830InitDma(ScrnInfoPtr pScrn)
    I830Ptr pI830 = I830PTR(pScrn);
    I830RingBuffer *ring = pI830->LpRing;
    I830DRIPtr pI830DRI = (I830DRIPtr) pI830->pDRIInfo->devPrivate;
-   drmI830Init info;
+   drm_i915_init_t info;
 
-   memset(&info, 0, sizeof(drmI830Init));
-   info.func = I830_INIT_DMA;
+   memset(&info, 0, sizeof(info));
+   info.func = I915_INIT_DMA;
 
    info.ring_start = ring->mem->offset + pI830->LinearAddr;
    info.ring_end = ring->mem->end + pI830->LinearAddr;
@@ -193,7 +197,7 @@ I830InitDma(ScrnInfoPtr pScrn)
    info.cpp = pI830->cpp;
 
    if (drmCommandWrite(pI830->drmSubFD, DRM_I830_INIT,
-		       &info, sizeof(drmI830Init))) {
+		       &info, sizeof(info))) {
       xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
 		 "I830 Dma Initialization Failed\n");
       return FALSE;
@@ -206,13 +210,13 @@ static Bool
 I830ResumeDma(ScrnInfoPtr pScrn)
 {
    I830Ptr pI830 = I830PTR(pScrn);
-   drmI830Init info;
+   drm_i915_init_t info;
 
-   memset(&info, 0, sizeof(drmI830Init));
-   info.func = I830_RESUME_DMA;
+   memset(&info, 0, sizeof(info));
+   info.func = I915_RESUME_DMA;
 
    if (drmCommandWrite(pI830->drmSubFD, DRM_I830_INIT,
-		       &info, sizeof(drmI830Init))) {
+		       &info, sizeof(info))) {
       xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "I830 Dma Resume Failed\n");
       return FALSE;
    }
@@ -1007,50 +1011,59 @@ I830DestroyContext(ScreenPtr pScreen, drm_context_t hwContext,
 {
 }
 
+static Bool
+I830InitializeIrq(ScreenPtr pScreen, int *irq)
+{
+    ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+    I830Ptr pI830 = I830PTR(pScrn);
+
+    *irq = drmGetInterruptFromBusID(pI830->drmSubFD,
+#if XSERVER_LIBPCIACCESS
+				    ((pI830->PciInfo->domain << 8) |
+				     pI830->PciInfo->bus),
+				    pI830->PciInfo->dev,
+				    pI830->PciInfo->func
+#else
+				    ((pciConfigPtr) pI830->
+				     PciInfo->thisCard)->busnum,
+				    ((pciConfigPtr) pI830->
+				     PciInfo->thisCard)->devnum,
+				    ((pciConfigPtr) pI830->
+				     PciInfo->thisCard)->funcnum
+#endif
+				   );
+
+    if (drmCtlInstHandler(pI830->drmSubFD, *irq)) {
+	xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
+		   "[drm] failure adding irq handler\n");
+	*irq = 0;
+	return FALSE;
+    }
+    else
+	xf86DrvMsg(pScrn->scrnIndex, X_INFO,
+		   "[drm] dma control initialized, using IRQ %d\n", *irq);
+
+    return TRUE;
+}
+
 Bool
 I830DRIFinishScreenInit(ScreenPtr pScreen)
 {
    ScrnInfoPtr        pScrn = xf86Screens[pScreen->myNum];
    I830Ptr pI830 = I830PTR(pScrn);
+   I830DRIPtr pI830DRI = (I830DRIPtr) pI830->pDRIInfo->devPrivate;
 
    DPRINTF(PFX, "I830DRIFinishScreenInit\n");
 
    if (!DRIFinishScreenInit(pScreen))
       return FALSE;
 
-   /* Okay now initialize the dma engine */
-   {
-      I830DRIPtr pI830DRI = (I830DRIPtr) pI830->pDRIInfo->devPrivate;
-
-      pI830DRI->irq = drmGetInterruptFromBusID(pI830->drmSubFD,
-#if XSERVER_LIBPCIACCESS
-					       ((pI830->PciInfo->domain << 8) |
-						pI830->PciInfo->bus),
-					       pI830->PciInfo->dev,
-					       pI830->PciInfo->func
-#else
-					       ((pciConfigPtr) pI830->
-						PciInfo->thisCard)->busnum,
-					       ((pciConfigPtr) pI830->
-						PciInfo->thisCard)->devnum,
-					       ((pciConfigPtr) pI830->
-						PciInfo->thisCard)->funcnum
-#endif
-					       );
-
-      if (drmCtlInstHandler(pI830->drmSubFD, pI830DRI->irq)) {
-	 xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
-		    "[drm] failure adding irq handler\n");
-	 pI830DRI->irq = 0;
-	 DRICloseScreen(pScreen);
-	 return FALSE;
-      }
-      else
-	 xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-		    "[drm] dma control initialized, using IRQ %d\n",
-		    pI830DRI->irq);
-	 return TRUE;
+   if (!I830InitializeIrq(pScreen, &pI830DRI->irq)) {
+	DRICloseScreen(pScreen);
+	return FALSE;
    }
+
+   return TRUE;   
 }
 
 #ifdef DAMAGE
@@ -1787,7 +1800,7 @@ I830DRISetVBlankInterrupt (ScrnInfoPtr pScrn, Bool on)
     if (!pI830->want_vblank_interrupts)
 	on = FALSE;
 
-    if (pI830->directRenderingEnabled && pI830->drmMinor >= 5) {
+    if (pI830->directRendering == DRI_TYPE_XF86DRI && pI830->drmMinor >= 5) {
 	if (on) {
 	    if (xf86_config->num_crtc > 1 && xf86_config->crtc[1]->enabled)
 		if (pI830->drmMinor >= 6)
@@ -1813,25 +1826,257 @@ I830DRILock(ScrnInfoPtr pScrn)
 {
    I830Ptr pI830 = I830PTR(pScrn);
 
-   if (pI830->directRenderingEnabled && !pI830->LockHeld) {
-      DRILock(screenInfo.screens[pScrn->scrnIndex], 0);
-      pI830->LockHeld = 1;
-      i830_refresh_ring(pScrn);
-      return TRUE;
-   }
-   else
+   if (pI830->LockHeld || pI830->directRendering == DRI_TYPE_NONE)
       return FALSE;
+   else if (pI830->directRendering == DRI_TYPE_XF86DRI)
+      DRILock(screenInfo.screens[pScrn->scrnIndex], 0);
+   else if (pI830->directRendering == DRI_TYPE_DRI2)
+      I830DRI2Lock(screenInfo.screens[pScrn->scrnIndex]);
+
+   pI830->LockHeld = 1;
+   i830_refresh_ring(pScrn);
+
+   return TRUE;
 }
-
-
 
 void
 I830DRIUnlock(ScrnInfoPtr pScrn)
 {
    I830Ptr pI830 = I830PTR(pScrn);
 
-   if (pI830->directRenderingEnabled && pI830->LockHeld) {
+   if (!pI830->LockHeld || pI830->directRendering == DRI_TYPE_NONE)
+      return;
+   else if (pI830->directRendering == DRI_TYPE_XF86DRI)
       DRIUnlock(screenInfo.screens[pScrn->scrnIndex]);
-      pI830->LockHeld = 0;
-   }
+   else if (pI830->directRendering == DRI_TYPE_DRI2)
+      I830DRI2Unlock(screenInfo.screens[pScrn->scrnIndex]);
+
+   pI830->LockHeld = 0;
+}
+
+void
+I830DRI2Lock(ScreenPtr pScreen)
+{
+    ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+    I830Ptr pI830 = I830PTR(pScrn);
+
+    ErrorF("taking lock\n");
+
+    if (pI830->lockRefCount == 0) {
+       DRM_LOCK(pI830->drmSubFD, pI830->lock, pI830->context, 0);
+       pI830->lockingContext = pI830->context;
+    } else if (pI830->lockingContext != pI830->context) {
+	xf86DrvMsg(pScreen->myNum, X_ERROR,
+		   "[DRI] Locking deadlock.\n"
+		   "\tAlready locked with context %d,\n"
+		   "\ttrying to lock with context %d.\n",
+		   pI830->lockingContext, pI830->context);
+    }
+
+    pI830->lockRefCount++;
+}
+
+void
+I830DRI2Unlock(ScreenPtr pScreen)
+{
+    ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+    I830Ptr pI830 = I830PTR(pScrn);
+
+    ErrorF("releasing lock\n");
+
+    if (pI830 == NULL)
+	return;
+
+    if (pI830->lockRefCount > 0) {
+	if (pI830->lockingContext != pI830->context) {
+	    xf86DrvMsg(pScreen->myNum, X_ERROR,
+		      "[DRI] Unlocking inconsistency:\n"
+		      "\tContext %d trying to unlock lock held by context %d\n",
+		       pI830->context, pI830->lockingContext);
+	}
+	pI830->lockRefCount--;
+    } else {
+	xf86DrvMsg(pScreen->myNum, X_ERROR,
+		   "DRIUnlock called when not locked.\n");
+        return;
+    }
+
+    if (pI830->lockRefCount == 0)
+       DRM_UNLOCK(pI830->drmSubFD, pI830->lock, pI830->context);
+}
+
+static void
+I830DRI2BeginClipNotify(ScreenPtr pScreen)
+{
+    I830DRI2Lock(pScreen);
+}
+
+static void
+I830DRI2EndClipNotify(ScreenPtr pScreen)
+{
+    I830EmitFlush(xf86Screens[pScreen->myNum]);
+    I830DRI2Unlock(pScreen);
+}
+
+void
+I830DRI2Prepare(ScreenPtr pScreen)
+{
+    ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+    I830Ptr pI830 = I830PTR(pScrn);
+    char busId[64];
+    drmVersionPtr version;
+
+#if XSERVER_LIBPCIACCESS
+    sprintf(busId, "pci:%04x:%02x:%02x.%d",
+	    pI830->PciInfo->domain, pI830->PciInfo->bus,
+	    pI830->PciInfo->dev, pI830->PciInfo->func);
+#else
+    snprintf(busId, "PCI:%d:%d:%d",
+	     ((pciConfigPtr) pI830->PciInfo->thisCard)->busnum,
+	     ((pciConfigPtr) pI830->PciInfo->thisCard)->devnum,
+	     ((pciConfigPtr) pI830->PciInfo->thisCard)->funcnum);
+#endif
+
+    /* Low level DRM open */
+    pI830->drmSubFD = drmOpen("i915", busId);
+    if (pI830->drmSubFD < 0) {
+	xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "[DRI2] drmOpen failed\n");
+	return;
+    }
+
+    version = drmGetVersion(pI830->drmSubFD);
+    if (!version) {
+	xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
+		   "[DRI2] Failed to get DRM version\n");
+	return;
+    }
+       
+    if (version->version_major != 1 || version->version_minor < 3) {
+	xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
+		   "[DRI2] Need at least version 1.3 for DRI2\n");
+	drmClose(pI830->drmSubFD);
+	return;
+    }	       
+
+    pI830->LockHeld = 0;
+    pI830->drmMinor = version->version_minor;
+    drmFreeVersion(version);
+
+    xf86DrvMsg(pScrn->scrnIndex, X_INFO,
+	       "[DRI2] Opened DRM device successfully\n");
+
+    I830InitBufMgr(pScreen);
+    if (!pI830->use_ttm_batch)
+	return;
+
+    pI830->directRendering = DRI_TYPE_DRI2;
+}
+
+struct __DRILock {
+    unsigned int block_header;
+    drm_hw_lock_t lock;
+};
+
+#define DRI2_SAREA_BLOCK_HEADER(type, size) (((type) << 16) | (size))
+#define DRI2_SAREA_BLOCK_LOCK		0x0001
+
+void
+I830DRI2ScreenInit(ScreenPtr pScreen)
+{
+    DRI2InfoRec dri2info;
+    ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+    I830Ptr pI830 = I830PTR(pScrn);
+    I830RingBuffer *ring = pI830->LpRing;
+    drm_i915_init_t info;
+    int irq;
+    int fd, major, minor, patch;
+    const char *driverName;
+    unsigned int sarea_handle;
+    void *p;
+    struct __DRILock *driLock;
+
+    dri2info.version = 1;
+    dri2info.fd = pI830->drmSubFD;
+    dri2info.driverSareaSize = sizeof *driLock;
+    dri2info.driverName = IS_I965G(pI830) ? "i965" : "i915";
+    dri2info.ddxVersionMajor = I830_MAJOR_VERSION;
+    dri2info.ddxVersionMinor = I830_MINOR_VERSION;
+    dri2info.ddxVersionPatch = I830_PATCHLEVEL;
+    dri2info.getPixmapHandle = I830EXAGetPixmapHandle;
+    dri2info.beginClipNotify = I830DRI2BeginClipNotify;
+    dri2info.endClipNotify   = I830DRI2EndClipNotify;
+
+    p = DRI2ScreenInit(pScreen, &dri2info);
+    if (!p) {
+	pI830->directRendering = DRI_TYPE_NONE;
+	return;
+    }
+
+    driLock = p;
+    driLock->block_header =
+	DRI2_SAREA_BLOCK_HEADER(DRI2_SAREA_BLOCK_LOCK, sizeof *driLock);
+    pI830->lock = &driLock->lock;
+    pI830->lockRefCount = 0;
+    pI830->lockingContext = 0;
+    
+    if (drmCreateContext(pI830->drmSubFD, &pI830->context)) {
+	pI830->directRendering = DRI_TYPE_NONE;
+	return;
+    }
+
+    I830DRI2Lock(pScreen);
+
+    /* Get sarea BO handle... maybe we need a dedicated function for
+     * that or maybe a DRI2 info struct that it fills out. */
+    DRI2Connect(pScreen, &fd, &driverName, &major, &minor, &patch,
+		&sarea_handle);
+
+    memset(&info, 0, sizeof(info));
+    info.func = I915_INIT_DMA2;
+    info.ring_start = ring->mem->offset + pI830->LinearAddr;
+    info.ring_end = ring->mem->end + pI830->LinearAddr;
+    info.ring_size = ring->mem->size;
+    info.mmio_offset = 0;
+    info.sarea_priv_offset = 0;
+    info.sarea_handle = sarea_handle;
+
+    if (drmCommandWrite(pI830->drmSubFD, DRM_I830_INIT,
+			&info, sizeof(info))) {
+	xf86DrvMsg(pScreen->myNum, X_ERROR,
+		   "I830 Dma Initialization Failed\n");
+	pI830->directRendering = DRI_TYPE_NONE;
+      
+	return;
+    }
+
+    if (IS_G33CLASS(pI830)) {
+	if (!I830SetHWS(pScrn, pI830->hw_status->offset)) {
+	    pI830->directRendering = DRI_TYPE_NONE;
+	    return;
+	}
+    }
+
+    if (DEVICE_ID(pI830->PciInfo) != PCI_CHIP_845_G &&
+	DEVICE_ID(pI830->PciInfo) != PCI_CHIP_I830_M) {
+	I830SetParam(pScrn, I830_SETPARAM_USE_MI_BATCHBUFFER_START, 1);
+    }
+
+    if (!I830InitializeIrq(pScreen, &irq)) {
+	pI830->directRendering = DRI_TYPE_NONE;
+	return;
+    }
+}
+
+void
+I830DRI2CloseScreen(ScreenPtr pScreen)
+{
+    ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+    I830Ptr pI830 = I830PTR(pScrn);
+
+    drmCtlUninstHandler(pI830->drmSubFD);
+    I830CleanupDma(pScrn);
+    drmDestroyContext(pI830->drmSubFD, pI830->context);
+    I830DRI2Unlock(pScreen);
+    DRI2CloseScreen(pScreen);
+    drmClose(pI830->drmSubFD);
 }

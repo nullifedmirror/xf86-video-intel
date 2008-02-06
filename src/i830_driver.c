@@ -298,7 +298,8 @@ typedef enum {
    OPTION_INTELTEXPOOL,
 #endif
    OPTION_TRIPLEBUFFER,
-   OPTION_FORCEENABLEPIPEA
+   OPTION_FORCEENABLEPIPEA,
+   OPTION_DRI2
 } I830Opts;
 
 static OptionInfoRec I830Options[] = {
@@ -322,6 +323,7 @@ static OptionInfoRec I830Options[] = {
 #endif
    {OPTION_TRIPLEBUFFER, "TripleBuffer", OPTV_BOOLEAN,	{0},	FALSE},
    {OPTION_FORCEENABLEPIPEA, "ForceEnablePipeA", OPTV_BOOLEAN,	{0},	FALSE},
+   {OPTION_DRI2,	"DRI2",		OPTV_BOOLEAN,	{0},	FALSE},
    {-1,			NULL,		OPTV_NONE,	{0},	FALSE}
 };
 /* *INDENT-ON* */
@@ -1492,7 +1494,7 @@ I830PreInit(ScrnInfoPtr pScrn, int flags)
    pI830->directRenderingDisabled =
 	!xf86ReturnOptValBool(pI830->Options, OPTION_DRI, TRUE);
 
-#ifdef XF86DRI
+#if defined(XF86DRI) || defined(DRI2)
    if (!pI830->directRenderingDisabled) {
       if (pI830->noAccel || pI830->SWCursor) {
 	 xf86DrvMsg(pScrn->scrnIndex, X_CONFIG, "DRI is disabled because it "
@@ -1740,6 +1742,14 @@ I830PreInit(ScrnInfoPtr pScrn, int flags)
       if (xf86LoadSubModule(pScrn, "dri")) {
 	 xf86LoaderReqSymLists(I810driSymbols, I810drmSymbols, NULL);
       }
+   }
+#endif
+
+#if defined(DRI2)
+   /* Load the dri2 module if requested. */
+   if (xf86ReturnOptValBool(pI830->Options, OPTION_DRI2, FALSE) &&
+       !pI830->directRenderingDisabled) {
+       xf86LoadSubModule(pScrn, "dri2");
    }
 #endif
 
@@ -2306,7 +2316,7 @@ IntelEmitInvarientState(ScrnInfoPtr pScrn)
       return;
 
 #ifdef XF86DRI
-   if (pI830->directRenderingEnabled) {
+   if (pI830->directRendering == DRI_TYPE_XF86DRI) {
       drmI830Sarea *sarea = DRIGetSAREAPrivate(pScrn->pScreen);
 
       /* Mark that the X Server was the last holder of the context */
@@ -2457,21 +2467,29 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
       pScrn->videoRam &= ~3;
    }
 
+   pI830->directRendering = DRI_TYPE_NONE;
+#ifdef DRI2
+   if (xf86ReturnOptValBool(pI830->Options, OPTION_DRI2, FALSE))
+       I830DRI2Prepare(pScreen);
+#endif
+
 #ifdef XF86DRI
    /* Check for appropriate bpp and module support to initialize DRI. */
-   if (!I830CheckDRIAvailable(pScrn)) {
-      pI830->directRenderingDisabled = TRUE;
-   }
+   if (pI830->directRendering == DRI_TYPE_NONE) {
 
-   /* If DRI hasn't been explicitly disabled, try to initialize it.
-    * It will be used by the memory allocator.
-    */
-   if (!pI830->directRenderingDisabled)
-      pI830->directRenderingEnabled = I830DRIScreenInit(pScreen);
-   else
-      pI830->directRenderingEnabled = FALSE;
-#else
-   pI830->directRenderingEnabled = FALSE;
+       if (!I830CheckDRIAvailable(pScrn)) {
+	   pI830->directRendering = DRI_TYPE_XF86DRI;
+       }
+
+       /* If DRI hasn't been explicitly disabled, try to initialize it.
+	* It will be used by the memory allocator.
+	*/
+       if (!pI830->directRenderingDisabled)
+	   pI830->directRendering =
+	       I830DRIScreenInit(pScreen) ? DRI_TYPE_XF86DRI : DRI_TYPE_NONE;
+       else
+	   pI830->directRendering = DRI_TYPE_NONE;
+   }
 #endif
 
    /* Set up our video memory allocator for the chosen videoRam */
@@ -2554,7 +2572,7 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
    /* Need MMIO mapped to do GTT lookups during memory allocation. */
    I830MapMMIO(pScrn);
 
-#if defined(XF86DRI)
+#if defined(XF86DRI) || defined(DRI2)
    /*
     * If DRI is potentially usable, check if there is enough memory available
     * for it, and if there's also enough to allow tiling to be enabled.
@@ -2569,7 +2587,7 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
     pI830->XvEnabled = !pI830->XvDisabled;
 #endif
 
-   if (pI830->directRenderingEnabled) {
+   if (pI830->directRendering != DRI_TYPE_NONE) {
       int savedDisplayWidth = pScrn->displayWidth;
       Bool tiled = FALSE;
 
@@ -2650,7 +2668,7 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
       if (i == MM_TURNS) {
 	 xf86DrvMsg(pScrn->scrnIndex, X_WARNING,
 		    "Not enough video memory.  Disabling DRI.\n");
-	 pI830->directRenderingEnabled = FALSE;
+	 pI830->directRendering = DRI_TYPE_NONE;
       }
    }
 #endif
@@ -2670,7 +2688,7 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
       xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
 		 "Cannot support DRI with frame buffer width > 2048.\n");
       pI830->tiling = FALSE;
-      pI830->directRenderingEnabled = FALSE;
+      pI830->directRendering = DRI_TYPE_NONE;
    }
 
 #ifdef HAS_MTRR_SUPPORT
@@ -2768,26 +2786,32 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
    }
 #endif
 
-#ifdef XF86DRI
+#if defined(XF86DRI) || defined(DRI2)
    /*
     * Setup DRI after visuals have been established, but before fbScreenInit
     * is called.   fbScreenInit will eventually call into the drivers
     * InitGLXVisuals call back.
     */
 
-   if (pI830->directRenderingEnabled) {
+   if (pI830->directRendering != DRI_TYPE_NONE) {
       if (pI830->noAccel || pI830->SWCursor || (pI830->StolenOnly && I830IsPrimary(pScrn))) {
 	 xf86DrvMsg(pScrn->scrnIndex, X_PROBED, "DRI is disabled because it "
 		    "needs HW cursor, 2D accel and AGPGART.\n");
-	 pI830->directRenderingEnabled = FALSE;
+	 pI830->directRendering = DRI_TYPE_NONE;
       }
    }
 
-   if (pI830->directRenderingEnabled)
-      pI830->directRenderingEnabled = I830DRIDoMappings(pScreen);
+   if (pI830->directRendering == DRI_TYPE_XF86DRI)
+      pI830->directRendering =
+	  I830DRIDoMappings(pScreen) ? DRI_TYPE_XF86DRI : DRI_TYPE_NONE;
+
+   /* FIXME-DRI2: Necessary? */
+   pScrn->pScreen = pScreen;
+   pScreen->width = pScrn->virtualX;
+   pScreen->height = pScrn->virtualY;
 
    /* If we failed for any reason, free DRI memory. */
-   if (!pI830->directRenderingEnabled)
+   if (pI830->directRendering == DRI_TYPE_NONE)
       i830_free_3d_memory(pScrn);
 
    config = XF86_CRTC_CONFIG_PTR(pScrn);
@@ -2800,8 +2824,9 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
     * Also make sure the DRM can handle the swap.
     */
    if (I830LVDSPresent(pScrn) && !IS_I965GM(pI830) && !IS_IGD_GM(pI830) &&
-       (!pI830->directRenderingEnabled ||
-	(pI830->directRenderingEnabled && pI830->drmMinor >= 10))) {
+       (pI830->directRendering == DRI_TYPE_NONE ||
+	(pI830->directRendering == DRI_TYPE_XF86DRI && pI830->drmMinor >= 10) ||
+	(pI830->directRendering == DRI_TYPE_DRI2))) {
        xf86DrvMsg(pScrn->scrnIndex, X_INFO, "adjusting plane->pipe mappings "
 		  "to allow for framebuffer compression\n");
        for (c = 0; c < config->num_crtc; c++) {
@@ -2814,9 +2839,6 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
 	       intel_crtc->plane = 0;
       }
    }
-
-#else
-   pI830->directRenderingEnabled = FALSE;
 #endif
 
 #ifdef XF86DRI
@@ -2923,8 +2945,14 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
    /* Must be called before EnterVT, so we can acquire the DRI lock when
     * binding our memory.
     */
-   if (pI830->directRenderingEnabled)
-      pI830->directRenderingEnabled = I830DRIFinishScreenInit(pScreen);
+   if (pI830->directRendering == DRI_TYPE_XF86DRI)
+      pI830->directRendering =
+	  I830DRIFinishScreenInit(pScreen) ? DRI_TYPE_XF86DRI : DRI_TYPE_NONE;
+#endif
+
+#ifdef DRI2
+   if (pI830->directRendering == DRI_TYPE_DRI2)
+       I830DRI2ScreenInit(pScreen);
 #endif
 
    if (!I830EnterVT(scrnIndex, 0))
@@ -2953,7 +2981,7 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
    IntelEmitInvarientState(pScrn);
 
 #ifdef XF86DRI
-   if (pI830->directRenderingEnabled) {
+   if (pI830->directRendering != DRI_TYPE_NONE) {
       pI830->directRenderingOpen = TRUE;
       xf86DrvMsg(pScrn->scrnIndex, X_INFO, "direct rendering: Enabled\n");
    } else {
@@ -2962,7 +2990,9 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
       else
 	 xf86DrvMsg(pScrn->scrnIndex, X_INFO, "direct rendering: Failed\n");
    }
-#else
+#endif
+
+#if !defined(XF86DRI) || !defined(DRI2)
    xf86DrvMsg(pScrn->scrnIndex, X_INFO, "direct rendering: Not available\n");
 #endif
 
@@ -2998,6 +3028,11 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
        */
       OUTREG(SVG_WORK_CTL, 0x00000010);
    }
+
+#ifdef DRI2
+   if (pI830->directRendering == DRI_TYPE_DRI2 && pI830->directRenderingOpen)
+      I830DRI2Unlock(pScreen);
+#endif
 
    pI830->starting = FALSE;
    pI830->closing = FALSE;
@@ -3059,9 +3094,9 @@ I830LeaveVT(int scrnIndex, int flags)
 	}
    }
 
-#ifdef XF86DRI
+#if defined(XF86DRI) || defined(DRI2)
    if (pI830->directRenderingOpen) {
-      DRILock(screenInfo.screens[pScrn->scrnIndex], 0);
+      I830DRILock(pScrn);
 
       I830DRISetVBlankInterrupt (pScrn, FALSE);
    }
@@ -3073,7 +3108,7 @@ I830LeaveVT(int scrnIndex, int flags)
 
    i830_stop_ring(pScrn, TRUE);
 
-#ifdef XF86DRI
+#if defined(XF86DRI) || defined(DRI2)
    /* don't disable interrupt before stopping the ring for fencing */
    if (pI830->directRenderingOpen) {
       drmCtlUninstHandler(pI830->drmSubFD);
@@ -3127,7 +3162,7 @@ I830EnterVT(int scrnIndex, int flags)
    pI830->leaving = FALSE;
 
 #ifdef XF86DRI_MM
-   if (pI830->directRenderingEnabled) {
+   if (pI830->directRendering != DRI_TYPE_NONE) {
       /* Unlock the memory manager first of all so that we can pin our
        * buffer objects
        */
@@ -3175,8 +3210,24 @@ I830EnterVT(int scrnIndex, int flags)
    i830_stop_ring(pScrn, TRUE);
    SetHWOperatingState(pScrn);
 
+#ifdef DRI2
+   if (pI830->directRendering == DRI_TYPE_DRI2) {
+      I830DRISetVBlankInterrupt (pScrn, TRUE);
+
+      if (!pI830->starting) {
+	      I830DRIResume(screenInfo.screens[scrnIndex]);
+	      i830_refresh_ring(pScrn);
+	      I830Sync(pScrn);
+	      DO_RING_IDLE();
+
+	      DPRINTF(PFX, "calling dri unlock\n");
+	      I830DRIUnlock(pScrn);
+      }
+   }
+#endif
+
 #ifdef XF86DRI
-   if (pI830->directRenderingEnabled) {
+   if (pI830->directRendering == DRI_TYPE_XF86DRI) {
       /* Update buffer offsets in sarea and mappings, since buffer offsets
        * may have changed.
        */
@@ -3247,7 +3298,7 @@ I830CloseScreen(int scrnIndex, ScreenPtr pScreen)
    if (pScrn->vtSema == TRUE) {
       I830LeaveVT(scrnIndex, 0);
 #ifdef XF86DRI_MM
-      if (pI830->directRenderingEnabled) {
+      if (pI830->directRendering != DRI_TYPE_NONE) {
  	 if (pI830->memory_manager != NULL) {
 	    drmMMUnlock(pI830->drmSubFD, DRM_BO_MEM_TT, 1);
 	 }
@@ -3287,7 +3338,8 @@ I830CloseScreen(int scrnIndex, ScreenPtr pScreen)
 
    i830_allocator_fini(pScrn);
 #ifdef XF86DRI
-   if (pI830->directRenderingOpen) {
+   if (pI830->directRenderingOpen &&
+       pI830->directRendering == DRI_TYPE_XF86DRI) {
 #ifdef DAMAGE
       if (pI830->pDamage) {
 	 PixmapPtr pPix = pScreen->GetScreenPixmap(pScreen);
@@ -3299,6 +3351,13 @@ I830CloseScreen(int scrnIndex, ScreenPtr pScreen)
 #endif
       pI830->directRenderingOpen = FALSE;
       I830DRICloseScreen(pScreen);
+   }
+#endif
+
+#ifdef DRI2
+   if (pI830->directRenderingOpen && pI830->directRendering == DRI_TYPE_DRI2) {
+      pI830->directRenderingOpen = FALSE;
+      I830DRI2CloseScreen(pScreen);
    }
 #endif
 

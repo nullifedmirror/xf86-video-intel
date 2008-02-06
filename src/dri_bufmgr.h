@@ -119,6 +119,9 @@ struct _dri_bufmgr {
    /** Reduces the refcount on the userspace mapping of the buffer object. */
    int (*bo_unmap)(dri_bo *buf);
 
+   /** Get the handle of the underlying DRM buffer object, if available . */
+   unsigned int (*bo_get_handle)(dri_bo *buf);
+
    /** Takes a reference on a fence object */
    void (*fence_reference)(dri_fence *fence);
 
@@ -191,6 +194,7 @@ void dri_bo_reference(dri_bo *bo);
 void dri_bo_unreference(dri_bo *bo);
 int dri_bo_map(dri_bo *buf, GLboolean write_enable);
 int dri_bo_unmap(dri_bo *buf);
+unsigned int dri_bo_get_handle(dri_bo *buf);
 void dri_fence_wait(dri_fence *fence);
 void dri_fence_reference(dri_fence *fence);
 void dri_fence_unreference(dri_fence *fence);

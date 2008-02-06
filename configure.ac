@@ -56,6 +56,11 @@ AC_ARG_ENABLE(dri, AC_HELP_STRING([--disable-dri],
               [DRI="$enableval"],
               [DRI=auto])
 
+AC_ARG_ENABLE(dri2, AC_HELP_STRING([--disable-dri2],
+                                    [Disable DRI2 support [[default=auto]]]),
+              [DRI="$enableval"],
+              [DRI=auto])
+
 AC_ARG_ENABLE(video-debug, AC_HELP_STRING([--enable-video-debug],
                                   [Enable video debugging support [[default=no]]]),
               [VIDEO_DEBUG="$enableval"],
@@ -105,6 +110,10 @@ if test x$DRI = xauto; then
         fi
 fi
 AC_MSG_RESULT([$DRI])
+
+if test "$DRI2" != no; then
+        AC_CHECK_FILE([${sdkdir}/dri2.h], [DRI2="yes"], [DRI2="no"])
+fi
 
 save_CFLAGS="$CFLAGS"
 CFLAGS="$XORG_CFLAGS"
@@ -202,6 +211,14 @@ if test "$DRI" = yes; then
 ])
 	CFLAGS="$save_CFLAGS"
 fi
+
+AM_CONDITIONAL(DRI2, test x$DRI2 = xyes)
+if test "$DRI2" = yes; then
+        PKG_CHECK_MODULES(DRI2, [libdrm >= 2.3.1])
+        AC_DEFINE(DRI2,1,[Enable DRI driver support])
+	AC_DEFINE(XF86DRI_MM,1,[Extended DRI memory management])
+fi
+
 
 AM_CONDITIONAL(VIDEO_DEBUG, test x$VIDEO_DEBUG = xyes)
 if test "$VIDEO_DEBUG" = yes; then

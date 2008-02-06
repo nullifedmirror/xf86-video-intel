@@ -57,31 +57,6 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define DRM_I830_GET_VBLANK_PIPE	  0x0e
 #define DRM_I830_HWS_PAGE_ADDR		  0x11
 
-
-typedef struct {
-   enum {
-      I830_INIT_DMA = 0x01,
-      I830_CLEANUP_DMA = 0x02,
-      I830_RESUME_DMA = 0x03
-   } func;
-   unsigned int mmio_offset;
-   int sarea_priv_offset;
-   unsigned int ring_start;
-   unsigned int ring_end;
-   unsigned int ring_size;
-   unsigned int front_offset;
-   unsigned int back_offset;
-   unsigned int depth_offset;
-   unsigned int w;
-   unsigned int h;
-   unsigned int pitch; /* Pitch of front buffer in units of pixels */
-   unsigned int pitch_bits;
-   unsigned int back_pitch;
-   unsigned int depth_pitch;
-   unsigned int cpp;
-   unsigned int chipset;
-} drmI830Init;
-
 typedef struct {
 	drmTextureRegion texList[I830_NR_TEX_REGIONS+1];
         int last_upload;	/* last time texture was uploaded */

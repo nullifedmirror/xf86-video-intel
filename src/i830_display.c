@@ -419,7 +419,7 @@ i830PipeSetBase(xf86CrtcPtr crtc, int x, int y)
     }
 
 #ifdef XF86DRI
-    if (pI830->directRenderingEnabled) {
+    if (pI830->directRendering == DRI_TYPE_XF86DRI) {
 	drmI830Sarea *sPriv = (drmI830Sarea *) DRIGetSAREAPrivate(pScrn->pScreen);
 
 	if (!sPriv)
@@ -770,7 +770,7 @@ i830_crtc_dpms(xf86CrtcPtr crtc, int mode)
     intel_crtc->dpms_mode = mode;
 
 #ifdef XF86DRI
-    if (pI830->directRenderingEnabled) {
+    if (pI830->directRendering == DRI_TYPE_XF86DRI) {
 	drmI830Sarea *sPriv = (drmI830Sarea *) DRIGetSAREAPrivate(pScrn->pScreen);
 	Bool enabled = crtc->enabled && mode != DPMSModeOff;
 
@@ -793,7 +793,10 @@ i830_crtc_dpms(xf86CrtcPtr crtc, int mode)
 		       "Can't update pipe %d in SAREA\n", pipe);
 	    break;
 	}
+    } else if (pI830->directRendering == DRI_TYPE_DRI2) {
+	I830DRISetVBlankInterrupt (pScrn, TRUE);
     }
+
 #endif
 }
 

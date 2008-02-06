@@ -361,7 +361,10 @@ i830_free_3d_memory(ScrnInfoPtr pScrn)
 {
     I830Ptr pI830 = I830PTR(pScrn);
 
-#ifdef XF86DRI
+#if defined(XF86DRI) || defined(DRI2)
+    if (pI830->directRendering == DRI_TYPE_DRI2)
+	return;
+
     i830_free_memory(pScrn, pI830->back_buffer);
     pI830->back_buffer = NULL;
     i830_free_memory(pScrn, pI830->third_buffer);
@@ -434,7 +437,7 @@ i830_allocator_init(ScrnInfoPtr pScrn, unsigned long offset, unsigned long size)
      * 5.4 or newer so we can rely on the lock being held after DRIScreenInit,
      * rather than after DRIFinishScreenInit.
      */
-    if (pI830->directRenderingEnabled && pI830->drmMinor >= 7 &&
+    if (pI830->directRendering != DRI_TYPE_NONE && pI830->drmMinor >= 7 &&
 	(dri_major > 5 || (dri_major == 5 && dri_minor >= 4)))
     {
 	int mmsize;
@@ -1391,7 +1394,7 @@ i830_allocate_2d_memory(ScrnInfoPtr pScrn)
 	return FALSE;
 
 #ifdef I830_USE_EXA
-    if (pI830->useEXA) {
+    if (pI830->useEXA && !pI830->use_ttm_batch) {
 	if (pI830->exa_offscreen == NULL) {
 	    /* Default EXA to having 3 screens worth of offscreen memory space
 	     * (for pixmaps).
@@ -1646,6 +1649,10 @@ i830_allocate_3d_memory(ScrnInfoPtr pScrn)
 	if (!i830_allocate_hwstatus(pScrn))
 	    return FALSE;
     }
+
+    /* DRI2 doesn't need pre-allocated backbuffer, so return here. */
+    if (pI830->directRendering == DRI_TYPE_DRI2)
+	return TRUE;
 
     if (!i830_allocate_backbuffer(pScrn, &pI830->back_buffer, "back buffer"))
 	return FALSE;

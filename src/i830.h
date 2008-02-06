@@ -87,6 +87,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #ifdef I830_USE_EXA
 #include "exa.h"
 Bool I830EXAInit(ScreenPtr pScreen);
+unsigned int I830EXAGetPixmapHandle(PixmapPtr pPix, unsigned int *flags);
 #define EXA_LINEAR_EXTRA	(64*1024)
 unsigned long long I830TexOffsetStart(PixmapPtr pPix);
 #endif
@@ -351,6 +352,12 @@ enum backlight_control {
     BCM_KERNEL,
 };
 
+enum dri_type {
+    DRI_TYPE_NONE,
+    DRI_TYPE_XF86DRI,
+    DRI_TYPE_DRI2
+};
+
 typedef struct _I830Rec {
    unsigned char *MMIOBase;
    unsigned char *GTTBase;
@@ -511,7 +518,7 @@ typedef struct _I830Rec {
    PixmapPtr texture_pixmaps[2];
 
    Bool directRenderingDisabled;	/* DRI disabled in PreInit. */
-   Bool directRenderingEnabled;		/* DRI enabled this generation. */
+   enum dri_type directRendering;	/* Type of DRI enabled this generation. */
 
 #ifdef XF86DRI
    Bool directRenderingOpen;
@@ -523,6 +530,11 @@ typedef struct _I830Rec {
    I830ConfigPrivPtr pVisualConfigsPriv;
    drm_handle_t buffer_map;
    drm_handle_t ring_map;
+
+    drm_hw_lock_t		*lock;
+    int				 lockRefCount;
+    int				 lockingContext;
+    drm_context_t		 context;
 #endif
 
    /* Broken-out options. */
@@ -715,6 +727,14 @@ extern void I830DRIUnlock(ScrnInfoPtr pScrn);
 extern Bool I830DRILock(ScrnInfoPtr pScrn);
 extern Bool I830DRISetVBlankInterrupt (ScrnInfoPtr pScrn, Bool on);
 Bool i830_update_dri_buffers(ScrnInfoPtr pScrn);
+#endif
+
+#ifdef DRI2
+extern void I830DRI2Prepare(ScreenPtr pScreen);
+extern void I830DRI2ScreenInit(ScreenPtr pScreen);
+extern void I830DRI2CloseScreen(ScreenPtr pScreen);
+extern void I830DRI2Lock(ScreenPtr pScrn);
+extern void I830DRI2Unlock(ScreenPtr pScrn);
 #endif
 
 unsigned long intel_get_pixmap_offset(PixmapPtr pPix);

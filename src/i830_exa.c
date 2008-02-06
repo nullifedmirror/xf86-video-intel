@@ -97,6 +97,26 @@ const int I830PatternROP[16] =
     ROP_1
 };
 
+static void dri2Lock(PixmapPtr pPixmap)
+{
+#ifdef DRI2
+    I830Ptr pI830 = I830PTR(xf86Screens[pPixmap->drawable.pScreen->myNum]);
+
+    if (pI830->directRendering == DRI_TYPE_DRI2)
+	I830DRI2Lock(pPixmap->drawable.pScreen);
+#endif
+}
+
+static void dri2Unlock(PixmapPtr pPixmap)
+{
+#ifdef DRI2
+    I830Ptr pI830 = I830PTR(xf86Screens[pPixmap->drawable.pScreen->myNum]);
+
+    if (pI830->directRendering == DRI_TYPE_DRI2)
+	I830DRI2Unlock(pPixmap->drawable.pScreen);
+#endif
+}
+
 /**
  * Returns whether a given pixmap is tiled or not.
  *
@@ -205,6 +225,9 @@ I830EXAPrepareSolid(PixmapPtr pPixmap, int alu, Pixel planemask, Pixel fg)
 	    break;
     }
     pI830->BR[16] = fg;
+
+    dri2Lock(pPixmap);
+
     return TRUE;
 }
 
@@ -252,6 +275,8 @@ I830EXADoneSolid(PixmapPtr pPixmap)
 
     I830Sync(pScrn);
 #endif
+
+    dri2Unlock(pPixmap);
 }
 
 /**
@@ -282,6 +307,9 @@ I830EXAPrepareCopy(PixmapPtr pSrcPixmap, PixmapPtr pDstPixmap, int xdir,
 	pI830->BR[13] |= ((1 << 25) | (1 << 24));
 	break;
     }
+
+    dri2Lock(pDstPixmap);
+
     return TRUE;
 }
 
@@ -349,6 +377,8 @@ I830EXADoneCopy(PixmapPtr pDstPixmap)
 
     I830Sync(pScrn);
 #endif
+
+    dri2Unlock(pDstPixmap);
 }
 
 #define xFixedToFloat(val) \
@@ -416,6 +446,22 @@ static void I830EXADestroyPixmap(ScreenPtr pScreen, void *driverPriv)
     xfree(driverPriv);
 }
 
+#define BUFFER_FLAG_TILED 0x0100
+
+unsigned int I830EXAGetPixmapHandle(PixmapPtr pPix, unsigned int *flags)
+{
+    struct i830_exa_pixmap_priv *driver_priv;
+
+    driver_priv = exaGetPixmapDriverPrivate(pPix);
+    if (!driver_priv)
+	    return 0;
+
+    if (i830_pixmap_tiled(pPix))
+	*flags = 0x0100;
+
+    return dri_bo_get_handle(driver_priv->bo);
+}
+
 static Bool I830EXAPixmapIsOffscreen(PixmapPtr pPix)
 {
     struct i830_exa_pixmap_priv *driver_priv;
@@ -449,18 +495,24 @@ static Bool I830EXAPrepareAccess(PixmapPtr pPix, int index)
     if (driver_priv->bo) {
 	mmDebug("mapping %p %d %dx%d\n", pPix, driver_priv->flags, pPix->drawable.width, pPix->drawable.height);
 
-	if ((driver_priv->flags & I830_EXA_PIXMAP_IS_MAPPED))
-	    return TRUE;
+	if (!(driver_priv->flags & I830_EXA_PIXMAP_IS_MAPPED)) {
+	    ret = dri_bo_map(driver_priv->bo, 1);
+	    if (ret)
+		return FALSE;
 
-	ret = dri_bo_map(driver_priv->bo, 1);
-	if (ret)
-	    return FALSE;
-
-	driver_priv->flags |= I830_EXA_PIXMAP_IS_MAPPED;
-	pPix->devPrivate.ptr = driver_priv->bo->virtual;
+	    driver_priv->flags |= I830_EXA_PIXMAP_IS_MAPPED;
+	    pPix->devPrivate.ptr = driver_priv->bo->virtual;
+	}
     }
 
+    dri2Lock(pPix);
+
     return TRUE;
+}
+
+static void I830ExaFinishAccess(PixmapPtr pPix, int index)
+{
+    dri2Unlock(pPix);
 }
 
 static Bool I830EXAModifyPixmapHeader(PixmapPtr pPixmap, int width, int height,
@@ -537,6 +589,7 @@ I830EXAInit(ScreenPtr pScreen)
     } else {
 	pI830->EXADriverPtr->flags = EXA_OFFSCREEN_PIXMAPS | EXA_HANDLES_PIXMAPS;
 	pI830->EXADriverPtr->PrepareAccess = I830EXAPrepareAccess;
+	pI830->EXADriverPtr->FinishAccess = I830ExaFinishAccess;
     }
 
     DPRINTF(PFX, "EXA Mem: memoryBase 0x%x, end 0x%x, offscreen base 0x%x, "

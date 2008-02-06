@@ -83,6 +83,12 @@ dri_bo_map(dri_bo *buf, GLboolean write_enable)
    return buf->bufmgr->bo_map(buf, write_enable);
 }
 
+unsigned int
+dri_bo_get_handle(dri_bo *buf)
+{
+   return buf->bufmgr->bo_get_handle(buf);
+}
+
 int
 dri_bo_unmap(dri_bo *buf)
 {
