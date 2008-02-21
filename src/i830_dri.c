@@ -1,4 +1,3 @@
-/* $xfree86: xc/programs/Xserver/hw/xfree86/drivers/i810/i830_dri.c,v 1.15 2003/06/18 13:14:17 dawes Exp $ */
 /**************************************************************************
 
 Copyright 2001 VA Linux Systems Inc., Fremont, California.
@@ -1860,8 +1859,6 @@ I830DRI2Lock(ScreenPtr pScreen)
     ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
     I830Ptr pI830 = I830PTR(pScrn);
 
-    ErrorF("taking lock\n");
-
     if (pI830->lockRefCount == 0) {
        DRM_LOCK(pI830->drmSubFD, pI830->lock, pI830->context, 0);
        pI830->lockingContext = pI830->context;
@@ -1881,8 +1878,6 @@ I830DRI2Unlock(ScreenPtr pScreen)
 {
     ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
     I830Ptr pI830 = I830PTR(pScrn);
-
-    ErrorF("releasing lock\n");
 
     if (pI830 == NULL)
 	return;
