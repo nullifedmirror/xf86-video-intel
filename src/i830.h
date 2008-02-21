@@ -64,6 +64,10 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "xf86RandR12.h"
 
 #include "xorg-server.h"
+/* The X Server tries to disable our assert()s. Knock that off. */
+#undef NDEBUG
+#include <assert.h>
+
 #ifdef XSERVER_LIBPCIACCESS
 #include <pciaccess.h>
 #endif
@@ -531,10 +535,11 @@ typedef struct _I830Rec {
    drm_handle_t buffer_map;
    drm_handle_t ring_map;
 
-    drm_hw_lock_t		*lock;
-    int				 lockRefCount;
-    int				 lockingContext;
-    drm_context_t		 context;
+   drm_hw_lock_t		*lock;
+   int				 lockRefCount;
+   int				 lockingContext;
+   drm_context_t		 context;
+   int irq;
 #endif
 
    /* Broken-out options. */
@@ -653,7 +658,6 @@ typedef struct _I830Rec {
 #define I830_SELECT_THIRD	3
 
 #define I830_EXA_PIXMAP_IS_FRONTBUFFER 1
-#define I830_EXA_PIXMAP_IS_MAPPED 2
 
 /* i830 pixmap private for TTM */
 struct i830_exa_pixmap_priv {
@@ -726,7 +730,9 @@ extern Bool I830DRIFinishScreenInit(ScreenPtr pScreen);
 extern void I830DRIUnlock(ScrnInfoPtr pScrn);
 extern Bool I830DRILock(ScrnInfoPtr pScrn);
 extern Bool I830DRISetVBlankInterrupt (ScrnInfoPtr pScrn, Bool on);
-Bool i830_update_dri_buffers(ScrnInfoPtr pScrn);
+extern Bool i830_update_dri_buffers(ScrnInfoPtr pScrn);
+extern Bool I830DRISetHWS(ScrnInfoPtr pScrn);
+extern Bool I830DRIInstIrqHandler(ScrnInfoPtr pScrn);
 #endif
 
 #ifdef DRI2
@@ -835,6 +841,7 @@ void i965_composite(PixmapPtr pDst, int srcX, int srcY,
 		    int maskX, int maskY, int dstX, int dstY, int w, int h);
 void i965_done_composite(PixmapPtr pDst);
 int i965_init_exa_state(ScrnInfoPtr pScrn);
+void i965_exastate_flush(struct i965_exastate_buffer *state);
 void
 i830_get_transformed_coordinates(int x, int y, PictTransformPtr transform,
 				 float *x_out, float *y_out);

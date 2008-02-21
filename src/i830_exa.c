@@ -175,16 +175,20 @@ i830_exa_pixmap_is_offscreen(PixmapPtr pPixmap)
  * @pScreen: current screen
  * @marker: marker command to wait for
  *
- * Wait for the command specified by @marker to finish, then return.  We don't
- * actually do marker waits, though we might in the future.  For now, just
- * wait for a full idle.
+ * Wait for the command specified by @marker to finish, then return.
+ *
+ * Since this is only called through EXA's PrepareAccess/FinishAccess path
+ * and dri_bo_map handles waiting when necessary, we no longer need to
+ * implement this one.
  */
 static void
 I830EXASync(ScreenPtr pScreen, int marker)
 {
     ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
 
+#if 0
     I830Sync(pScrn);
+#endif
 }
 
 /**
@@ -435,12 +439,7 @@ static void *I830EXACreatePixmap(ScreenPtr pScreen, int size, int align)
 
 static void I830EXADestroyPixmap(ScreenPtr pScreen, void *driverPriv)
 {
-    ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
-    I830Ptr pI830 = I830PTR(pScrn);
     struct i830_exa_pixmap_priv *driver_priv = driverPriv;
-
-    if (driver_priv->flags & I830_EXA_PIXMAP_IS_MAPPED)
-        dri_bo_unmap(driver_priv->bo);
 
     dri_bo_unreference(driver_priv->bo);
     xfree(driverPriv);
@@ -488,21 +487,18 @@ static Bool I830EXAPrepareAccess(PixmapPtr pPix, int index)
     if (!driver_priv)
 	return FALSE;
 
-    /* TODO : make this more conditional */
-    intelddx_batchbuffer_flush(pI830->batch);
-    dri_fence_wait(pI830->batch->last_fence);
-
     if (driver_priv->bo) {
 	mmDebug("mapping %p %d %dx%d\n", pPix, driver_priv->flags, pPix->drawable.width, pPix->drawable.height);
 
-	if (!(driver_priv->flags & I830_EXA_PIXMAP_IS_MAPPED)) {
-	    ret = dri_bo_map(driver_priv->bo, 1);
-	    if (ret)
-		return FALSE;
+	intelddx_batchbuffer_flush(pI830->batch);
 
-	    driver_priv->flags |= I830_EXA_PIXMAP_IS_MAPPED;
-	    pPix->devPrivate.ptr = driver_priv->bo->virtual;
+	ret = dri_bo_map(driver_priv->bo, TRUE);
+	if (ret) {
+	    FatalError("Failed to map pixmap: %s\n", strerror(-ret));
+	    return FALSE;
 	}
+
+	pPix->devPrivate.ptr = driver_priv->bo->virtual;
     }
 
     dri2Lock(pPix);
@@ -510,8 +506,29 @@ static Bool I830EXAPrepareAccess(PixmapPtr pPix, int index)
     return TRUE;
 }
 
-static void I830ExaFinishAccess(PixmapPtr pPix, int index)
+static void I830EXAFinishAccess(PixmapPtr pPix, int index)
 {
+    struct i830_exa_pixmap_priv *driver_priv;
+    int ret;
+
+    driver_priv = exaGetPixmapDriverPrivate(pPix);
+
+    if (!driver_priv)
+	return;
+
+    if (driver_priv->bo) {
+	mmDebug("numapping %p %d %dx%d\n", pPix, driver_priv->flags, pPix->drawable.width, pPix->drawable.height);
+
+	ret = dri_bo_unmap(driver_priv->bo);
+	if (ret) {
+	    FatalError("Failed to unmap pixmap: %s\n", strerror(-ret));
+	    dri2Unlock(pPix);
+	    return;
+	}
+
+	pPix->devPrivate.ptr = driver_priv->bo->virtual;
+    }
+
     dri2Unlock(pPix);
 }
 
@@ -589,7 +606,7 @@ I830EXAInit(ScreenPtr pScreen)
     } else {
 	pI830->EXADriverPtr->flags = EXA_OFFSCREEN_PIXMAPS | EXA_HANDLES_PIXMAPS;
 	pI830->EXADriverPtr->PrepareAccess = I830EXAPrepareAccess;
-	pI830->EXADriverPtr->FinishAccess = I830ExaFinishAccess;
+	pI830->EXADriverPtr->FinishAccess = I830EXAFinishAccess;
     }
 
     DPRINTF(PFX, "EXA Mem: memoryBase 0x%x, end 0x%x, offscreen base 0x%x, "

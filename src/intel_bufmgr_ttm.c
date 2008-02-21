@@ -101,6 +101,7 @@ typedef struct _dri_bo_ttm {
     int refcount;
     drmBO drm_bo;
     const char *name;
+    unsigned int map_count;
 
     uint64_t last_flags;
 
@@ -185,6 +186,8 @@ intel_add_validate_buffer(dri_bo *buf,
 	drmBOUnmap(bufmgr_ttm->fd, &ttm_buf->drm_bo);
 	ttm_buf->delayed_unmap = GL_FALSE;
     }
+
+    assert(ttm_buf->map_count == 0);
 
     if (ttm_buf->validate_index == -1) {
 	struct intel_validate_entry *entry;
@@ -369,6 +372,7 @@ dri_ttm_alloc(dri_bufmgr *bufmgr, const char *name,
     ttm_buf->shared = GL_FALSE;
     ttm_buf->delayed_unmap = GL_FALSE;
     ttm_buf->validate_index = -1;
+    ttm_buf->map_count = 0;
 
     DBG("bo_create: %p (%s) %ldb\n", &ttm_buf->bo, ttm_buf->name, size);
 
@@ -424,6 +428,7 @@ intel_ttm_bo_create_from_handle(dri_bufmgr *bufmgr, const char *name,
     ttm_buf->shared = GL_TRUE;
     ttm_buf->delayed_unmap = GL_FALSE;
     ttm_buf->validate_index = -1;
+    ttm_buf->map_count = 0;
 
     DBG("bo_create_from_handle: %p %08x (%s)\n",
 	&ttm_buf->bo, handle, ttm_buf->name);
@@ -472,6 +477,8 @@ dri_ttm_bo_unreference(dri_bo *buf)
 	    }
 	}
 
+	assert(ttm_buf->map_count == 0);
+
 	if (ttm_buf->delayed_unmap)
 	   drmBOUnmap(bufmgr_ttm->fd, &ttm_buf->drm_bo);
 
@@ -500,9 +507,10 @@ dri_ttm_bo_map(dri_bo *buf, GLboolean write_enable)
     if (write_enable)
 	flags |= DRM_BO_FLAG_WRITE;
 
-    assert(buf->virtual == NULL);
-
     DBG("bo_map: %p (%s)\n", &ttm_buf->bo, ttm_buf->name);
+
+    if (ttm_buf->map_count++ != 0)
+	return 0;
 
     /* XXX: What about if we're upgrading from READ to WRITE? */
     if (ttm_buf->delayed_unmap) {
@@ -524,9 +532,11 @@ dri_ttm_bo_unmap(dri_bo *buf)
 
     bufmgr_ttm = (dri_bufmgr_ttm *)buf->bufmgr;
 
-    assert(buf->virtual != NULL);
-
     DBG("bo_unmap: %p (%s)\n", &ttm_buf->bo, ttm_buf->name);
+
+    if (--ttm_buf->map_count > 0)
+	return 0;
+    assert(ttm_buf->map_count >= 0);
 
     if (!ttm_buf->shared) {
 	ttm_buf->saved_virtual = buf->virtual;

@@ -69,6 +69,9 @@ static i830_quirk i830_quirk_list[] = {
     /* Apple Mac mini has no lvds, but macbook pro does */
     { PCI_CHIP_I945_GM, 0x8086, 0x7270, quirk_mac_mini },
 
+    /* Clevo M720R has no tv output */
+    { PCI_CHIP_I965_GM, 0x1558, 0x0721, quirk_ignore_tv },
+
     /* Dell Latitude X1 */
     { PCI_CHIP_I915_GM, 0x1028, 0x01a3, quirk_ignore_tv },
     /* Dell XPS 1330 */
@@ -91,6 +94,8 @@ static i830_quirk i830_quirk_list[] = {
 
     /* Samsung Q35 has no TV output */
     { PCI_CHIP_I945_GM, 0x144d, 0xc504, quirk_ignore_tv },
+    /* Samsung Q45 has no TV output */
+    { PCI_CHIP_I965_GM, 0x144d, 0xc510, quirk_ignore_tv },
 
     /* Dell Inspiron 510m needs pipe A force quirk */
     { PCI_CHIP_I855_GM, 0x1028, 0x0164, quirk_pipea_force },
