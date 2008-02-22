@@ -1861,7 +1861,7 @@ i830_refresh_ring(ScrnInfoPtr pScrn)
    /* If we're reaching RefreshRing as a result of grabbing the DRI lock
     * before we've set up the ringbuffer, don't bother.
     */
-   if (pI830->LpRing->mem == NULL)
+   if (!pI830->LpRing || !pI830->LpRing->mem)
        return;
 
    pI830->LpRing->head = INREG(LP_RING + RING_HEAD) & I830_HEAD_MASK;
