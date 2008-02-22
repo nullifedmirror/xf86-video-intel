@@ -3170,15 +3170,6 @@ I830EnterVT(int scrnIndex, int flags)
 
    DPRINTF(PFX, "Enter VT\n");
 
-   /*
-    * Only save state once per server generation since that's what most
-    * drivers do.  Could change this to save state at each VT enter.
-    */
-   if (pI830->SaveGeneration != serverGeneration) {
-      pI830->SaveGeneration = serverGeneration;
-      SaveHWState(pScrn);
-   }
-
    pI830->leaving = FALSE;
 
 #ifdef XF86DRI_MM
