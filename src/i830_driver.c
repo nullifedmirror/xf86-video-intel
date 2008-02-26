@@ -3222,10 +3222,8 @@ I830EnterVT(int scrnIndex, int flags)
 
       if (pI830->starting) {
 	 if (HWS_NEED_GFX(pI830) && !I830DRISetHWS(pScrn)) {
-	    if (!I830SetHWS(pScrn, pI830->hw_status->offset)) {
-	       pI830->directRendering = DRI_TYPE_NONE;
-	       return FALSE;
-	    }
+	     pI830->directRendering = DRI_TYPE_NONE;
+	     return FALSE;
 	 }
 
 	 if (!I830DRIInstIrqHandler(pScrn)) {
