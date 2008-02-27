@@ -497,7 +497,7 @@ I830DetectMemory(ScrnInfoPtr pScrn)
    range = gtt_size + 4;
 
    if (IS_I85X(pI830) || IS_I865G(pI830) || IS_I9XX(pI830)) {
-      switch (gmch_ctrl & I830_GMCH_GMS_MASK) {
+      switch (gmch_ctrl & I855_GMCH_GMS_MASK) {
       case I855_GMCH_GMS_STOLEN_1M:
 	 memsize = MB(1) - KB(range);
 	 break;
@@ -1942,6 +1942,7 @@ SaveHWState(ScrnInfoPtr pScrn)
        pI830->saveFBC_LL_BASE = INREG(FBC_LL_BASE);
        pI830->saveFBC_CONTROL2 = INREG(FBC_CONTROL2);
        pI830->saveFBC_CONTROL = INREG(FBC_CONTROL);
+       pI830->saveFBC_FENCE_OFF = INREG(FBC_FENCE_OFF);
    }
 
    /* Save video mode information for native mode-setting. */
@@ -2129,12 +2130,14 @@ RestoreHWState(ScrnInfoPtr pScrn)
     * enabled if pipe A is actually on (otherwise we have a bug in the initial
     * state).
     */
-   if (pI830->saveDSPACNTR & DISPPLANE_SEL_PIPE_A) {
+   if ((pI830->saveDSPACNTR & DISPPLANE_SEL_PIPE_MASK) ==
+       DISPPLANE_SEL_PIPE_A) {
        OUTREG(DSPACNTR, pI830->saveDSPACNTR);
        OUTREG(DSPABASE, INREG(DSPABASE));
        i830WaitForVblank(pScrn);
    }
-   if (pI830->saveDSPBCNTR & DISPPLANE_SEL_PIPE_A) {
+   if ((pI830->saveDSPBCNTR & DISPPLANE_SEL_PIPE_MASK) ==
+       DISPPLANE_SEL_PIPE_A) {
        OUTREG(DSPBCNTR, pI830->saveDSPBCNTR);
        OUTREG(DSPBBASE, INREG(DSPBBASE));
        i830WaitForVblank(pScrn);
@@ -2186,12 +2189,14 @@ RestoreHWState(ScrnInfoPtr pScrn)
        * Note that pipe B may be disabled, and in that case, the plane
        * should also be disabled or we must have had a bad initial state.
        */
-      if (pI830->saveDSPACNTR & DISPPLANE_SEL_PIPE_B) {
+      if ((pI830->saveDSPACNTR & DISPPLANE_SEL_PIPE_MASK) ==
+	  DISPPLANE_SEL_PIPE_B) {
 	  OUTREG(DSPACNTR, pI830->saveDSPACNTR);
 	  OUTREG(DSPABASE, INREG(DSPABASE));
 	  i830WaitForVblank(pScrn);
       }
-      if (pI830->saveDSPBCNTR & DISPPLANE_SEL_PIPE_B) {
+      if ((pI830->saveDSPBCNTR & DISPPLANE_SEL_PIPE_MASK) ==
+	  DISPPLANE_SEL_PIPE_B) {
 	  OUTREG(DSPBCNTR, pI830->saveDSPBCNTR);
 	  OUTREG(DSPBBASE, INREG(DSPBBASE));
 	  i830WaitForVblank(pScrn);
@@ -2222,6 +2227,7 @@ RestoreHWState(ScrnInfoPtr pScrn)
    if (pI830->fb_compression) {
        OUTREG(FBC_CFB_BASE, pI830->saveFBC_CFB_BASE);
        OUTREG(FBC_LL_BASE, pI830->saveFBC_LL_BASE);
+       OUTREG(FBC_FENCE_OFF, pI830->saveFBC_FENCE_OFF);
        OUTREG(FBC_CONTROL2, pI830->saveFBC_CONTROL2);
        OUTREG(FBC_CONTROL, pI830->saveFBC_CONTROL);
    }

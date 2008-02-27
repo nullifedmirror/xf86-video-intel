@@ -635,6 +635,7 @@ typedef struct _I830Rec {
    CARD32 saveFBC_LL_BASE;
    CARD32 saveFBC_CONTROL2;
    CARD32 saveFBC_CONTROL;
+   CARD32 saveFBC_FENCE_OFF;
 
    enum last_3d *last_3d;
 
@@ -884,6 +885,7 @@ extern const int I830CopyROP[16];
 #define QUIRK_IGNORE_LVDS		0x00000002
 #define QUIRK_IGNORE_MACMINI_LVDS 	0x00000004
 #define QUIRK_PIPEA_FORCE		0x00000008
+#define QUIRK_IVCH_NEED_DVOB		0x00000010
 extern void i830_fixup_devices(ScrnInfoPtr);
 
 #include "intel_batchbuffer.h"
