@@ -116,9 +116,11 @@ intel_drv_la_SOURCES = \
 	 i830_render.c \
 	 i915_render.c \
 	 i965_render.c \
+	 i965_render.h \
 	 dri_bufmgr.c \
          dri_bufmgr.h \
-         intel_bufmgr_ttm.c \
+	 dri_bufmgr_remap.h \
+	 intel_bufmgr_ttm.c \
          intel_bufmgr_ttm.h \
          intel_batchbuffer.c \
          intel_batchbuffer.h
