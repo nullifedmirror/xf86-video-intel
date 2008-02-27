@@ -1795,8 +1795,10 @@ I830DRILock(ScrnInfoPtr pScrn)
       return FALSE;
    else if (pI830->directRendering == DRI_TYPE_XF86DRI)
       DRILock(screenInfo.screens[pScrn->scrnIndex], 0);
+#ifdef DRI2
    else if (pI830->directRendering == DRI_TYPE_DRI2)
       I830DRI2Lock(screenInfo.screens[pScrn->scrnIndex]);
+#endif
 
    pI830->LockHeld = 1;
    i830_refresh_ring(pScrn);
@@ -1813,12 +1815,15 @@ I830DRIUnlock(ScrnInfoPtr pScrn)
       return;
    else if (pI830->directRendering == DRI_TYPE_XF86DRI)
       DRIUnlock(screenInfo.screens[pScrn->scrnIndex]);
+#ifdef DRI2
    else if (pI830->directRendering == DRI_TYPE_DRI2)
       I830DRI2Unlock(screenInfo.screens[pScrn->scrnIndex]);
+#endif
 
    pI830->LockHeld = 0;
 }
 
+#ifdef DRI2
 void
 I830DRI2Lock(ScreenPtr pScreen)
 {
@@ -2028,3 +2033,4 @@ I830DRI2CloseScreen(ScreenPtr pScreen)
     DRI2CloseScreen(pScreen);
     drmClose(pI830->drmSubFD);
 }
+#endif
