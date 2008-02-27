@@ -2493,6 +2493,14 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
    }
 #endif
 
+   /* The batchbuffer branch won't work without a bufmgr, so fail now
+    * if neither XF86DRI or DRI2 managed to set that up. */
+   if (pI830->bufmgr == NULL) {
+      xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
+		 "Couldn't initialize TTM bufmgr\n");
+      return FALSE;
+   }
+
    /* Set up our video memory allocator for the chosen videoRam */
    if (!i830_allocator_init(pScrn, 0, pScrn->videoRam * KB(1))) {
       xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
