@@ -123,7 +123,10 @@ intel_drv_la_SOURCES = \
 	 intel_bufmgr_ttm.c \
          intel_bufmgr_ttm.h \
          intel_batchbuffer.c \
-         intel_batchbuffer.h
+         intel_batchbuffer.h \
+	 drmmode_display.c \
+	 drmmode_display.h
+	
 
 INTEL_G4A =				\
 	packed_yuv_sf.g4a		\

@@ -202,6 +202,10 @@ if test "$DRI" = yes; then
 
 	save_CFLAGS="$CFLAGS"
 	CFLAGS="$XORG_CFLAGS $DRI_CFLAGS"
+	AC_CHECK_HEADER(xf86drmMode.h,[DRM_MODE=yes],[DRM_MODE=no],[#include "stdint.h"])
+	if test "x$DRM_MODE" = xyes; then
+		AC_DEFINE(XF86DRM_MODE,1,[DRM kernel modesetting])
+	fi
 	AC_CHECK_TYPE(drm_i915_flip_t,
 		      [AC_DEFINE(HAVE_I915_FLIP, 1,
 			         [Have drm_i915_flip_t and related definitions])],

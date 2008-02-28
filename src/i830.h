@@ -86,7 +86,11 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #ifdef DAMAGE
 #include "damage.h"
 #endif
+#include "drmmode_display.h"
 #endif
+
+
+
 
 #ifdef I830_USE_EXA
 #include "exa.h"
@@ -199,6 +203,7 @@ struct _i830_memory {
 #ifdef XF86DRI_MM
     drmBO bo;
     Bool lifetime_fixed_offset;
+  Bool need_vram;
 #endif
 };
 
@@ -547,10 +552,6 @@ typedef struct _I830Rec {
 
    Bool StolenOnly;
 
-   Bool swfSaved;
-   CARD32 saveSWF0;
-   CARD32 saveSWF4;
-
    Bool checkDevices;
 
    /* Driver phase/state information */
@@ -571,6 +572,10 @@ typedef struct _I830Rec {
    int ddc2;
 
    enum backlight_control backlight_control_method;
+
+   Bool swfSaved;
+   CARD32 saveSWF0;
+   CARD32 saveSWF4;
 
    CARD32 saveDSPACNTR;
    CARD32 saveDSPBCNTR;
@@ -637,11 +642,11 @@ typedef struct _I830Rec {
    CARD32 saveFBC_CONTROL;
    CARD32 saveFBC_FENCE_OFF;
 
-   enum last_3d *last_3d;
-
    /** Enables logging of debug output related to mode switching. */
    Bool debug_modes;
    unsigned int quirk_flag;
+
+   enum last_3d *last_3d;
 
    /* batchbuffer support */
    struct i965_exastate_buffer *exa965;
@@ -649,6 +654,12 @@ typedef struct _I830Rec {
    dri_bufmgr *bufmgr;
    unsigned int maxBatchSize;
    Bool use_ttm_batch;
+
+   int use_drm_mode;
+#ifdef XF86DRM_MODE
+   drmmode_rec drmmode;
+   int drm_mm_init;
+#endif
 } I830Rec;
 
 #define I830PTR(p) ((I830Ptr)((p)->driverPrivate))
@@ -742,6 +753,10 @@ extern void I830DRI2ScreenInit(ScreenPtr pScreen);
 extern void I830DRI2CloseScreen(ScreenPtr pScreen);
 extern void I830DRI2Lock(ScreenPtr pScrn);
 extern void I830DRI2Unlock(ScreenPtr pScrn);
+#endif
+
+#ifdef XF86DRI
+extern void I830InitBufMgr(ScrnInfoPtr pScrn);
 #endif
 
 unsigned long intel_get_pixmap_offset(PixmapPtr pPix);

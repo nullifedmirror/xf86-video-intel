@@ -177,10 +177,12 @@ I830InitDma(ScrnInfoPtr pScrn)
 
    memset(&info, 0, sizeof(info));
    info.func = I915_INIT_DMA;
-
-   info.ring_start = ring->mem->offset + pI830->LinearAddr;
-   info.ring_end = ring->mem->end + pI830->LinearAddr;
-   info.ring_size = ring->mem->size;
+   
+   if (!pI830->use_drm_mode) {
+       info.ring_start = ring->mem->offset + pI830->LinearAddr;
+       info.ring_end = ring->mem->end + pI830->LinearAddr;
+       info.ring_size = ring->mem->size;
+   }
 
    info.mmio_offset = (unsigned int)pI830DRI->regs;
 
@@ -516,16 +518,13 @@ I830CheckDRIAvailable(ScrnInfoPtr pScrn)
    return TRUE;
 }
 
-static void
-I830InitBufMgr(ScreenPtr pScreen)
+void
+I830InitBufMgr(ScrnInfoPtr pScrn)
 {
-   ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
    I830Ptr pI830 = I830PTR(pScrn);
 
-   if (pI830->drmMinor < 11) {
-   	pI830->use_ttm_batch = FALSE;
-	return;
-   }
+   if (pI830->bufmgr)
+       return;
 
    /* 865G appears to have a problem with large batchbuffer sizes,
     * according to comments in Mesa code. It fixes problems on the hardware.
@@ -545,6 +544,7 @@ I830InitBufMgr(ScreenPtr pScreen)
    pI830->batch = intelddx_batchbuffer_alloc(pScrn);
    pI830->use_ttm_batch = TRUE;
 
+   drmmode_set_bufmgr(pScrn, &pI830->drmmode, pI830->bufmgr);
 }
 
 Bool
@@ -777,7 +777,11 @@ I830DRIScreenInit(ScreenPtr pScreen)
       }
    }
 
-   I830InitBufMgr(pScreen);
+   if (pI830->drmMinor < 11) {
+     pI830->use_ttm_batch = FALSE;
+   } else {
+     I830InitBufMgr(pScrn);
+   }
    return TRUE;
 }
 
@@ -823,28 +827,31 @@ I830DRIDoMappings(ScreenPtr pScreen)
    drmI830Sarea *sarea = (drmI830Sarea *) DRIGetSAREAPrivate(pScreen);
 
    DPRINTF(PFX, "I830DRIDoMappings\n");
-   pI830DRI->regsSize = I830_REG_SIZE;
-   if (drmAddMap(pI830->drmSubFD, (drm_handle_t)pI830->MMIOAddr,
-		 pI830DRI->regsSize, DRM_REGISTERS, 0,
-		 (drmAddress) &pI830DRI->regs) < 0) {
-      xf86DrvMsg(pScreen->myNum, X_ERROR, "[drm] drmAddMap(regs) failed\n");
-      DRICloseScreen(pScreen);
-      return FALSE;
-   }
-   xf86DrvMsg(pScreen->myNum, X_INFO, "[drm] Registers = 0x%08x\n",
-	      (int)pI830DRI->regs);
 
-   if (drmAddMap(pI830->drmSubFD,
-		 (drm_handle_t)pI830->LpRing->mem->offset + pI830->LinearAddr,
-		 pI830->LpRing->mem->size, DRM_AGP, 0,
-		 (drmAddress) &pI830->ring_map) < 0) {
-      xf86DrvMsg(pScreen->myNum, X_ERROR,
-		 "[drm] drmAddMap(ring_map) failed. Disabling DRI\n");
-      DRICloseScreen(pScreen);
-      return FALSE;
+   if (!pI830->use_drm_mode) {
+       pI830DRI->regsSize = I830_REG_SIZE;
+       if (drmAddMap(pI830->drmSubFD, (drm_handle_t)pI830->MMIOAddr,
+		     pI830DRI->regsSize, DRM_REGISTERS, 0,
+		     (drmAddress) &pI830DRI->regs) < 0) {
+	   xf86DrvMsg(pScreen->myNum, X_ERROR, "[drm] drmAddMap(regs) failed\n");
+	   DRICloseScreen(pScreen);
+	   return FALSE;
+       }
+       xf86DrvMsg(pScreen->myNum, X_INFO, "[drm] Registers = 0x%08x\n",
+		(int)pI830DRI->regs);
+
+       if (drmAddMap(pI830->drmSubFD,
+		     (drm_handle_t)pI830->LpRing->mem->offset + pI830->LinearAddr,
+		     pI830->LpRing->mem->size, DRM_AGP, 0,
+		     (drmAddress) &pI830->ring_map) < 0) {
+	   xf86DrvMsg(pScreen->myNum, X_ERROR,
+		      "[drm] drmAddMap(ring_map) failed. Disabling DRI\n");
+	   DRICloseScreen(pScreen);
+	   return FALSE;
+       }
+       xf86DrvMsg(pScreen->myNum, X_INFO, "[drm] ring buffer = 0x%08x\n",
+		  (int)pI830->ring_map);
    }
-   xf86DrvMsg(pScreen->myNum, X_INFO, "[drm] ring buffer = 0x%08x\n",
-	      (int)pI830->ring_map);
 
    if (!I830InitDma(pScrn)) {
       DRICloseScreen(pScreen);
@@ -1931,9 +1938,11 @@ I830DRI2Prepare(ScreenPtr pScreen)
     xf86DrvMsg(pScrn->scrnIndex, X_INFO,
 	       "[DRI2] Opened DRM device successfully\n");
 
-    I830InitBufMgr(pScreen);
-    if (!pI830->use_ttm_batch)
-	return;
+    if (pI830->drmMinor < 11) {
+      pI830->use_ttm_batch = FALSE;
+    } else {
+      I830InitBufMgr(pScrn);
+    }
 
     pI830->directRendering = DRI_TYPE_DRI2;
 }
@@ -1998,9 +2007,11 @@ I830DRI2ScreenInit(ScreenPtr pScreen)
 
     memset(&info, 0, sizeof(info));
     info.func = I915_INIT_DMA2;
-    info.ring_start = ring->mem->offset + pI830->LinearAddr;
-    info.ring_end = ring->mem->end + pI830->LinearAddr;
-    info.ring_size = ring->mem->size;
+    if (!pI830->use_drm_mode) {
+	info.ring_start = ring->mem->offset + pI830->LinearAddr;
+	info.ring_end = ring->mem->end + pI830->LinearAddr;
+	info.ring_size = ring->mem->size;
+    }
     info.mmio_offset = 0;
     info.sarea_priv_offset = 0;
     info.sarea_handle = sarea_handle;
