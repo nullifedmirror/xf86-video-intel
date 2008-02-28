@@ -2523,6 +2523,7 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
    }
 
    if (pI830->use_drm_mode) {
+#ifdef XF86DRM_MODE
        uint64_t size;
        int ret;
        ret = drmMMInfo(pI830->drmSubFD, DRM_BO_MEM_VRAM, &size);
@@ -2544,6 +2545,7 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
        pScrn->videoRam = (size * GTT_PAGE_SIZE) / KB(1);
        xf86DrvMsg(pScrn->scrnIndex, X_INFO,
 		  "Kernel AGP allocator is %dkb\n", pScrn->videoRam);
+#endif
    } else {
        /* Limit videoRam to how much we might be able to allocate from AGP */
        sys_mem = I830CheckAvailableMemory(pScrn);

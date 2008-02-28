@@ -543,8 +543,9 @@ I830InitBufMgr(ScrnInfoPtr pScrn)
 	return;
    pI830->batch = intelddx_batchbuffer_alloc(pScrn);
    pI830->use_ttm_batch = TRUE;
-
+#ifdef XF86DRM_MODE
    drmmode_set_bufmgr(pScrn, &pI830->drmmode, pI830->bufmgr);
+#endif
 }
 
 Bool
