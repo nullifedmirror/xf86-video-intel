@@ -263,7 +263,7 @@ drmmode_crtc_shadow_allocate(xf86CrtcPtr crtc, int width, int height)
 	dri_bo_map(drmmode_crtc->rotate_bo, 1);
 
 	ret = drmModeAddFB(drmmode->fd, width, height, crtc->scrn->depth,
-			   crtc->scrn->depth, rotate_pitch, dri_bo_get_kernel_bo_ptr(drmmode_crtc->rotate_bo), &drmmode_crtc->rotate_fb_id);
+			   crtc->scrn->depth, rotate_pitch, dri_bo_get_handle(drmmode_crtc->rotate_bo), &drmmode_crtc->rotate_fb_id);
 	if (ret) {
 		ErrorF("failed to add rotate fb\n");
 	}
@@ -347,7 +347,6 @@ drmmode_crtc_init(ScrnInfoPtr pScrn, drmmode_ptr drmmode, int num)
 {
 	xf86CrtcPtr crtc;
 	drmmode_crtc_private_ptr drmmode_crtc;
-	int i;
 	int cursor_size = 64 * 64 * 4;
 	uint32_t mask;
 	int ret;
@@ -497,13 +496,9 @@ const char *output_names[] = { "None",
 static void
 drmmode_output_init(ScrnInfoPtr pScrn, drmmode_ptr drmmode, int num)
 {
-	xf86CrtcConfigPtr	config = XF86_CRTC_CONFIG_PTR (pScrn);
 	xf86OutputPtr output;
 	drmModeOutputPtr koutput;
 	drmmode_output_private_ptr drmmode_output;
-	int i, c;
-	int possible_crtcs = 0;
-	int possible_clones = 0;
 	char name[32];
 
 	koutput = drmModeGetOutput(drmmode->fd, drmmode->mode_res->outputs[num]);
@@ -587,7 +582,7 @@ void drmmode_set_fb(ScrnInfoPtr pScrn, drmmode_ptr drmmode, int width, int heigh
 	int ret;
 
 	ret = drmModeAddFB(drmmode->fd, width, height, pScrn->depth,
-			   pScrn->depth, pitch, bo, &drmmode->fb_id);
+			   pScrn->depth, pitch, bo->handle, &drmmode->fb_id);
 
 	if (ret) {
 		ErrorF("Failed to add fb\n");

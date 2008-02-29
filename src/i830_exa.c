@@ -543,6 +543,18 @@ static Bool I830EXAModifyPixmapHeader(PixmapPtr pPixmap, int width, int height,
 
     driver_priv = exaGetPixmapDriverPrivate(pPixmap);
 
+    if (!driver_priv)
+      return FALSE;
+
+    if (drmmode_is_rotate_pixmap(pScrn, pPixData, &driver_priv->bo)) {
+	ErrorF("yes a rotate pixmap landed here %08x\n", driver_priv->bo);
+	/* this is a rotate pixmap */
+	dri_bo_unmap(driver_priv->bo);
+	dri_bo_reference(driver_priv->bo);
+        miModifyPixmapHeader(pPixmap, width, height, depth,
+			     bitsPerPixel, devKind, NULL);
+    }
+
     if (pPixData == pI830->FbBase + pScrn->fbOffset) {
 	/* this is the front buffer pixmap so set it up as such..*/
         driver_priv->flags |= I830_EXA_PIXMAP_IS_FRONTBUFFER;
