@@ -148,7 +148,11 @@ I915DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
 
       OUT_BATCH(_3DSTATE_MAP_STATE | 3);
       OUT_BATCH(0x00000001);	/* texture map #1 */
-      OUT_BATCH(pPriv->YBuf0offset);
+      if (pI830->use_ttm_batch) {
+	  OUT_RELOC((dri_bo *)pPriv->buf, DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ, pPriv->YBuf0offset);
+      } else {
+	  OUT_BATCH(pPriv->YBuf0offset);
+      }
       ms3 = MAPSURF_422 | MS3_USE_FENCE_REGS;
       switch (id) {
       case FOURCC_YUY2:
@@ -245,21 +249,33 @@ I915DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
       OUT_BATCH(_3DSTATE_MAP_STATE | 9);
       OUT_BATCH(0x00000007);
 
-      OUT_BATCH(pPriv->YBuf0offset);
+      if (pI830->use_ttm_batch) {
+	  OUT_RELOC((dri_bo *)pPriv->buf, DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ, pPriv->YBuf0offset);
+      } else {
+	  OUT_BATCH(pPriv->YBuf0offset);
+      }
       ms3 = MAPSURF_8BIT | MT_8BIT_I8 | MS3_USE_FENCE_REGS;
       ms3 |= (height - 1) << MS3_HEIGHT_SHIFT;
       ms3 |= (width - 1) << MS3_WIDTH_SHIFT;
       OUT_BATCH(ms3);
       OUT_BATCH(((video_pitch * 2 / 4) - 1) << MS4_PITCH_SHIFT);
 
-      OUT_BATCH(pPriv->UBuf0offset);
+      if (pI830->use_ttm_batch) {
+	  OUT_RELOC((dri_bo *)pPriv->buf, DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ, pPriv->UBuf0offset);
+      } else {
+	  OUT_BATCH(pPriv->UBuf0offset);
+      }
       ms3 = MAPSURF_8BIT | MT_8BIT_I8 | MS3_USE_FENCE_REGS;
       ms3 |= (height / 2 - 1) << MS3_HEIGHT_SHIFT;
       ms3 |= (width / 2 - 1) << MS3_WIDTH_SHIFT;
       OUT_BATCH(ms3);
       OUT_BATCH(((video_pitch / 4) - 1) << MS4_PITCH_SHIFT);
 
-      OUT_BATCH(pPriv->VBuf0offset);
+      if (pI830->use_ttm_batch) {
+	  OUT_RELOC((dri_bo *)pPriv->buf, DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ, pPriv->VBuf0offset);
+      } else {
+	  OUT_BATCH(pPriv->VBuf0offset);
+      }
       ms3 = MAPSURF_8BIT | MT_8BIT_I8 | MS3_USE_FENCE_REGS;
       ms3 |= (height / 2 - 1) << MS3_HEIGHT_SHIFT;
       ms3 |= (width / 2 - 1) << MS3_WIDTH_SHIFT;
