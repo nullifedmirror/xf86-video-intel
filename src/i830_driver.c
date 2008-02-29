@@ -2698,6 +2698,7 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
       pI8301 = I830PTR(pI830->entityPrivate->pScrn_1);
       pI830->LpRing = pI8301->LpRing;
       pI830->overlay_regs = pI8301->overlay_regs;
+      pI830->overlay_regs_bo = pI8301->overlay_regs_bo;
       pI830->overlayOn = pI8301->overlayOn;
       pI830->last_3d = pI8301->last_3d;
    }
@@ -2911,7 +2912,7 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
 		    "needs 2D acceleration.\n");
 	 pI830->XvEnabled = FALSE;
       }
-      if (!IS_I9XX(pI830) && pI830->overlay_regs == NULL) {
+      if (!IS_I9XX(pI830) && pI830->overlay_regs == NULL && pI830->overlay_regs_bo == NULL) {
 	  xf86DrvMsg(pScrn->scrnIndex, X_WARNING,
 		     "Disabling Xv because the overlay register buffer "
 		      "allocation failed.\n");

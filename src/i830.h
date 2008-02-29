@@ -416,6 +416,7 @@ typedef struct _I830Rec {
 #ifdef I830_XV
    /* For Xvideo */
    i830_memory *overlay_regs;
+   dri_bo *overlay_regs_bo;
 #endif
    XF86ModReqInfo shadowReq; /* to test for later libshadow */
    Rotation rotation;

@@ -360,6 +360,7 @@ i830_reset_allocations(ScrnInfoPtr pScrn)
     pI830->exa_offscreen = NULL;
     pI830->exa_965_state = NULL;
     pI830->overlay_regs = NULL;
+    pI830->overlay_regs_bo = NULL;
 #ifdef XF86DRI
     pI830->back_buffer = NULL;
     pI830->third_buffer = NULL;
@@ -1050,16 +1051,28 @@ i830_allocate_overlay(ScrnInfoPtr pScrn)
     I830Ptr pI830 = I830PTR(pScrn);
     int flags = 0;
 
-    /* TODO - fix in later commit */
-    if (pI830->use_drm_mode)
-      return TRUE;
-
     /* Only allocate if overlay is going to be enabled. */
     if (!pI830->XvEnabled)
 	return TRUE;
 
     if (!OVERLAY_NOPHYSICAL(pI830))
 	flags |= NEED_PHYSICAL_ADDR;
+
+    if (pI830->use_ttm_batch) {
+	int mem_space = DRM_BO_FLAG_MEM_TT;
+	if (flags & NEED_PHYSICAL_ADDR)
+	    mem_space = DRM_BO_FLAG_MEM_VRAM;
+
+	/*  allocate overlay regs from bufmgr */
+	pI830->overlay_regs_bo = dri_bo_alloc(pI830->bufmgr,"overlay regs",
+					      OVERLAY_SIZE, GTT_PAGE_SIZE,
+					      mem_space | DRM_BO_FLAG_CACHED | DRM_BO_FLAG_CACHED_MAPPED);
+	if (pI830->overlay_regs_bo == NULL) {
+	    xf86DrvMsg(pScrn->scrnIndex, X_WARNING,
+		       "Failed to allocate Overlay register space.\n");
+	}
+	return TRUE;
+    }
 
     if (!IS_I965G(pI830)) {
 	pI830->overlay_regs = i830_allocate_memory(pScrn, "overlay registers",
