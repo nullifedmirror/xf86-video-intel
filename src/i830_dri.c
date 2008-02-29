@@ -1964,9 +1964,6 @@ I830DRI2ScreenInit(ScreenPtr pScreen)
     dri2info.fd = pI830->drmSubFD;
     dri2info.driverSareaSize = sizeof *driLock;
     dri2info.driverName = IS_I965G(pI830) ? "i965" : "i915";
-    dri2info.ddxVersionMajor = I830_MAJOR_VERSION;
-    dri2info.ddxVersionMinor = I830_MINOR_VERSION;
-    dri2info.ddxVersionPatch = I830_PATCHLEVEL;
     dri2info.getPixmapHandle = I830EXAGetPixmapHandle;
     dri2info.beginClipNotify = I830DRI2BeginClipNotify;
     dri2info.endClipNotify   = I830DRI2EndClipNotify;
@@ -1993,8 +1990,7 @@ I830DRI2ScreenInit(ScreenPtr pScreen)
 
     /* Get sarea BO handle... maybe we need a dedicated function for
      * that or maybe a DRI2 info struct that it fills out. */
-    DRI2Connect(pScreen, &fd, &driverName, &major, &minor, &patch,
-		&sarea_handle);
+    DRI2Connect(pScreen, &fd, &driverName, &sarea_handle);
 
     memset(&info, 0, sizeof(info));
     info.func = I915_INIT_DMA2;
