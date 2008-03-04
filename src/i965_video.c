@@ -251,7 +251,9 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
     state_base_offset = pPriv->extra_offset;
     state_base_offset = ALIGN(state_base_offset, 64);
 
-    state_base = (char *)(pI830->FbBase + state_base_offset);
+    dri_bo_map(pPriv->buf, TRUE);
+    
+    state_base = (char *) pPriv->buf->virtual + state_base_offset;
     /* Set up our pointers to state structures in framebuffer.  It would
      * probably be a good idea to fill these structures out in system memory
      * and then dump them there, instead.
@@ -340,7 +342,10 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
     cc_state->cc3.ia_blend_enable = 1;  /* blend alpha just like colors */
     cc_state->cc3.blend_enable = 0;     /* disable color blend */
     cc_state->cc3.alpha_test = 0;       /* disable alpha test */
-    cc_state->cc4.cc_viewport_state_offset = (state_base_offset +
+
+    /* FIXME: Eek! No relocation to match this... */
+    cc_state->cc4.cc_viewport_state_offset = (pPriv->buf->offset +
+					      state_base_offset +
 					      cc_viewport_offset) >> 5;
     cc_state->cc5.dither_enable = 0;    /* disable dither */
     cc_state->cc5.logicop_func = 0xc;   /* WHITE */
@@ -371,7 +376,19 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
     dest_surf_state->ss0.mipmap_layout_mode = 0;
     dest_surf_state->ss0.render_cache_read_mode = 0;
 
-    dest_surf_state->ss1.base_addr = intel_get_pixmap_offset(pPixmap);
+    if (pI830->use_ttm_batch)
+	dest_surf_state->ss1.base_addr =
+	    intelddx_batchbuffer_emit_pixmap(pPixmap,
+					     DRM_BO_FLAG_MEM_TT |
+					     DRM_BO_FLAG_WRITE |
+					     DRM_BO_FLAG_READ,
+					     pPriv->buf,
+					     (char *) &dest_surf_state->ss1.base_addr -
+					     (char *) pPriv->buf->virtual,
+					     0);
+    else
+	dest_surf_state->ss1.base_addr = intel_get_pixmap_offset(pPixmap);
+
     dest_surf_state->ss2.height = pScrn->virtualY - 1;
     dest_surf_state->ss2.width = pScrn->virtualX - 1;
     dest_surf_state->ss2.mip_count = 0;
@@ -403,7 +420,20 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
     src_surf_state->ss0.mipmap_layout_mode = 0;
     src_surf_state->ss0.render_cache_read_mode = 0;
 
-    src_surf_state->ss1.base_addr = pPriv->YBuf0offset;
+
+    if (pI830->use_ttm_batch)
+	src_surf_state->ss1.base_addr =
+	    intelddx_batchbuffer_emit_pixmap(pPixmap,
+					     DRM_BO_FLAG_MEM_TT |
+					     DRM_BO_FLAG_READ,
+					     pPriv->buf,
+					     (char *) &src_surf_state->ss1.base_addr -
+					     (char *) pPriv->buf->virtual,
+					     pPriv->YBuf0offset);
+    else
+	src_surf_state->ss1.base_addr =
+	    pPriv->buf->offset + pPriv->YBuf0offset;
+
     src_surf_state->ss2.width = width - 1;
     src_surf_state->ss2.height = height - 1;
     src_surf_state->ss2.mip_count = 0;
@@ -439,8 +469,11 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
 
     memcpy (sf_kernel, sf_kernel_static, sizeof (sf_kernel_static));
     memset(sf_state, 0, sizeof(*sf_state));
+
+    /* FIXME: Eek! No relocation to match this... */
     sf_state->thread0.kernel_start_pointer =
-	(state_base_offset + sf_kernel_offset) >> 6;
+	(pPriv->buf->offset + state_base_offset + sf_kernel_offset) >> 6;
+
     sf_state->thread0.grf_reg_count = BRW_GRF_BLOCKS(SF_KERNEL_NUM_GRF);
     sf_state->sf1.single_program_flow = 1; /* XXX */
     sf_state->sf1.binding_table_entry_count = 0;
@@ -470,16 +503,22 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
 
     memcpy (ps_kernel, ps_kernel_static, sizeof (ps_kernel_static));
     memset (wm_state, 0, sizeof (*wm_state));
+
+    /* FIXME: Eek! No relocation to match this... */
     wm_state->thread0.kernel_start_pointer =
-	(state_base_offset + ps_kernel_offset) >> 6;
+	(pPriv->buf->offset + state_base_offset + ps_kernel_offset) >> 6;
+
     wm_state->thread0.grf_reg_count = BRW_GRF_BLOCKS(PS_KERNEL_NUM_GRF);
     wm_state->thread1.single_program_flow = 1; /* XXX */
     wm_state->thread1.binding_table_entry_count = 2;
     /* Though we never use the scratch space in our WM kernel, it has to be
      * set, and the minimum allocation is 1024 bytes.
      */
-    wm_state->thread2.scratch_space_base_pointer = (state_base_offset +
+    /* FIXME: Eek! No relocation to match this... */
+    wm_state->thread2.scratch_space_base_pointer = (pPriv->buf->offset +
+						    state_base_offset +
 						    wm_scratch_offset) >> 10;
+
     wm_state->thread2.per_thread_scratch_space = 0; /* 1024 bytes */
     wm_state->thread3.dispatch_grf_start_reg = 3; /* XXX */
     wm_state->thread3.const_urb_entry_read_length = 0;
@@ -487,8 +526,12 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
     wm_state->thread3.urb_entry_read_length = 1; /* XXX */
     wm_state->thread3.urb_entry_read_offset = 0; /* XXX */
     wm_state->wm4.stats_enable = 1;
-    wm_state->wm4.sampler_state_pointer = (state_base_offset +
+
+    /* FIXME: Eek! No relocation to match this... */
+    wm_state->wm4.sampler_state_pointer = (pPriv->buf->offset +
+					   state_base_offset +
 					   src_sampler_offset) >> 5;
+
     wm_state->wm4.sampler_count = 1; /* 1-4 samplers used */
     wm_state->wm5.max_threads = PS_MAX_THREADS - 1;
     wm_state->wm5.thread_dispatch_enable = 1;
@@ -535,8 +578,9 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
 	/* Set system instruction pointer */
 	OUT_BATCH(BRW_STATE_SIP | 0);
 	/* system instruction pointer */
-	OUT_BATCH(state_base_offset + sip_kernel_offset);
-
+	OUT_RELOC(pPriv->buf,
+		  DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
+		  state_base_offset + sip_kernel_offset);
 	OUT_BATCH(MI_NOOP);
 	ADVANCE_BATCH();
     }
@@ -564,7 +608,9 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
        OUT_BATCH(0); /* clip */
        OUT_BATCH(0); /* sf */
        /* Only the PS uses the binding table */
-       OUT_BATCH(state_base_offset + binding_table_offset); /* ps */
+	OUT_RELOC(pPriv->buf,
+		  DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
+		  state_base_offset + binding_table_offset); /* ps */
 
        /* Blend constant color (magenta is fun) */
        OUT_BATCH(BRW_3DSTATE_CONSTANT_COLOR | 3);
@@ -594,9 +640,16 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
        OUT_BATCH(BRW_GS_DISABLE);
        /* disable CLIP, resulting in passthrough */
        OUT_BATCH(BRW_CLIP_DISABLE);
-       OUT_BATCH(state_base_offset + sf_offset);  /* 32 byte aligned */
-       OUT_BATCH(state_base_offset + wm_offset);  /* 32 byte aligned */
-       OUT_BATCH(state_base_offset + cc_offset);  /* 64 byte aligned */
+
+       OUT_RELOC(pPriv->buf,
+		 DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
+		 state_base_offset + sf_offset);  /* 32 byte aligned */
+       OUT_RELOC(pPriv->buf,
+		 DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
+		 state_base_offset + wm_offset);  /* 32 byte aligned */
+       OUT_RELOC(pPriv->buf,
+		 DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
+		 state_base_offset + cc_offset);  /* 64 byte aligned */
 
        /* URB fence */
        OUT_BATCH(BRW_URB_FENCE |
@@ -623,7 +676,9 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
        OUT_BATCH((0 << VB0_BUFFER_INDEX_SHIFT) |
 		VB0_VERTEXDATA |
 		((4 * 4) << VB0_BUFFER_PITCH_SHIFT));
-       OUT_BATCH(state_base_offset + vb_offset);
+       OUT_RELOC(pPriv->buf,
+		 DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
+		 state_base_offset + vb_offset);
        OUT_BATCH(3); /* four corners to our rectangle */
 
        /* Set up our vertex elements, sourced from the single vertex buffer. */

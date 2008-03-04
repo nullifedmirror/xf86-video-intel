@@ -1931,7 +1931,9 @@ I830DRI2Prepare(ScreenPtr pScreen)
     xf86DrvMsg(pScrn->scrnIndex, X_INFO,
 	       "[DRI2] Opened DRM device successfully\n");
 
+#if 0
     I830InitBufMgr(pScreen);
+#endif
     if (!pI830->use_ttm_batch)
 	return;
 

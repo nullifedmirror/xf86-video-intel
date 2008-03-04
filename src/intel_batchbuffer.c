@@ -276,5 +276,5 @@ uint32_t intelddx_batchbuffer_emit_pixmap(PixmapPtr pPixmap,
 
     driver_priv = exaGetPixmapDriverPrivate(pPixmap);
     dri_emit_reloc(reloc_buf, flags, delta, offset, driver_priv->bo);
-    return driver_priv->bo->offset;
+    return driver_priv->bo->offset + delta;
 }
