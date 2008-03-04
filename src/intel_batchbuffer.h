@@ -94,12 +94,20 @@ extern uint32_t intelddx_batchbuffer_emit_pixmap(PixmapPtr pPixmap,
  */
 #define BATCH_LOCALS
 
-#define BEGIN_BATCH(n)  							\
-	RING_LOCALS 								\
-	if (pI830->use_ttm_batch)						\
-   		intelddx_batchbuffer_require_space(pI830->batch, (n)*4, 0);	\
-	 else { \
-   DO_LP_RING(n) ; }
+#define BEGIN_BATCH(n)							\
+   RING_LOCALS								\
+   if (pI830->use_ttm_batch)						\
+      intelddx_batchbuffer_require_space(pI830->batch, (n)*4, 0);	\
+   else {								\
+      DO_LP_RING(n);							\
+   }
+
+#define ENSURE_BATCH(n)							\
+   if (pI830->use_ttm_batch)						\
+      intelddx_batchbuffer_require_space(pI830->batch, (n)*4, 0);	\
+   else {								\
+      ENSURE_LP_RING(n);						\
+   }
 
 #define OUT_BATCH(d) \
 	 if (pI830->use_ttm_batch) \
@@ -112,17 +120,24 @@ extern uint32_t intelddx_batchbuffer_emit_pixmap(PixmapPtr pPixmap,
         OUT_BATCH(tmp.ui);                      \
 } while(0)
 
-#define OUT_RELOC(buf, flags, delta) do {	\
-   intelddx_batchbuffer_emit_reloc(pI830->batch, buf, flags, delta);	\
+#define OUT_RELOC(buf, flags, delta) do {				\
+   if (pI830->use_ttm_batch)						\
+      intelddx_batchbuffer_emit_reloc(pI830->batch, buf, flags, delta);	\
+   else									\
+      OUT_RING(buf->offset + delta);					\
 } while (0)
 
-#define OUT_PIXMAP_RELOC(pixmap, flags, delta) if (pI830->use_ttm_batch) { \
-    uint32_t _retval = intelddx_batchbuffer_emit_pixmap((pixmap), (flags),		\
-                                 pI830->batch->buf, (pI830->batch->ptr - pI830->batch->map), (delta)); \
-    intelddx_batchbuffer_emit_dword (pI830->batch, _retval + (delta)); \
-  } else {								\
-    OUT_RING(intel_get_pixmap_offset(pixmap) + delta);			\
-  }
+#define OUT_PIXMAP_RELOC(pixmap, flags, delta)				\
+   if (pI830->use_ttm_batch) {						\
+      unsigned int offset = pI830->batch->ptr - pI830->batch->map;	\
+      uint32_t _retval =						\
+         intelddx_batchbuffer_emit_pixmap((pixmap), (flags),		\
+					  pI830->batch->buf,		\
+					  offset, delta);		\
+      intelddx_batchbuffer_emit_dword (pI830->batch, _retval + (delta)); \
+   } else {								\
+      OUT_RING(intel_get_pixmap_offset(pixmap) + delta);		\
+   }
 
 #define ADVANCE_BATCH() if (!pI830->use_ttm_batch) { ADVANCE_LP_RING(); }
 

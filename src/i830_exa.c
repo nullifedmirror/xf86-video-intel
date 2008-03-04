@@ -185,10 +185,10 @@ static void
 I830EXASync(ScreenPtr pScreen, int marker)
 {
     ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+    I830Ptr pI830 = I830PTR(pScrn);
 
-#if 0
-    I830Sync(pScrn);
-#endif
+    if (!pI830->use_ttm_batch)
+	I830Sync(pScrn);
 }
 
 /**

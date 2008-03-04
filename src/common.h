@@ -229,6 +229,9 @@ union intfloat {
    if (I810_DEBUG & DEBUG_VERBOSE_RING)					\
       ErrorF( "BEGIN_LP_RING %d in %s\n", n, FUNCTION_NAME);
 
+#define ENSURE_LP_RING(n)			\
+   if (RecPtr->LpRing->space < (n) * 4)		\
+      WaitRingFunc(pScrn, (n) * 4, 0);
 
 #define BEGIN_LP_RING(n)						\
 	RING_LOCALS							\

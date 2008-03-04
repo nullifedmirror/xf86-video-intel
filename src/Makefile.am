@@ -122,6 +122,8 @@ intel_drv_la_SOURCES = \
 	 dri_bufmgr_remap.h \
 	 intel_bufmgr_ttm.c \
          intel_bufmgr_ttm.h \
+	 intel_bufmgr_exa.c \
+         intel_bufmgr_exa.h \
          intel_batchbuffer.c \
          intel_batchbuffer.h
 
