@@ -456,7 +456,9 @@ unsigned int I830EXAGetPixmapHandle(PixmapPtr pPix, unsigned int *flags)
 	    return 0;
 
     if (i830_pixmap_tiled(pPix))
-	*flags = 0x0100;
+	*flags = BUFFER_FLAG_TILED;
+    else
+	*flags = 0;
 
     return dri_bo_get_handle(driver_priv->bo);
 }
