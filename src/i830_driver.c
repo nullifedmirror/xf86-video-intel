@@ -2640,6 +2640,8 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
       return FALSE;
    }
 
+   pI830->batch = intelddx_batchbuffer_alloc(pScrn);
+
    xf86DrvMsg(pScrn->scrnIndex,
 	      pI830->pEnt->device->videoRam ? X_CONFIG : X_DEFAULT,
 	      "VideoRam: %d KB\n", pScrn->videoRam);
