@@ -58,7 +58,7 @@ typedef struct {
    CARD32 videoStatus;
    Time offTime;
    Time freeTime;
-   i830_memory *buf; /** YUV data buffer */
+   dri_bo *buf; /** YUV data buffer */
    unsigned int extra_offset;
 
    Bool overlayOK;

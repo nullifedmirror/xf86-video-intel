@@ -198,6 +198,7 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "i830_debug.h"
 #include "i830_bios.h"
 #include "i830_video.h"
+#include "intel_bufmgr_exa.h"
 
 #ifdef XF86DRI
 #include "dri.h"
@@ -2452,7 +2453,7 @@ I830BlockHandler(int i,
     pScreen->BlockHandler = I830BlockHandler;
 
     if (pI830->batch)
-    	intelddx_batchbuffer_flush(pI830->batch);
+	intelddx_batchbuffer_flush(pI830->batch);
     I830VideoBlockHandler(i, blockData, pTimeout, pReadmask);
 }
 
@@ -2616,6 +2617,12 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
 	   pI830->directRendering = DRI_TYPE_NONE;
    }
 #endif
+
+   if (pI830->bufmgr == NULL) {
+      pI830->bufmgr = intel_bufmgr_exa_init(pScrn);
+      if (pI830->bufmgr)
+	 xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Using EXA bufmgr\n");
+   }
 
    /* The batchbuffer branch won't work without a bufmgr, so fail now
     * if neither XF86DRI or DRI2 managed to set that up. */
@@ -3026,9 +3033,6 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
 
     if (pScrn->virtualX > pScrn->displayWidth)
 	pScrn->displayWidth = pScrn->virtualX;
-
-   if (IS_I965G(pI830))
-     i965_init_exa_state(pScrn);
 
    DPRINTF(PFX, "assert( if(!fbScreenInit(pScreen, ...) )\n");
    if (!fbScreenInit(pScreen, pI830->FbBase + pScrn->fbOffset, 
@@ -3450,6 +3454,9 @@ I830EnterVT(int scrnIndex, int flags)
 
    if (pI830->checkDevices)
       pI830->devicesTimer = TimerSet(NULL, 0, 1000, I830CheckDevicesTimer, pScrn);
+
+   if (pI830->starting && IS_I965G(pI830))
+      i965_init_exa_state(pScrn);
 
    /* Mark 3D state as being clobbered and setup the basics */
    *pI830->last_3d = LAST_3D_OTHER;

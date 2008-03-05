@@ -968,16 +968,20 @@ i965_set_picture_surface_state(ScrnInfoPtr pScrn, unsigned int index,
     ss->ss0.vert_line_stride_ofs = 0;
     ss->ss0.mipmap_layout_mode = 0;
     ss->ss0.render_cache_read_mode = 0;
-    ss->ss1.base_addr =
-	intelddx_batchbuffer_emit_pixmap(pPixmap,
-					 DRM_BO_FLAG_MEM_TT |
-					 (is_dst ? DRM_BO_FLAG_WRITE : 0) |
-					 DRM_BO_FLAG_READ,
-					 pI830->exa965->surface_buf,
-					 offset +
-					 offsetof(struct brw_surface_state,
-						  ss1),
-					 0);
+    if (pI830->use_ttm_batch)
+       ss->ss1.base_addr =
+	  intelddx_batchbuffer_emit_pixmap(pPixmap,
+					   DRM_BO_FLAG_MEM_TT |
+					   (is_dst ? DRM_BO_FLAG_WRITE : 0) |
+					   DRM_BO_FLAG_READ,
+					   pI830->exa965->surface_buf,
+					   offset +
+					   offsetof(struct brw_surface_state,
+						    ss1),
+					   0);
+    else
+       ss->ss1.base_addr = intel_get_pixmap_offset(pPixmap);
+
     ss->ss2.mip_count = 0;
     ss->ss2.render_target_rotation = 0;
     ss->ss2.height = pPixmap->drawable.height - 1;
@@ -1024,7 +1028,7 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
      * And with a 16k batchbuffer, this means we'll be wasting at most
      * 1/8 of the total batchbuffer.
      */
-    intelddx_batchbuffer_require_space (pI830->batch, 2048, 0);
+    ENSURE_BATCH(512);
 
     i965_exastate_reset(pI830->exa965);
     surface_map = pI830->exa965->surface_map;
@@ -1160,7 +1164,7 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
 	gen4_emit_batch_header (pScrn);
 
      {
-	BEGIN_BATCH(19);
+	BEGIN_BATCH(18);
 	/* Flush the map (texture) cache.  The rendering cache covers the blit
 	 * and 3D destination parts of the engine and automatically flushes
 	 * between them, but the map cache has to be flushed separately.
@@ -1218,7 +1222,7 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
 	/* Set up our vertex elements, sourced from the single vertex buffer.
 	 * The vertex buffer will be set up later at primitive emit time.
 	 */
-	BEGIN_BATCH(pMask ? 7 : 5);
+	BEGIN_BATCH(pMask ? 8 : 6);
    	OUT_BATCH(BRW_3DSTATE_VERTEX_ELEMENTS | ((2 * nelem) - 1));
 	/* vertex coordinates */
    	OUT_BATCH((0 << VE0_VERTEX_BUFFER_INDEX_SHIFT) |
@@ -1253,6 +1257,7 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
 		     (10 << VE1_DESTINATION_ELEMENT_OFFSET_SHIFT));
    	}
 
+	OUT_BATCH(MI_NOOP);
    	ADVANCE_BATCH();
     }
 
@@ -1275,7 +1280,7 @@ i965_composite_flush_prims(ScrnInfoPtr pScrn)
     if (pI830->exa965->vbo_used == pI830->exa965->vbo_prim_start)
 	return;
 
-    BEGIN_BATCH(11);
+    BEGIN_BATCH(12);
     /* Set up the pointer to our vertex buffer.  We could emit this a lot
      * less often (as long as vertex_size and vbo haven't changed).
      */
@@ -1300,6 +1305,7 @@ i965_composite_flush_prims(ScrnInfoPtr pScrn)
     OUT_BATCH(1); /* single instance - mbz in docs */
     OUT_BATCH(0); /* start instance location */
     OUT_BATCH(0); /* index buffer offset, ignored */
+    OUT_BATCH(MI_NOOP);
     ADVANCE_BATCH();
 
     pI830->exa965->vbo_prim_start = pI830->exa965->vbo_used;
