@@ -548,7 +548,7 @@ static Bool I830EXAModifyPixmapHeader(PixmapPtr pPixmap, int width, int height,
     if (!driver_priv)
       return FALSE;
 
-    if (drmmode_is_rotate_pixmap(pScrn, pPixData, &driver_priv->bo)) {
+    if (pI830->use_drm_mode && drmmode_is_rotate_pixmap(pScrn, pPixData, &driver_priv->bo)) {
 	/* this is a rotate pixmap */
 	dri_bo_unmap(driver_priv->bo);
 	dri_bo_reference(driver_priv->bo);
