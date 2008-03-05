@@ -1938,6 +1938,11 @@ I830DRI2Prepare(ScreenPtr pScreen)
     xf86DrvMsg(pScrn->scrnIndex, X_INFO,
 	       "[DRI2] Opened DRM device successfully\n");
 
+   if (pI830->drmMinor < 11) {
+       pI830->use_ttm_batch = FALSE;
+   } else 
+       I830InitBufMgr(pScrn);
+
     if (!pI830->use_ttm_batch)
 	return;
 

@@ -1060,8 +1060,10 @@ i830_allocate_overlay(ScrnInfoPtr pScrn)
 
     if (pI830->use_ttm_batch) {
 	int mem_space = DRM_BO_FLAG_MEM_TT;
+
 	if (flags & NEED_PHYSICAL_ADDR)
-	    mem_space = DRM_BO_FLAG_MEM_VRAM;
+	    if (pI830->use_drm_mode) 
+	        mem_space = DRM_BO_FLAG_MEM_VRAM;
 
 	/*  allocate overlay regs from bufmgr */
 	pI830->overlay_regs_bo = dri_bo_alloc(pI830->bufmgr,"overlay regs",
