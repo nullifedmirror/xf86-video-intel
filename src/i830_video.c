@@ -464,8 +464,8 @@ i830_overlay_continue(ScrnInfoPtr pScrn, Bool update_filter)
 	flip_addr = pI830->overlay_regs->bus_addr;
     if (update_filter)
 	flip_addr |= OFC_UPDATE;
-    OVERLAY_DEBUG ("overlay_continue cmd 0x%08" PRIx32 " -> 0x%08" PRIx32
-		   " sta 0x%08" PRIx32 "\n",
+    OVERLAY_DEBUG ("overlay_continue cmd 0x%08" CARD32_HEX
+		   " -> 0x%08" CARD32_HEX " sta 0x%08" CARD32_HEX "\n",
 		   overlay->OCMD, INREG(OCMD_REGISTER), INREG(DOVSTA));
     BEGIN_BATCH(4);
     OUT_BATCH(MI_FLUSH | MI_WRITE_DIRTY_STATE);
@@ -505,7 +505,8 @@ i830_overlay_off(ScrnInfoPtr pScrn)
      */
     {
 	overlay->OCMD &= ~OVERLAY_ENABLE;
-	OVERLAY_DEBUG ("overlay_off cmd 0x%08" PRIx32 " -> 0x%08" PRIx32 " sta 0x%08" PRIx32 "\n",
+	OVERLAY_DEBUG ("overlay_off cmd 0x%08" CARD32_HEX
+		       " -> 0x%08" CARD32_HEX " sta 0x%08" CARD32_HEX "\n",
 		       overlay->OCMD, INREG(OCMD_REGISTER), INREG(DOVSTA));
 	BEGIN_BATCH(6);
 	OUT_BATCH(MI_FLUSH | MI_WRITE_DIRTY_STATE);
@@ -1202,7 +1203,6 @@ I830CopyPackedData(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv,
 		   int srcPitch,
 		   int dstPitch, int top, int left, int h, int w)
 {
-    I830Ptr pI830 = I830PTR(pScrn);
     unsigned char *src, *dst;
     int i,j;
     unsigned char *s;
@@ -1303,7 +1303,6 @@ I830CopyPlanarToPackedData(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv,
 			   int srcPitch2, int dstPitch, int srcH,
 			   int top, int left, int h, int w, int id)
 {
-    I830Ptr pI830 = I830PTR(pScrn);
     CARD8 *dst1, *srcy, *srcu, *srcv;
     int y;
 
@@ -1928,7 +1927,7 @@ i830_display_video(ScrnInfoPtr pScrn, xf86CrtcPtr crtc,
 	overlay->OBUF_1V = pPriv->VBuf1offset;
     }
 
-    OVERLAY_DEBUG("pos: 0x%" PRIx32 ", size: 0x%" PRIx32 "\n",
+    OVERLAY_DEBUG("pos: 0x%" CARD32_HEX ", size: 0x%" CARD32_HEX "\n",
 		  overlay->DWINPOS, overlay->DWINSZ);
     OVERLAY_DEBUG("dst: %d x %d, src: %d x %d\n", drw_w, drw_h, src_w, src_h);
 
@@ -2090,7 +2089,7 @@ i830_display_video(ScrnInfoPtr pScrn, xf86CrtcPtr crtc,
 	OCMD |= BUFFER1;
 
     overlay->OCMD = OCMD;
-    OVERLAY_DEBUG("OCMD is 0x%" PRIx32 "\n", OCMD);
+    OVERLAY_DEBUG("OCMD is 0x%" CARD32_HEX "\n", OCMD);
 
     /* make sure the overlay is on */
     i830_overlay_on (pScrn);

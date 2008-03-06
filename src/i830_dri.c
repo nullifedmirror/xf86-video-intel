@@ -971,7 +971,6 @@ I830DRICloseScreen(ScreenPtr pScreen)
 {
    ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
    I830Ptr pI830 = I830PTR(pScrn);
-   I830DRIPtr pI830DRI = (I830DRIPtr) pI830->pDRIInfo->devPrivate;
 
    DPRINTF(PFX, "I830DRICloseScreen\n");
 
@@ -1954,7 +1953,7 @@ I830DRI2ScreenInit(ScreenPtr pScreen)
     I830Ptr pI830 = I830PTR(pScrn);
     I830RingBuffer *ring = pI830->LpRing;
     drm_i915_init_t info;
-    int fd, major, minor, patch;
+    int fd;
     const char *driverName;
     unsigned int sarea_handle;
     void *p;
