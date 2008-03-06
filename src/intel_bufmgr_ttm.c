@@ -374,7 +374,7 @@ dri_ttm_alloc(dri_bufmgr *bufmgr, const char *name,
     ttm_buf->validate_index = -1;
     ttm_buf->map_count = 0;
 
-    DBG("bo_create: %p (%s) %ldb\n", &ttm_buf->bo, ttm_buf->name, size);
+    DBG("bo_create: %p %08x (%s) %ldb\n", &ttm_buf->bo, ttm_buf->drm_bo.handle, ttm_buf->name, size);
 
     return &ttm_buf->bo;
 }
