@@ -59,7 +59,7 @@ typedef struct {
    Time offTime;
    Time freeTime;
    dri_bo *buf; /** YUV data buffer */
-   unsigned int extra_offset;
+   dri_bo *state; /** State buffer */
 
    Bool overlayOK;
    int oneLineMode;
