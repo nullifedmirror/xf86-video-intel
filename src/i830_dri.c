@@ -1899,22 +1899,24 @@ I830DRI2Prepare(ScreenPtr pScreen)
     char busId[64];
     drmVersionPtr version;
 
+    if (!pI830->use_drm_mode) {
 #if XSERVER_LIBPCIACCESS
-    sprintf(busId, "pci:%04x:%02x:%02x.%d",
-	    pI830->PciInfo->domain, pI830->PciInfo->bus,
-	    pI830->PciInfo->dev, pI830->PciInfo->func);
+        sprintf(busId, "pci:%04x:%02x:%02x.%d",
+		pI830->PciInfo->domain, pI830->PciInfo->bus,
+		pI830->PciInfo->dev, pI830->PciInfo->func);
 #else
-    snprintf(busId, "PCI:%d:%d:%d",
-	     ((pciConfigPtr) pI830->PciInfo->thisCard)->busnum,
-	     ((pciConfigPtr) pI830->PciInfo->thisCard)->devnum,
-	     ((pciConfigPtr) pI830->PciInfo->thisCard)->funcnum);
+        snprintf(busId, "PCI:%d:%d:%d",
+		 ((pciConfigPtr) pI830->PciInfo->thisCard)->busnum,
+		 ((pciConfigPtr) pI830->PciInfo->thisCard)->devnum,
+		 ((pciConfigPtr) pI830->PciInfo->thisCard)->funcnum);
 #endif
 
-    /* Low level DRM open */
-    pI830->drmSubFD = drmOpen("i915", busId);
-    if (pI830->drmSubFD < 0) {
-	xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "[DRI2] drmOpen failed\n");
-	return;
+	/* Low level DRM open */
+	pI830->drmSubFD = drmOpen("i915", busId);
+	if (pI830->drmSubFD < 0) {
+	    xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "[DRI2] drmOpen failed\n");
+	    return;
+	}
     }
 
     version = drmGetVersion(pI830->drmSubFD);
