@@ -3166,7 +3166,7 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
    if (serverGeneration == 1)
       xf86ShowUnusedOptions(pScrn->scrnIndex, pScrn->options);
 
-   if (IS_I965G(pI830)) {
+   if (!pI830->use_drm_mode && IS_I965G(pI830)) {
       /* turn off clock gating */
 #if 0
       OUTREG(0x6204, 0x70804000);
