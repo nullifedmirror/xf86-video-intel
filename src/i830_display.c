@@ -419,7 +419,7 @@ i830PipeSetBase(xf86CrtcPtr crtc, int x, int y)
     }
 
 #ifdef XF86DRI
-    if (pI830->directRenderingEnabled) {
+    if (pI830->directRendering) {
 	drmI830Sarea *sPriv = (drmI830Sarea *) DRIGetSAREAPrivate(pScrn->pScreen);
 
 	if (!sPriv)
@@ -871,7 +871,7 @@ i830_crtc_dpms(xf86CrtcPtr crtc, int mode)
     intel_crtc->dpms_mode = mode;
 
 #ifdef XF86DRI
-    if (pI830->directRenderingEnabled) {
+    if (pI830->directRendering) {
 	drmI830Sarea *sPriv = (drmI830Sarea *) DRIGetSAREAPrivate(pScrn->pScreen);
 	Bool enabled = crtc->enabled && mode != DPMSModeOff;
 
