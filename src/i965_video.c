@@ -183,7 +183,6 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
     int next_offset, total_state_size;
     int vb_size = (4 * 4) * 4; /* 4 DWORDS per vertex */
     char *state_base;
-    int state_base_offset;
 
 #if 0
     ErrorF("BroadwaterDisplayVideoTextured: %dx%d (pitch %d)\n", width, height,
@@ -241,19 +240,12 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
     binding_table_offset = ALIGN(next_offset, 32);
     next_offset = binding_table_offset + (WM_BINDING_TABLE_ENTRIES * 4);
 
-    /* Allocate an area in framebuffer for our state layout we just set up */
     total_state_size = next_offset;
-    assert (total_state_size < BRW_LINEAR_EXTRA);
+    assert (total_state_size < pPriv->state->size);
 
-    /*
-     * Use the extra space allocated at the end of the Xv buffer
-     */
-    state_base_offset = pPriv->extra_offset;
-    state_base_offset = ALIGN(state_base_offset, 64);
-
-    dri_bo_map(pPriv->buf, TRUE);
+    dri_bo_map(pPriv->state, TRUE);
     
-    state_base = (char *) pPriv->buf->virtual + state_base_offset;
+    state_base = (char *) pPriv->state->virtual;
     /* Set up our pointers to state structures in framebuffer.  It would
      * probably be a good idea to fill these structures out in system memory
      * and then dump them there, instead.
@@ -274,19 +266,19 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
     vb = (void *)(state_base + vb_offset);
 
 #if 0
-    ErrorF("vs:            0x%08x\n", state_base_offset + vs_offset);
-    ErrorF("wm:            0x%08x\n", state_base_offset + wm_offset);
-    ErrorF("sf:            0x%08x\n", state_base_offset + sf_offset);
-    ErrorF("cc:            0x%08x\n", state_base_offset + cc_offset);
-    ErrorF("sf kernel:     0x%08x\n", state_base_offset + sf_kernel_offset);
-    ErrorF("ps kernel:     0x%08x\n", state_base_offset + ps_kernel_offset);
-    ErrorF("sip kernel:    0x%08x\n", state_base_offset + sip_kernel_offset);
-    ErrorF("cc_vp:         0x%08x\n", state_base_offset + cc_viewport_offset);
-    ErrorF("src sampler:   0x%08x\n", state_base_offset + src_sampler_offset);
-    ErrorF("vb:            0x%08x\n", state_base_offset + vb_offset);
-    ErrorF("dst surf:      0x%08x\n", state_base_offset + dest_surf_offset);
-    ErrorF("src surf:      0x%08x\n", state_base_offset + src_surf_offset);
-    ErrorF("binding table: 0x%08x\n", state_base_offset + binding_table_offset);
+    ErrorF("vs:            0x%08x\n", vs_offset);
+    ErrorF("wm:            0x%08x\n", wm_offset);
+    ErrorF("sf:            0x%08x\n", sf_offset);
+    ErrorF("cc:            0x%08x\n", cc_offset);
+    ErrorF("sf kernel:     0x%08x\n", sf_kernel_offset);
+    ErrorF("ps kernel:     0x%08x\n", ps_kernel_offset);
+    ErrorF("sip kernel:    0x%08x\n", sip_kernel_offset);
+    ErrorF("cc_vp:         0x%08x\n", cc_viewport_offset);
+    ErrorF("src sampler:   0x%08x\n", src_sampler_offset);
+    ErrorF("vb:            0x%08x\n", vb_offset);
+    ErrorF("dst surf:      0x%08x\n", dest_surf_offset);
+    ErrorF("src surf:      0x%08x\n", src_surf_offset);
+    ErrorF("binding table: 0x%08x\n", binding_table_offset);
 #endif
 
     /* For 3D, the VS must have 8, 12, 16, 24, or 32 VUEs allocated to it.
@@ -342,11 +334,7 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
     cc_state->cc3.ia_blend_enable = 1;  /* blend alpha just like colors */
     cc_state->cc3.blend_enable = 0;     /* disable color blend */
     cc_state->cc3.alpha_test = 0;       /* disable alpha test */
-
-    /* FIXME: Eek! No relocation to match this... */
-    cc_state->cc4.cc_viewport_state_offset = (pPriv->buf->offset +
-					      state_base_offset +
-					      cc_viewport_offset) >> 5;
+    cc_state->cc4.cc_viewport_state_offset = cc_viewport_offset >> 5;
     cc_state->cc5.dither_enable = 0;    /* disable dither */
     cc_state->cc5.logicop_func = 0xc;   /* WHITE */
     cc_state->cc5.statistics_enable = 1;
@@ -382,9 +370,9 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
 					     DRM_BO_FLAG_MEM_TT |
 					     DRM_BO_FLAG_WRITE |
 					     DRM_BO_FLAG_READ,
-					     pPriv->buf,
+					     pPriv->state,
 					     (char *) &dest_surf_state->ss1.base_addr -
-					     (char *) pPriv->buf->virtual,
+					     state_base,
 					     0);
     else
 	dest_surf_state->ss1.base_addr = intel_get_pixmap_offset(pPixmap);
@@ -420,19 +408,20 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
     src_surf_state->ss0.mipmap_layout_mode = 0;
     src_surf_state->ss0.render_cache_read_mode = 0;
 
-
-    if (pI830->use_ttm_batch)
-	src_surf_state->ss1.base_addr =
-	    intelddx_batchbuffer_emit_pixmap(pPixmap,
-					     DRM_BO_FLAG_MEM_TT |
-					     DRM_BO_FLAG_READ,
-					     pPriv->buf,
-					     (char *) &src_surf_state->ss1.base_addr -
-					     (char *) pPriv->buf->virtual,
-					     pPriv->YBuf0offset);
-    else
+    if (pI830->use_ttm_batch) {
+	dri_emit_reloc(pPriv->state,
+		       DRM_BO_FLAG_MEM_TT |
+		       DRM_BO_FLAG_WRITE | 
+		       DRM_BO_FLAG_READ,
+		       pPriv->YBuf0offset,
+		       (char *) &src_surf_state->ss1.base_addr - state_base,
+		       pPriv->buf);
 	src_surf_state->ss1.base_addr =
 	    pPriv->buf->offset + pPriv->YBuf0offset;
+    } else {
+	src_surf_state->ss1.base_addr =
+	    pPriv->buf->offset + pPriv->YBuf0offset;
+    }
 
     src_surf_state->ss2.width = width - 1;
     src_surf_state->ss2.height = height - 1;
@@ -443,8 +432,8 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
 
     /* Set up a binding table for our two surfaces.  Only the PS will use it */
     /* XXX: are these offset from the right place? */
-    binding_table[0] = state_base_offset + dest_surf_offset;
-    binding_table[1] = state_base_offset + src_surf_offset;
+    binding_table[0] = dest_surf_offset;
+    binding_table[1] = src_surf_offset;
 
     /* Set up the packed YUV source sampler.  Doesn't do colorspace conversion.
      */
@@ -470,10 +459,7 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
     memcpy (sf_kernel, sf_kernel_static, sizeof (sf_kernel_static));
     memset(sf_state, 0, sizeof(*sf_state));
 
-    /* FIXME: Eek! No relocation to match this... */
-    sf_state->thread0.kernel_start_pointer =
-	(pPriv->buf->offset + state_base_offset + sf_kernel_offset) >> 6;
-
+    sf_state->thread0.kernel_start_pointer = sf_kernel_offset >> 6;
     sf_state->thread0.grf_reg_count = BRW_GRF_BLOCKS(SF_KERNEL_NUM_GRF);
     sf_state->sf1.single_program_flow = 1; /* XXX */
     sf_state->sf1.binding_table_entry_count = 0;
@@ -504,21 +490,14 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
     memcpy (ps_kernel, ps_kernel_static, sizeof (ps_kernel_static));
     memset (wm_state, 0, sizeof (*wm_state));
 
-    /* FIXME: Eek! No relocation to match this... */
-    wm_state->thread0.kernel_start_pointer =
-	(pPriv->buf->offset + state_base_offset + ps_kernel_offset) >> 6;
-
+    wm_state->thread0.kernel_start_pointer = ps_kernel_offset >> 6;
     wm_state->thread0.grf_reg_count = BRW_GRF_BLOCKS(PS_KERNEL_NUM_GRF);
     wm_state->thread1.single_program_flow = 1; /* XXX */
     wm_state->thread1.binding_table_entry_count = 2;
     /* Though we never use the scratch space in our WM kernel, it has to be
      * set, and the minimum allocation is 1024 bytes.
      */
-    /* FIXME: Eek! No relocation to match this... */
-    wm_state->thread2.scratch_space_base_pointer = (pPriv->buf->offset +
-						    state_base_offset +
-						    wm_scratch_offset) >> 10;
-
+    wm_state->thread2.scratch_space_base_pointer = wm_scratch_offset >> 10;
     wm_state->thread2.per_thread_scratch_space = 0; /* 1024 bytes */
     wm_state->thread3.dispatch_grf_start_reg = 3; /* XXX */
     wm_state->thread3.const_urb_entry_read_length = 0;
@@ -526,18 +505,15 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
     wm_state->thread3.urb_entry_read_length = 1; /* XXX */
     wm_state->thread3.urb_entry_read_offset = 0; /* XXX */
     wm_state->wm4.stats_enable = 1;
-
-    /* FIXME: Eek! No relocation to match this... */
-    wm_state->wm4.sampler_state_pointer = (pPriv->buf->offset +
-					   state_base_offset +
-					   src_sampler_offset) >> 5;
-
+    wm_state->wm4.sampler_state_pointer = src_sampler_offset >> 5;
     wm_state->wm4.sampler_count = 1; /* 1-4 samplers used */
     wm_state->wm5.max_threads = PS_MAX_THREADS - 1;
     wm_state->wm5.thread_dispatch_enable = 1;
     wm_state->wm5.enable_16_pix = 1;
     wm_state->wm5.enable_8_pix = 0;
     wm_state->wm5.early_depth_test = 1;
+
+    dri_bo_unmap(pPriv->state);
 
     {
 	BEGIN_BATCH(2);
@@ -563,12 +539,16 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
 	OUT_BATCH((0 << 4) |	/* URB Entry Allocation Size */
 		 (0 << 0));	/* Number of URB Entries */
 
-	/* Zero out the two base address registers so all offsets are
-	 * absolute
+	/* Set the base addresses for general state and surface state
+	 * to our buffer.
 	 */
 	OUT_BATCH(BRW_STATE_BASE_ADDRESS | 4);
-	OUT_BATCH(0 | BASE_ADDRESS_MODIFY);  /* Generate state base address */
-	OUT_BATCH(0 | BASE_ADDRESS_MODIFY);  /* Surface state base address */
+	OUT_RELOC(pPriv->state,	/* General state base address */
+		  DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
+		  BASE_ADDRESS_MODIFY);
+	OUT_RELOC(pPriv->state,	/* Surface state base address */
+		  DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
+		  BASE_ADDRESS_MODIFY);
 	OUT_BATCH(0 | BASE_ADDRESS_MODIFY);  /* media base addr, don't care */
 	/* general state max addr, disabled */
 	OUT_BATCH(0x10000000 | BASE_ADDRESS_MODIFY);
@@ -578,9 +558,9 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
 	/* Set system instruction pointer */
 	OUT_BATCH(BRW_STATE_SIP | 0);
 	/* system instruction pointer */
-	OUT_RELOC(pPriv->buf,
+	OUT_RELOC(pPriv->state,
 		  DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
-		  state_base_offset + sip_kernel_offset);
+		  sip_kernel_offset);
 	OUT_BATCH(MI_NOOP);
 	ADVANCE_BATCH();
     }
@@ -608,9 +588,7 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
        OUT_BATCH(0); /* clip */
        OUT_BATCH(0); /* sf */
        /* Only the PS uses the binding table */
-	OUT_RELOC(pPriv->buf,
-		  DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
-		  state_base_offset + binding_table_offset); /* ps */
+	OUT_BATCH(binding_table_offset); /* ps */
 
        /* Blend constant color (magenta is fun) */
        OUT_BATCH(BRW_3DSTATE_CONSTANT_COLOR | 3);
@@ -635,21 +613,15 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
 
        /* Set the pointers to the 3d pipeline state */
        OUT_BATCH(BRW_3DSTATE_PIPELINED_POINTERS | 5);
-       OUT_BATCH(state_base_offset + vs_offset);  /* 32 byte aligned */
+       OUT_BATCH(vs_offset);  /* 32 byte aligned */
        /* disable GS, resulting in passthrough */
        OUT_BATCH(BRW_GS_DISABLE);
        /* disable CLIP, resulting in passthrough */
        OUT_BATCH(BRW_CLIP_DISABLE);
 
-       OUT_RELOC(pPriv->buf,
-		 DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
-		 state_base_offset + sf_offset);  /* 32 byte aligned */
-       OUT_RELOC(pPriv->buf,
-		 DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
-		 state_base_offset + wm_offset);  /* 32 byte aligned */
-       OUT_RELOC(pPriv->buf,
-		 DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
-		 state_base_offset + cc_offset);  /* 64 byte aligned */
+       OUT_BATCH(sf_offset);  /* 32 byte aligned */
+       OUT_BATCH(wm_offset);  /* 32 byte aligned */
+       OUT_BATCH(cc_offset);  /* 64 byte aligned */
 
        /* URB fence */
        OUT_BATCH(BRW_URB_FENCE |
@@ -670,16 +642,19 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
        OUT_BATCH(((URB_CS_ENTRY_SIZE - 1) << 4) |
 		(URB_CS_ENTRIES << 0));
 
-       /* Set up the pointer to our vertex buffer */
-       OUT_BATCH(BRW_3DSTATE_VERTEX_BUFFERS | 2);
+       /* Set up the pointer to our vertex buffer.  The vertex buffer
+	* addresses aren't relative to any of the base addresses so we
+	* have to emit a relocation. */
+       OUT_BATCH(BRW_3DSTATE_VERTEX_BUFFERS | 3);
        /* four 32-bit floats per vertex */
        OUT_BATCH((0 << VB0_BUFFER_INDEX_SHIFT) |
 		VB0_VERTEXDATA |
 		((4 * 4) << VB0_BUFFER_PITCH_SHIFT));
-       OUT_RELOC(pPriv->buf,
+       OUT_RELOC(pPriv->state,
 		 DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
-		 state_base_offset + vb_offset);
+		 vb_offset);
        OUT_BATCH(3); /* four corners to our rectangle */
+       OUT_BATCH(0); /* reserved */
 
        /* Set up our vertex elements, sourced from the single vertex buffer. */
        OUT_BATCH(BRW_3DSTATE_VERTEX_ELEMENTS | 3);
@@ -704,7 +679,6 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
 		(BRW_VFCOMPONENT_STORE_1_FLT << VE1_VFCOMPONENT_3_SHIFT) |
 		(4 << VE1_DESTINATION_ELEMENT_OFFSET_SHIFT));
 
-       OUT_BATCH(MI_NOOP);			/* pad to quadword */
        ADVANCE_BATCH();
     }
 

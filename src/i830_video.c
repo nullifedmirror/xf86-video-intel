@@ -560,6 +560,7 @@ i830_overlay_continue(ScrnInfoPtr pScrn, Bool update_filter)
     }
     if (update_filter)
 	flip_addr |= OFC_UPDATE;
+
     BEGIN_BATCH(4);
     OUT_BATCH(MI_FLUSH | MI_WRITE_DIRTY_STATE);
     OUT_BATCH(MI_NOOP);
@@ -603,8 +604,6 @@ i830_overlay_off(ScrnInfoPtr pScrn)
     {
 	overlay = overlay_reg_prepare(pI830);
 	overlay->OCMD &= ~OVERLAY_ENABLE;
-	//	OVERLAY_DEBUG ("overlay_off cmd 0x%08lx -> 0x%08lx sta 0x%08lx\n",
-	//		       overlay->OCMD, INREG(OCMD_REGISTER), INREG(DOVSTA));
 	overlay_reg_finish(pI830);
 
 	BEGIN_BATCH(6);
@@ -954,6 +953,7 @@ I830SetupImageVideoOverlay(ScreenPtr pScreen)
     pPriv->current_crtc = NULL;
     pPriv->desired_crtc = NULL;
     pPriv->buf = NULL;
+    pPriv->state = NULL;
     pPriv->currentBuf = 0;
     pPriv->gamma5 = 0xc0c0c0;
     pPriv->gamma4 = 0x808080;
@@ -1067,6 +1067,7 @@ I830SetupImageVideoTextured(ScreenPtr pScreen)
 	pPriv->textured = TRUE;
 	pPriv->videoStatus = 0;
 	pPriv->buf = NULL;
+	pPriv->state = NULL;
 	pPriv->currentBuf = 0;
 	pPriv->doubleBuffer = 0;
 
@@ -1133,6 +1134,10 @@ I830StopVideo(ScrnInfoPtr pScrn, pointer data, Bool shutdown)
 	I830Sync(pScrn);
 	dri_bo_unreference(pPriv->buf);
 	pPriv->buf = NULL;
+	if (pPriv->state) {
+	    dri_bo_unreference(pPriv->state);
+	    pPriv->state = NULL;
+	}
 	pPriv->videoStatus = 0;
     } else {
 	if (pPriv->videoStatus & CLIENT_VIDEO_ON) {
@@ -1327,7 +1332,6 @@ I830CopyPackedData(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv,
 		   int srcPitch,
 		   int dstPitch, int top, int left, int h, int w)
 {
-    I830Ptr pI830 = I830PTR(pScrn);
     unsigned char *src, *dst;
     int i,j;
     unsigned char *s;
@@ -1428,7 +1432,6 @@ I830CopyPlanarToPackedData(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv,
 			   int srcPitch2, int dstPitch, int srcH,
 			   int top, int left, int h, int w, int id)
 {
-    I830Ptr pI830 = I830PTR(pScrn);
     CARD8 *dst1, *srcy, *srcu, *srcv;
     int y;
 
@@ -2241,7 +2244,7 @@ i830_display_video(ScrnInfoPtr pScrn, xf86CrtcPtr crtc,
 	OCMD |= BUFFER1;
 
     overlay->OCMD = OCMD;
-    OVERLAY_DEBUG("OCMD is 0x%lx\n", OCMD);
+    OVERLAY_DEBUG("OCMD is 0x%" CARD32_HEX "\n", OCMD);
 
     overlay_reg_finish(pI830);
     /* make sure the overlay is on */
@@ -2362,7 +2365,7 @@ I830PutImage(ScrnInfoPtr pScrn,
     int top, left, npixels, nlines, size;
     BoxRec dstBox;
     int pitchAlignMask;
-    int alloc_size, extraLinear;
+    int alloc_size;
     xf86CrtcPtr	crtc;
 
     if (pPriv->textured)
@@ -2485,15 +2488,9 @@ I830PutImage(ScrnInfoPtr pScrn,
     ErrorF("srcPitch: %d, dstPitch: %d, size: %d\n", srcPitch, dstPitch, size);
 #endif
 
-    if (IS_I965G(pI830))
-	extraLinear = BRW_LINEAR_EXTRA;
-    else
-	extraLinear = 0;
-
     alloc_size = size;
     if (pPriv->doubleBuffer)
 	alloc_size *= 2;
-    alloc_size += extraLinear;
 
     if (pPriv->buf) {
 	/* Wait for any previous acceleration to the buffer to have completed.
@@ -2511,13 +2508,25 @@ I830PutImage(ScrnInfoPtr pScrn,
 
     if (pPriv->buf == NULL) {
 	pPriv->buf = dri_bo_alloc(pI830->bufmgr,
-				  "xv buffer", alloc_size, 16, 0);
+				  "xv buffer", alloc_size, 4096,
+				  DRM_BO_FLAG_MEM_LOCAL |
+				  DRM_BO_FLAG_CACHED |
+				  DRM_BO_FLAG_CACHED_MAPPED);
     }
-
     if (pPriv->buf == NULL)
 	return BadAlloc;
 
-    pPriv->extra_offset = (pPriv->doubleBuffer ? size * 2 : size);
+    if (pPriv->state == NULL && IS_I965G(pI830)) {
+	pPriv->state = dri_bo_alloc(pI830->bufmgr,
+				    "xv buffer", BRW_LINEAR_EXTRA, 4096,
+				    DRM_BO_FLAG_MEM_LOCAL |
+				    DRM_BO_FLAG_CACHED |
+				    DRM_BO_FLAG_CACHED_MAPPED);
+	if (pPriv->state == NULL) {
+	    dri_bo_unreference(pPriv->buf);
+	    return BadAlloc;
+	}
+    }
 
     /* fixup pointers */
     pPriv->YBuf0offset = 0;
@@ -2761,6 +2770,10 @@ I830VideoBlockHandler(int i, pointer blockData, pointer pTimeout,
 		I830Sync(pScrn);
 		dri_bo_unreference(pPriv->buf);
 		pPriv->buf = NULL;
+		if (pPriv->state) {
+		    dri_bo_unreference(pPriv->state);
+		    pPriv->state = NULL;
+		}
 		pPriv->videoStatus = 0;
 	    }
 	}
@@ -2817,7 +2830,10 @@ I830AllocateSurface(ScrnInfoPtr pScrn,
     fbpitch = pI830->cpp * pScrn->displayWidth;
     size = pitch * h;
 
-    pPriv->buf = dri_bo_alloc(pI830->bufmgr, "xv surface buffer", size, 16, 0);
+    pPriv->buf = dri_bo_alloc(pI830->bufmgr, "xv surface buffer", size, 4096,
+			      DRM_BO_FLAG_MEM_LOCAL | 
+			      DRM_BO_FLAG_CACHED | 
+			      DRM_BO_FLAG_CACHED_MAPPED);
     if (pPriv->buf == NULL) {
 	xfree(surface->pitches);
 	xfree(surface->offsets);

@@ -2407,7 +2407,6 @@ void
 IntelEmitInvarientState(ScrnInfoPtr pScrn)
 {
    I830Ptr pI830 = I830PTR(pScrn);
-   CARD32 ctx_addr;
 
    if (pI830->noAccel)
       return;
