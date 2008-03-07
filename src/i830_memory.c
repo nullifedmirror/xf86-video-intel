@@ -165,13 +165,17 @@ i830_bind_memory(ScrnInfoPtr pScrn, i830_memory *mem)
     if (mem->bo.size != 0) {
 	I830Ptr pI830 = I830PTR(pScrn);
 	int ret;
+	int flags = DRM_BO_FLAG_READ | DRM_BO_FLAG_WRITE;
+
+	if (mem->need_vram)
+	   flags |= DRM_BO_FLAG_MEM_VRAM;
+	else
+	   flags |= DRM_BO_FLAG_MEM_TT;
+
+	flags |= DRM_BO_FLAG_NO_EVICT;
 
 	ret = drmBOSetStatus(pI830->drmSubFD, &mem->bo,
-			     DRM_BO_FLAG_MEM_VRAM |
-			     DRM_BO_FLAG_MEM_TT |
-			     DRM_BO_FLAG_READ |
-			     DRM_BO_FLAG_WRITE |
-			     DRM_BO_FLAG_NO_EVICT,
+			     flags,
 			     DRM_BO_MASK_MEM |
 			     DRM_BO_FLAG_READ |
 			     DRM_BO_FLAG_WRITE |
