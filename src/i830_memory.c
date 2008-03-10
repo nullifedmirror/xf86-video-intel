@@ -793,6 +793,7 @@ i830_allocate_memory_bo(ScrnInfoPtr pScrn, const char *name,
     mem->end = -1;
     mem->size = size;
     mem->allocated_size = size;
+    mem->need_vram = (flags & NEED_PHYSICAL_ADDR) ? 1 : 0;
     if (flags & NEED_LIFETIME_FIXED)
 	mem->lifetime_fixed_offset = TRUE;
 
