@@ -238,6 +238,9 @@ static i830_quirk i830_quirk_list[] = {
     /* Toshiba i830M laptop (fix bug 11148) */
     { PCI_CHIP_I830_M, 0x1179, 0xff00, quirk_ivch_dvob },
 
+    /* Motion Computing M1200 reported on irc */
+    { PCI_CHIP_I830_M, 0x14c0, 0x0012, quirk_ivch_dvob },
+
     /* Samsung Q35 has no TV output */
     { PCI_CHIP_I945_GM, 0x144d, 0xc504, quirk_ignore_tv },
     /* Samsung Q45 has no TV output */
@@ -246,6 +249,8 @@ static i830_quirk i830_quirk_list[] = {
     /* HP Compaq 6730s has no TV output */
     { PCI_CHIP_IGD_GM, 0x103c, 0x30e8, quirk_ignore_tv },
 
+    /* Dell Latitude D500 needs pipe A force quirk */
+    { PCI_CHIP_I855_GM, 0x1028, 0x0152, quirk_pipea_force },
     /* Dell Inspiron 510m needs pipe A force quirk */
     { PCI_CHIP_I855_GM, 0x1028, 0x0164, quirk_pipea_force },
 
