@@ -1009,6 +1009,7 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
     CARD32 *binding_table;
     CARD32 src_blend, dst_blend;
     int binding_table_offset;
+    uint32_t dst_format;
 
     /* We cannot handle a flush occuring anytime during the
      * prepare_composite/composite/done_composite handling. So make
@@ -1071,6 +1072,9 @@ i965_prepare_composite(int op, PicturePtr pSrcPicture,
 			    sizeof (CARD32) * GEN4_BINDING_TABLE_PER_OP *
 			    pI830->exa965->num_ops);
     binding_table = (void *)((char *)surface_map + binding_table_offset);
+
+    if (!i965_get_dest_format(pDstPicture, &dst_format))
+	return FALSE;
 
     /* Set up and bind the state buffer for the destination surface */
     binding_table[0] = i965_set_picture_surface_state(pScrn, 0,
