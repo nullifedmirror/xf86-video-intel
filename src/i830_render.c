@@ -405,7 +405,8 @@ i830_prepare_composite(int op, PicturePtr pSrcPicture,
     IntelEmitInvarientState(pScrn);
     *pI830->last_3d = LAST_3D_RENDER;
 
-    i830_get_dest_format(pDstPicture, &dst_format);
+    if (!i830_get_dest_format(pDstPicture, &dst_format))
+	return FALSE;
     dst_pitch = intel_get_pixmap_pitch(pDst);
 
     if (!i830_texture_setup(pSrcPicture, pSrc, 0))

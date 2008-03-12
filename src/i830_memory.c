@@ -172,6 +172,8 @@ i830_bind_memory(ScrnInfoPtr pScrn, i830_memory *mem)
 	else
 	   flags |= DRM_BO_FLAG_MEM_TT;
 
+	flags |= DRM_BO_FLAG_NO_EVICT;
+
 	ret = drmBOSetStatus(pI830->drmSubFD, &mem->bo,
 			     flags,
 			     DRM_BO_MASK_MEM |

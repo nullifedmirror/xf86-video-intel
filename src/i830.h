@@ -203,7 +203,7 @@ struct _i830_memory {
 #ifdef XF86DRI_MM
     drmBO bo;
     Bool lifetime_fixed_offset;
-  Bool need_vram;
+    Bool need_vram;
 #endif
 };
 
