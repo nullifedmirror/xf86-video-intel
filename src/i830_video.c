@@ -953,7 +953,6 @@ I830SetupImageVideoOverlay(ScreenPtr pScreen)
     pPriv->current_crtc = NULL;
     pPriv->desired_crtc = NULL;
     pPriv->buf = NULL;
-    pPriv->state = NULL;
     pPriv->currentBuf = 0;
     pPriv->gamma5 = 0xc0c0c0;
     pPriv->gamma4 = 0x808080;
@@ -1067,7 +1066,6 @@ I830SetupImageVideoTextured(ScreenPtr pScreen)
 	pPriv->textured = TRUE;
 	pPriv->videoStatus = 0;
 	pPriv->buf = NULL;
-	pPriv->state = NULL;
 	pPriv->currentBuf = 0;
 	pPriv->doubleBuffer = 0;
 
@@ -1134,10 +1132,6 @@ I830StopVideo(ScrnInfoPtr pScrn, pointer data, Bool shutdown)
 	I830Sync(pScrn);
 	dri_bo_unreference(pPriv->buf);
 	pPriv->buf = NULL;
-	if (pPriv->state) {
-	    dri_bo_unreference(pPriv->state);
-	    pPriv->state = NULL;
-	}
 	pPriv->videoStatus = 0;
     } else {
 	if (pPriv->videoStatus & CLIENT_VIDEO_ON) {
@@ -2516,18 +2510,6 @@ I830PutImage(ScrnInfoPtr pScrn,
     if (pPriv->buf == NULL)
 	return BadAlloc;
 
-    if (pPriv->state == NULL && IS_I965G(pI830)) {
-	pPriv->state = dri_bo_alloc(pI830->bufmgr,
-				    "xv buffer", BRW_LINEAR_EXTRA, 4096,
-				    DRM_BO_FLAG_MEM_LOCAL |
-				    DRM_BO_FLAG_CACHED |
-				    DRM_BO_FLAG_CACHED_MAPPED);
-	if (pPriv->state == NULL) {
-	    dri_bo_unreference(pPriv->buf);
-	    return BadAlloc;
-	}
-    }
-
     /* fixup pointers */
     pPriv->YBuf0offset = 0;
     if (pPriv->rotation & (RR_Rotate_90 | RR_Rotate_270)) {
@@ -2770,10 +2752,6 @@ I830VideoBlockHandler(int i, pointer blockData, pointer pTimeout,
 		I830Sync(pScrn);
 		dri_bo_unreference(pPriv->buf);
 		pPriv->buf = NULL;
-		if (pPriv->state) {
-		    dri_bo_unreference(pPriv->state);
-		    pPriv->state = NULL;
-		}
 		pPriv->videoStatus = 0;
 	    }
 	}

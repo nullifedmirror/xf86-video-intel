@@ -1953,6 +1953,7 @@ I830DRI2Prepare(ScreenPtr pScreen)
 struct __DRILock {
     unsigned int block_header;
     drm_hw_lock_t lock;
+    unsigned int next_id;
 };
 
 #define DRI2_SAREA_BLOCK_HEADER(type, size) (((type) << 16) | (size))
@@ -1993,11 +1994,8 @@ I830DRI2ScreenInit(ScreenPtr pScreen)
     pI830->lockRefCount = 0;
     pI830->lockingContext = 0;
     
-    if (drmCreateContext(pI830->drmSubFD, &pI830->context)) {
-	pI830->directRendering = DRI_TYPE_NONE;
-	return;
-    }
-
+    pI830->context = 1;
+    driLock->next_id = 2;
     I830DRI2Lock(pScreen);
 
     /* Get sarea BO handle... maybe we need a dedicated function for
@@ -2038,7 +2036,6 @@ I830DRI2CloseScreen(ScreenPtr pScreen)
 
     drmCtlUninstHandler(pI830->drmSubFD);
     I830CleanupDma(pScrn);
-    drmDestroyContext(pI830->drmSubFD, pI830->context);
     I830DRI2Unlock(pScreen);
     DRI2CloseScreen(pScreen);
     drmClose(pI830->drmSubFD);

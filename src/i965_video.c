@@ -183,6 +183,7 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
     int next_offset, total_state_size;
     int vb_size = (4 * 4) * 4; /* 4 DWORDS per vertex */
     char *state_base;
+    dri_bo *state; /** State buffer */
 
 #if 0
     ErrorF("BroadwaterDisplayVideoTextured: %dx%d (pitch %d)\n", width, height,
@@ -198,6 +199,14 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
 #endif
 
     assert((id == FOURCC_UYVY) || (id == FOURCC_YUY2));
+
+    state = dri_bo_alloc(pI830->bufmgr,
+			 "xv buffer", BRW_LINEAR_EXTRA, 4096,
+			 DRM_BO_FLAG_MEM_LOCAL |
+			 DRM_BO_FLAG_CACHED |
+			 DRM_BO_FLAG_CACHED_MAPPED);
+    if (state == NULL)
+      return 
 
     IntelEmitInvarientState(pScrn);
     *pI830->last_3d = LAST_3D_VIDEO;
@@ -241,11 +250,11 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
     next_offset = binding_table_offset + (WM_BINDING_TABLE_ENTRIES * 4);
 
     total_state_size = next_offset;
-    assert (total_state_size < pPriv->state->size);
+    assert (total_state_size < state->size);
 
-    dri_bo_map(pPriv->state, TRUE);
+    dri_bo_map(state, TRUE);
     
-    state_base = (char *) pPriv->state->virtual;
+    state_base = (char *) state->virtual;
     /* Set up our pointers to state structures in framebuffer.  It would
      * probably be a good idea to fill these structures out in system memory
      * and then dump them there, instead.
@@ -370,7 +379,7 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
 					     DRM_BO_FLAG_MEM_TT |
 					     DRM_BO_FLAG_WRITE |
 					     DRM_BO_FLAG_READ,
-					     pPriv->state,
+					     state,
 					     (char *) &dest_surf_state->ss1.base_addr -
 					     state_base,
 					     0);
@@ -409,7 +418,7 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
     src_surf_state->ss0.render_cache_read_mode = 0;
 
     if (pI830->use_ttm_batch) {
-	dri_emit_reloc(pPriv->state,
+	dri_emit_reloc(state,
 		       DRM_BO_FLAG_MEM_TT |
 		       DRM_BO_FLAG_WRITE | 
 		       DRM_BO_FLAG_READ,
@@ -513,7 +522,7 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
     wm_state->wm5.enable_8_pix = 0;
     wm_state->wm5.early_depth_test = 1;
 
-    dri_bo_unmap(pPriv->state);
+    dri_bo_unmap(state);
 
     {
 	BEGIN_BATCH(2);
@@ -543,10 +552,10 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
 	 * to our buffer.
 	 */
 	OUT_BATCH(BRW_STATE_BASE_ADDRESS | 4);
-	OUT_RELOC(pPriv->state,	/* General state base address */
+	OUT_RELOC(state,	/* General state base address */
 		  DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
 		  BASE_ADDRESS_MODIFY);
-	OUT_RELOC(pPriv->state,	/* Surface state base address */
+	OUT_RELOC(state,	/* Surface state base address */
 		  DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
 		  BASE_ADDRESS_MODIFY);
 	OUT_BATCH(0 | BASE_ADDRESS_MODIFY);  /* media base addr, don't care */
@@ -558,7 +567,7 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
 	/* Set system instruction pointer */
 	OUT_BATCH(BRW_STATE_SIP | 0);
 	/* system instruction pointer */
-	OUT_RELOC(pPriv->state,
+	OUT_RELOC(state,
 		  DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
 		  sip_kernel_offset);
 	OUT_BATCH(MI_NOOP);
@@ -650,7 +659,7 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
        OUT_BATCH((0 << VB0_BUFFER_INDEX_SHIFT) |
 		VB0_VERTEXDATA |
 		((4 * 4) << VB0_BUFFER_PITCH_SHIFT));
-       OUT_RELOC(pPriv->state,
+       OUT_RELOC(state,
 		 DRM_BO_FLAG_MEM_TT | DRM_BO_FLAG_READ,
 		 vb_offset);
        OUT_BATCH(3); /* four corners to our rectangle */
@@ -681,6 +690,8 @@ I965DisplayVideoTextured(ScrnInfoPtr pScrn, I830PortPrivPtr pPriv, int id,
 
        ADVANCE_BATCH();
     }
+
+    dri_bo_unreference(state);
 
    /* Set up the offset for translating from the given region (in screen
     * coordinates) to the backing pixmap.
