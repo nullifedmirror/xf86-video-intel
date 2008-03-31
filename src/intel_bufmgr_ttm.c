@@ -554,9 +554,21 @@ dri_ttm_bo_unmap(dri_bo *buf)
 static unsigned int
 dri_ttm_bo_get_handle(dri_bo *buf)
 {
-   dri_bo_ttm *ttm_buf = (dri_bo_ttm *)buf;
+    dri_bufmgr_ttm *bufmgr_ttm;
+    dri_bo_ttm *ttm_buf = (dri_bo_ttm *)buf;
 
-   return ttm_buf->drm_bo.handle;
+    if (buf == NULL)
+	return 0;
+
+    bufmgr_ttm = (dri_bufmgr_ttm *)buf->bufmgr;
+    if (ttm_buf->delayed_unmap) {
+	drmBOUnmap(bufmgr_ttm->fd, &ttm_buf->drm_bo);
+	ttm_buf->delayed_unmap = GL_FALSE;
+    }
+
+    ttm_buf->shared = GL_TRUE;
+
+    return ttm_buf->drm_bo.handle;
 }
 
 /**
