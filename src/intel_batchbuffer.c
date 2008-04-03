@@ -133,6 +133,7 @@ intel_exec_ioctl(ScrnInfoPtr pScrn,
    I830Ptr pI830 = I830PTR(pScrn);
    struct drm_i915_execbuffer execbuf;
    dri_fence *fo;
+   int ret;
 
    assert(used);
 
@@ -151,10 +152,23 @@ intel_exec_ioctl(ScrnInfoPtr pScrn,
    execbuf.ops_list = (unsigned long)start;
    execbuf.fence_arg.flags = DRM_FENCE_FLAG_SHAREABLE | DRM_I915_FENCE_FLAG_FLUSHED;
 
-   if (drmCommandWriteRead(pI830->drmSubFD, DRM_I915_EXECBUFFER, &execbuf,
-                       sizeof(execbuf))) {
-      fprintf(stderr, "DRM_I830_EXECBUFFER: %d\n", -errno);
+   do {
+      ret = drmCommandWriteRead(pI830->drmSubFD, DRM_I915_EXECBUFFER, &execbuf,
+				sizeof(execbuf));
+   } while (ret == -EAGAIN);
+
+   if (ret) {
+      fprintf(stderr, "DRM_I915_EXECBUFFER: %d\n", -errno);
       exit(1);
+   }
+
+   if (execbuf.fence_arg.error != 0) {
+      /*
+       * Fence creation has failed, but the GPU has been idled by the
+       * kernel. Safe to continue.
+       */
+      *fence = NULL;
+      return;
    }
 
    fo = intel_ttm_fence_create_from_arg(pI830->bufmgr, "fence buffers",
