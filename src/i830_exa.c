@@ -489,6 +489,8 @@ static Bool I830EXAPrepareAccess(PixmapPtr pPix, int index)
     if (!driver_priv)
 	return FALSE;
 
+    dri2Lock(pPix);
+
     if (driver_priv->bo) {
 	mmDebug("mapping %p %d %dx%d\n", pPix, driver_priv->flags, pPix->drawable.width, pPix->drawable.height);
 
@@ -497,15 +499,17 @@ static Bool I830EXAPrepareAccess(PixmapPtr pPix, int index)
 	ret = dri_bo_map(driver_priv->bo, TRUE);
 	if (ret) {
 	    FatalError("Failed to map pixmap: %s\n", strerror(-ret));
-	    return FALSE;
+	    goto error;
 	}
 
 	pPix->devPrivate.ptr = driver_priv->bo->virtual;
     }
 
-    dri2Lock(pPix);
-
     return TRUE;
+
+error:
+    dri2Unlock(pPix);
+    return FALSE;
 }
 
 static void I830EXAFinishAccess(PixmapPtr pPix, int index)
