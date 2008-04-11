@@ -1748,8 +1748,7 @@ I830PreInit(ScrnInfoPtr pScrn, int flags)
 
 #if defined(DRI2)
    /* Load the dri2 module if requested. */
-   if (xf86ReturnOptValBool(pI830->Options, OPTION_DRI2, FALSE) &&
-       !pI830->directRenderingDisabled) {
+   if (xf86DRI2Enabled() && !pI830->directRenderingDisabled) {
        xf86LoadSubModule(pScrn, "dri2");
    }
 #endif
@@ -2476,7 +2475,7 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
 
    pI830->directRendering = DRI_TYPE_NONE;
 #ifdef DRI2
-   if (xf86ReturnOptValBool(pI830->Options, OPTION_DRI2, FALSE))
+   if (xf86DRI2Enabled())
        I830DRI2Prepare(pScreen);
 #endif
 
