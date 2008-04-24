@@ -3391,9 +3391,11 @@ I830EnterVT(int scrnIndex, int flags)
 
       if (!pI830->starting) {
 	 I830DRIResume(screenInfo.screens[scrnIndex]);
-	 i830_refresh_ring(pScrn);
-	 I830Sync(pScrn);
-	 DO_RING_IDLE();
+	 if (!pI830->use_drm_mode) {
+	     i830_refresh_ring(pScrn);
+	     I830Sync(pScrn);
+	     DO_RING_IDLE();
+	 }
 
 	 DPRINTF(PFX, "calling dri unlock\n");
 	 I830DRIUnlock(pScrn);
@@ -3434,9 +3436,11 @@ I830EnterVT(int scrnIndex, int flags)
 
 	 I830DRIResume(screenInfo.screens[scrnIndex]);
       
-	 i830_refresh_ring(pScrn);
-	 I830Sync(pScrn);
-	 DO_RING_IDLE();
+	 if (!pI830->use_drm_mode) {
+	     i830_refresh_ring(pScrn);
+	     I830Sync(pScrn);
+	     DO_RING_IDLE();
+	 }
 
 	 sarea->texAge++;
 	 for(i = 0; i < I830_NR_TEX_REGIONS+1 ; i++)
