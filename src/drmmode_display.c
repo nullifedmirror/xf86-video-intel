@@ -630,7 +630,7 @@ static Bool drmmode_resize_fb(ScrnInfoPtr scrn, drmmode_ptr drmmode, int width, 
 
 	ErrorF("current width %d height %d\n", drmmode->mode_fb->width, drmmode->mode_fb->height);
 
-	if (drmmode->mode_fb->width == width)
+	if (drmmode->mode_fb->width == width && drmmode->mode_fb->height == height)
 		return TRUE;
 
 	if (!drmmode->create_new_fb)
