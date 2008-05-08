@@ -2081,13 +2081,7 @@ i830_allocate_framebuffer_new(ScrnInfoPtr pScrn, I830Ptr pI830, BoxPtr FbMemBox)
     /* Clear everything first. */
     memset(FbMemBox, 0, sizeof(*FbMemBox));
 
-    /* We'll allocate the fb such that the root window will fit regardless of
-     * rotation.
-     */
-    if (pScrn->virtualX > pScrn->virtualY)
-	fb_height = pScrn->virtualX;
-    else
-	fb_height = pScrn->virtualY;
+    fb_height = pScrn->virtualY;
 
     FbMemBox->x1 = 0;
     FbMemBox->x2 = pScrn->displayWidth;
