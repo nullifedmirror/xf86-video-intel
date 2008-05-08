@@ -272,7 +272,7 @@ drmmode_crtc_shadow_allocate(xf86CrtcPtr crtc, int width, int height)
 	dri_bo_map(drmmode_crtc->rotate_bo, 1);
 
 	ret = drmModeAddFB(drmmode->fd, width, height, crtc->scrn->depth,
-			   crtc->scrn->depth, rotate_pitch, dri_bo_get_handle(drmmode_crtc->rotate_bo), &drmmode_crtc->rotate_fb_id);
+			   crtc->scrn->bitsPerPixel, rotate_pitch, dri_bo_get_handle(drmmode_crtc->rotate_bo), &drmmode_crtc->rotate_fb_id);
 	if (ret) {
 		ErrorF("failed to add rotate fb\n");
 	}
@@ -587,7 +587,7 @@ void drmmode_set_fb(ScrnInfoPtr scrn, drmmode_ptr drmmode, int width, int height
 	int ret;
 
 	ret = drmModeAddFB(drmmode->fd, width, height, scrn->depth,
-			   scrn->depth, pitch, bo->handle, &drmmode->fb_id);
+			   scrn->bitsPerPixel, pitch, bo->handle, &drmmode->fb_id);
 
 	if (ret) {
 		ErrorF("Failed to add fb\n");
@@ -628,8 +628,6 @@ static Bool drmmode_resize_fb(ScrnInfoPtr scrn, drmmode_ptr drmmode, int width, 
 	int pitch;
 	int ret;
 
-	ErrorF("current width %d height %d\n", drmmode->mode_fb->width, drmmode->mode_fb->height);
-
 	if (drmmode->mode_fb->width == width && drmmode->mode_fb->height == height)
 		return TRUE;
 
@@ -640,10 +638,9 @@ static Bool drmmode_resize_fb(ScrnInfoPtr scrn, drmmode_ptr drmmode, int width, 
 	if (handle == 0)
 		return FALSE;
 
-	ErrorF("pitch is %d\n", pitch);
 	ret = drmModeReplaceFB(drmmode->fd, drmmode->fb_id, 
 			       width, height,
-			       scrn->depth, scrn->depth, pitch,
+			       scrn->depth, scrn->bitsPerPixel, pitch,
 			       handle);
 
 	if (ret)
