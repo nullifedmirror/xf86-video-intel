@@ -808,11 +808,12 @@ I830LoadPalette(ScrnInfoPtr pScrn, int numColors, int *indices,
    }
 }
 
-static void
+void
 i830_update_front_offset(ScrnInfoPtr pScrn)
 {
    ScreenPtr pScreen = pScrn->pScreen;
    I830Ptr pI830 = I830PTR(pScrn);
+   int pitch = pScrn->displayWidth * pI830->cpp;
 
    /* Update buffer locations, which may have changed as a result of
     * i830_bind_all_memory().
@@ -824,7 +825,7 @@ i830_update_front_offset(ScrnInfoPtr pScrn)
     */
    if (!pI830->starting) {
       if (!pScreen->ModifyPixmapHeader(pScreen->GetScreenPixmap(pScreen),
-				       -1, -1, -1, -1, -1,
+				       pScrn->virtualX, pScrn->virtualY, -1, -1, pitch,
 				       (pointer)(pI830->FbBase +
 						 pScrn->fbOffset)))
        FatalError("Couldn't adjust screen pixmap\n");
@@ -1647,6 +1648,8 @@ I830PreInit(ScrnInfoPtr pScrn, int flags)
 	   PreInitCleanup(pScrn);
 	   return FALSE;
        }
+
+       pI830->drmmode.create_new_fb = i830_create_new_fb;
 
        pI830->drmSubFD = pI830->drmmode.fd;
        xfree(bus_id);

@@ -560,13 +560,16 @@ static Bool I830EXAModifyPixmapHeader(PixmapPtr pPixmap, int width, int height,
 	/* this is the front buffer pixmap so set it up as such..*/
         driver_priv->flags |= I830_EXA_PIXMAP_IS_FRONTBUFFER;
 
+	ErrorF("FRONTBUFFER HANDLE CHANGING %p\n", driver_priv->bo);
 	/* get a reference to the front buffer handle */
+	if (driver_priv->bo)
+		dri_bo_unreference(driver_priv->bo);
 	driver_priv->bo =
 	    intel_ttm_bo_create_from_handle(pI830->bufmgr, "front",
 					    pI830->front_buffer->bo.handle);
+
 	miModifyPixmapHeader(pPixmap, width, height, depth,
 			     bitsPerPixel, devKind, NULL);
-
 
 	return TRUE;
     }

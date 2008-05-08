@@ -38,6 +38,8 @@ typedef struct {
   drmModeFBPtr mode_fb;
   int cpp;
   dri_bufmgr *bufmgr;
+
+  uint32_t (*create_new_fb)(ScrnInfoPtr pScrn, int width, int height, int *pitch);
 } drmmode_rec, *drmmode_ptr;
 
 typedef struct {

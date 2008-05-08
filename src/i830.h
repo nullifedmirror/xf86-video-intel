@@ -760,6 +760,7 @@ extern void I830DRI2Unlock(ScreenPtr pScrn);
 extern void I830InitBufMgr(ScrnInfoPtr pScrn);
 #endif
 
+void i830_update_front_offset(ScrnInfoPtr pScrn);
 unsigned long intel_get_pixmap_offset(PixmapPtr pPix);
 unsigned long intel_get_pixmap_pitch(PixmapPtr pPix);
 extern Bool I830AccelInit(ScreenPtr pScreen);
@@ -795,7 +796,7 @@ extern long I830CheckAvailableMemory(ScrnInfoPtr pScrn);
 Bool i830_allocate_2d_memory(ScrnInfoPtr pScrn);
 Bool i830_allocate_texture_memory(ScrnInfoPtr pScrn);
 Bool i830_allocate_3d_memory(ScrnInfoPtr pScrn);
-
+extern uint32_t i830_create_new_fb(ScrnInfoPtr pScrn, int width, int height, int *pitch);
 extern Bool I830IsPrimary(ScrnInfoPtr pScrn);
 
 extern Bool I830I2CInit(ScrnInfoPtr pScrn, I2CBusPtr *bus_ptr, int i2c_reg,

@@ -32,12 +32,21 @@
 #ifdef XF86DRM_MODE
 #include "i830.h"
 
+static Bool drmmode_resize_fb(ScrnInfoPtr scrn, drmmode_ptr drmmode, int width, int height);
+
 static Bool
 drmmode_xf86crtc_resize (ScrnInfoPtr scrn, int width, int height)
 {
+	xf86CrtcConfigPtr   xf86_config = XF86_CRTC_CONFIG_PTR(scrn);
+	drmmode_crtc_private_ptr drmmode_crtc = xf86_config->crtc[0]->driver_private;
+	drmmode_ptr drmmode = drmmode_crtc->drmmode;
+	Bool ret;
+
+	ErrorF("resize called %d %d\n", width, height);
+	ret = drmmode_resize_fb(scrn, drmmode, width, height);
 	scrn->virtualX = width;
 	scrn->virtualY = height;
-	return TRUE;
+	return ret;
 }
 
 static void
@@ -555,18 +564,14 @@ Bool drmmode_pre_init(ScrnInfoPtr pScrn, drmmode_ptr drmmode, char *busId, char 
 	if (!drmmode->mode_res)
 		return FALSE;
 
-	drmmode->mode_fb = drmModeGetFB(drmmode->fd, drmmode->mode_res->fbs[0]);
-	if (!drmmode->mode_fb)
-		return FALSE;
-
-	xf86CrtcSetSizeRange(pScrn, 320, 200, drmmode->mode_fb->width, drmmode->mode_fb->height);
+	xf86CrtcSetSizeRange(pScrn, 320, 200, drmmode->mode_res->max_width, drmmode->mode_res->max_height);
 	for (i = 0; i < drmmode->mode_res->count_crtcs; i++)
 		drmmode_crtc_init(pScrn, drmmode, i);
 
 	for (i = 0; i < drmmode->mode_res->count_outputs; i++)
 		drmmode_output_init(pScrn, drmmode, i);
 
-	xf86InitialConfiguration(pScrn, FALSE);
+	xf86InitialConfiguration(pScrn, TRUE);
 
 	return TRUE;
 }
@@ -577,17 +582,23 @@ Bool drmmode_set_bufmgr(ScrnInfoPtr pScrn, drmmode_ptr drmmode, dri_bufmgr *bufm
 	return TRUE;
 }
 
-void drmmode_set_fb(ScrnInfoPtr pScrn, drmmode_ptr drmmode, int width, int height, int pitch, drmBO *bo)
+void drmmode_set_fb(ScrnInfoPtr scrn, drmmode_ptr drmmode, int width, int height, int pitch, drmBO *bo)
 {
 	int ret;
 
-	ret = drmModeAddFB(drmmode->fd, width, height, pScrn->depth,
-			   pScrn->depth, pitch, bo->handle, &drmmode->fb_id);
+	ret = drmModeAddFB(drmmode->fd, width, height, scrn->depth,
+			   scrn->depth, pitch, bo->handle, &drmmode->fb_id);
 
 	if (ret) {
 		ErrorF("Failed to add fb\n");
 	}
-	ErrorF("Add fb id %d\n", drmmode->fb_id);
+
+	drmmode->mode_fb = drmModeGetFB(drmmode->fd, drmmode->fb_id);
+	if (!drmmode->mode_fb)
+		return;
+
+
+	ErrorF("Add fb id %d %d %d\n", drmmode->fb_id, width, height);
 }
 
 Bool drmmode_is_rotate_pixmap(ScrnInfoPtr pScrn, pointer pPixData, dri_bo **bo)
@@ -607,9 +618,44 @@ Bool drmmode_is_rotate_pixmap(ScrnInfoPtr pScrn, pointer pPixData, dri_bo **bo)
 			return TRUE;
 		}
 	}
-	*bo = NULL;
 	return FALSE;
 
 }
+
+static Bool drmmode_resize_fb(ScrnInfoPtr scrn, drmmode_ptr drmmode, int width, int height)
+{
+	uint32_t handle;
+	int pitch;
+	int ret;
+
+	ErrorF("current width %d height %d\n", drmmode->mode_fb->width, drmmode->mode_fb->height);
+
+	if (drmmode->mode_fb->width == width)
+		return TRUE;
+
+	if (!drmmode->create_new_fb)
+		return FALSE;
+
+	handle = drmmode->create_new_fb(scrn, width, height, &pitch);
+	if (handle == 0)
+		return FALSE;
+
+	ErrorF("pitch is %d\n", pitch);
+	ret = drmModeReplaceFB(drmmode->fd, drmmode->fb_id, 
+			       width, height,
+			       scrn->depth, scrn->depth, pitch,
+			       handle);
+
+	if (ret)
+		return FALSE;
+
+	drmModeFreeFB(drmmode->mode_fb);
+	drmmode->mode_fb = drmModeGetFB(drmmode->fd, drmmode->fb_id);
+	if (!drmmode->mode_fb)
+		return;
+	
+	return TRUE;
+}
+
 #endif
 
