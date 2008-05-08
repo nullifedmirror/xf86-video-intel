@@ -226,7 +226,7 @@ drmmode_hide_cursor (xf86CrtcPtr crtc)
 	drmmode_crtc_private_ptr drmmode_crtc = crtc->driver_private;
 	drmmode_ptr drmmode = drmmode_crtc->drmmode;
 	
-	drmModeSetCursor(drmmode->fd, drmmode_crtc->mode_crtc->crtc_id, NULL, I810_CURSOR_X, I810_CURSOR_Y);
+	drmModeSetCursor(drmmode->fd, drmmode_crtc->mode_crtc->crtc_id, 0, I810_CURSOR_X, I810_CURSOR_Y);
 
 }
 
@@ -236,7 +236,7 @@ drmmode_show_cursor (xf86CrtcPtr crtc)
 	drmmode_crtc_private_ptr drmmode_crtc = crtc->driver_private;
 	drmmode_ptr drmmode = drmmode_crtc->drmmode;
 
-	drmModeSetCursor(drmmode->fd, drmmode_crtc->mode_crtc->crtc_id, &drmmode_crtc->cursor_bo, I810_CURSOR_X, I810_CURSOR_Y);
+	drmModeSetCursor(drmmode->fd, drmmode_crtc->mode_crtc->crtc_id, drmmode_crtc->cursor_bo.handle, I810_CURSOR_X, I810_CURSOR_Y);
 }
 
 static void *
