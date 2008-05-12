@@ -158,6 +158,21 @@ static const struct pci_id_match intel_device_match[] = {
 
 #endif /* XSERVER_LIBPCIACCESS */
 
+static Bool
+I810DriverFunc(ScrnInfoPtr pScrn, xorgDriverFuncOp op, pointer ptr)
+{
+    xorgHWFlags *flag;
+
+    switch (op) {
+        case GET_REQUIRED_HW_INTERFACES:
+            flag = (CARD32*)ptr;
+            (*flag) = 0;
+            return TRUE;
+        default:
+            return FALSE;
+    }
+}
+
 _X_EXPORT DriverRec I810 = {
    I810_VERSION,
    I810_DRIVER_NAME,
@@ -170,7 +185,7 @@ _X_EXPORT DriverRec I810 = {
    I810AvailableOptions,
    NULL,
    0,
-   NULL,
+   I810DriverFunc,
 #if XSERVER_LIBPCIACCESS
    intel_device_match,
    intel_pci_probe

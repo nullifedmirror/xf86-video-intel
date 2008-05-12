@@ -371,7 +371,7 @@ drmmode_crtc_init(ScrnInfoPtr pScrn, drmmode_ptr drmmode, int num)
 
 	/* allocate cursor BO for this crtc */
 	mask = DRM_BO_FLAG_READ | DRM_BO_FLAG_WRITE | DRM_BO_FLAG_MAPPABLE |
-	       DRM_BO_FLAG_MEM_VRAM | DRM_BO_FLAG_NO_EVICT;
+	       DRM_BO_FLAG_MEM_VRAM /*| DRM_BO_FLAG_NO_EVICT*/;
 	ret  = drmBOCreate(drmmode->fd, cursor_size, 0, NULL,
 			   mask, 0, &drmmode_crtc->cursor_bo);
 
