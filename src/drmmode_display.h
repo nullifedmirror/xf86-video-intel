@@ -54,7 +54,8 @@ typedef struct {
 typedef struct {
     drmmode_ptr drmmode;
     int output_id;
-    drmModeOutputPtr mode_output;
+    drmModeConnectorPtr mode_output;
+    drmModeEncoderPtr mode_encoder;
     drmModePropertyBlobPtr edid_blob;
 } drmmode_output_private_rec, *drmmode_output_private_ptr;
 

@@ -159,7 +159,7 @@ drmmode_set_mode_major(xf86CrtcPtr crtc, DisplayModePtr mode,
 			continue;
 
 		drmmode_output = output->driver_private;
-		output_ids[output_count] = drmmode_output->mode_output->output_id;
+		output_ids[output_count] = drmmode_output->mode_output->connector_id;
 		output_count++;
 	}
 
@@ -389,9 +389,9 @@ drmmode_output_detect(xf86OutputPtr output)
 	drmmode_output_private_ptr drmmode_output = output->driver_private;
 	drmmode_ptr drmmode = drmmode_output->drmmode;
 	xf86OutputStatus status;
-	drmModeFreeOutput(drmmode_output->mode_output);
+	drmModeFreeConnector(drmmode_output->mode_output);
 	
-	drmmode_output->mode_output = drmModeGetOutput(drmmode->fd, drmmode_output->output_id);
+	drmmode_output->mode_output = drmModeGetConnector(drmmode->fd, drmmode_output->output_id);
 	
 	switch (drmmode_output->mode_output->connection) {
 	case DRM_MODE_CONNECTED:
@@ -418,7 +418,7 @@ static DisplayModePtr
 drmmode_output_get_modes(xf86OutputPtr output)
 {
 	drmmode_output_private_ptr drmmode_output = output->driver_private;
-	drmModeOutputPtr koutput = drmmode_output->mode_output;
+	drmModeConnectorPtr koutput = drmmode_output->mode_output;
 	drmmode_ptr drmmode = drmmode_output->drmmode;
 	int i;
 	DisplayModePtr Modes = NULL, Mode;
@@ -460,7 +460,7 @@ drmmode_output_destroy(xf86OutputPtr output)
 
 	if (drmmode_output->edid_blob)
 		drmModeFreePropertyBlob(drmmode_output->edid_blob);
-	drmModeFreeOutput(drmmode_output->mode_output);
+	drmModeFreeConnector(drmmode_output->mode_output);
 	xfree(drmmode_output);
 	output->driver_private = NULL;
 }
@@ -506,26 +506,41 @@ static void
 drmmode_output_init(ScrnInfoPtr pScrn, drmmode_ptr drmmode, int num)
 {
 	xf86OutputPtr output;
-	drmModeOutputPtr koutput;
+	drmModeConnectorPtr koutput;
+	drmModeEncoderPtr kencoder;
 	drmmode_output_private_ptr drmmode_output;
 	char name[32];
 
-	koutput = drmModeGetOutput(drmmode->fd, drmmode->mode_res->outputs[num]);
+	koutput = drmModeGetConnector(drmmode->fd, drmmode->mode_res->connectors[num]);
 	if (!koutput)
 		return;
 
-	snprintf(name, 32, "%s%d", output_names[koutput->output_type], koutput->output_type_id);
-	output = xf86OutputCreate (pScrn, &drmmode_output_funcs, name);
-	if (!output)
+	snprintf(name, 32, "%s%d", output_names[koutput->connector_type], koutput->connector_id);
+
+	kencoder = drmModeGetEncoder(drmmode->fd, koutput->encoder);
+	if (!kencoder) {
+		drmModeFreeConnector(koutput);
 		return;
+	}
+
+	output = xf86OutputCreate (pScrn, &drmmode_output_funcs, name);
+	if (!output) {
+		drmModeFreeEncoder(kencoder);
+		drmModeFreeConnector(koutput);
+		return;
+	}
+
 	drmmode_output = xcalloc(sizeof(drmmode_output_private_rec), 1);
 	if (!drmmode_output) {
 		xf86OutputDestroy(output);
-		drmModeFreeOutput(koutput);
+		drmModeFreeConnector(koutput);
+		drmModeFreeEncoder(kencoder);
 		return;
 	}
-	drmmode_output->output_id = drmmode->mode_res->outputs[num];
+
+	drmmode_output->output_id = drmmode->mode_res->connectors[num];
 	drmmode_output->mode_output = koutput;
+	drmmode_output->mode_encoder = kencoder;
 	drmmode_output->drmmode = drmmode;
 	output->mm_width = koutput->mmWidth;
 	output->mm_height = koutput->mmHeight;
@@ -533,8 +548,8 @@ drmmode_output_init(ScrnInfoPtr pScrn, drmmode_ptr drmmode, int num)
 	output->subpixel_order = subpixel_conv_table[koutput->subpixel];
 	output->driver_private = drmmode_output;
 
-	output->possible_crtcs = koutput->crtcs;
-	output->possible_clones = koutput->clones;
+	output->possible_crtcs = kencoder->crtcs;
+	output->possible_clones = kencoder->clones;
 	return;
 }
 
@@ -568,7 +583,7 @@ Bool drmmode_pre_init(ScrnInfoPtr pScrn, drmmode_ptr drmmode, char *busId, char 
 	for (i = 0; i < drmmode->mode_res->count_crtcs; i++)
 		drmmode_crtc_init(pScrn, drmmode, i);
 
-	for (i = 0; i < drmmode->mode_res->count_outputs; i++)
+	for (i = 0; i < drmmode->mode_res->count_connectors; i++)
 		drmmode_output_init(pScrn, drmmode, i);
 
 	xf86InitialConfiguration(pScrn, TRUE);
@@ -649,7 +664,7 @@ static Bool drmmode_resize_fb(ScrnInfoPtr scrn, drmmode_ptr drmmode, int width, 
 	drmModeFreeFB(drmmode->mode_fb);
 	drmmode->mode_fb = drmModeGetFB(drmmode->fd, drmmode->fb_id);
 	if (!drmmode->mode_fb)
-		return;
+		return FALSE;
 	
 	return TRUE;
 }
