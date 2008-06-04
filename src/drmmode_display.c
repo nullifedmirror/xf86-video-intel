@@ -496,11 +496,18 @@ static int subpixel_conv_table[7] = { 0, SubPixelUnknown,
 				      SubPixelVerticalBGR,
 				      SubPixelNone };
 
-const char *output_names[] = { "None",
-			       "VGA",
-			       "TMDS",
-			       "LVDS",
-			       "TV" };
+struct output_name {
+	const char *name;
+	int count;
+};
+
+struct output_name output_names[] = {
+	{ "None", 0 },
+	{ "VGA", 0 },
+	{ "TMDS", 0 },
+	{ "LVDS", 0 },
+	{ "TV", 0 },
+};
 
 static void
 drmmode_output_init(ScrnInfoPtr pScrn, drmmode_ptr drmmode, int num)
@@ -515,13 +522,13 @@ drmmode_output_init(ScrnInfoPtr pScrn, drmmode_ptr drmmode, int num)
 	if (!koutput)
 		return;
 
-	snprintf(name, 32, "%s%d", output_names[koutput->connector_type], koutput->connector_id);
-
-	kencoder = drmModeGetEncoder(drmmode->fd, koutput->encoder);
+	kencoder = drmModeGetEncoder(drmmode->fd, koutput->encoders[0]);
 	if (!kencoder) {
 		drmModeFreeConnector(koutput);
 		return;
 	}
+
+	snprintf(name, 32, "%s%d", output_names[kencoder->encoder_type].name, output_names[kencoder->encoder_type].count++);
 
 	output = xf86OutputCreate (pScrn, &drmmode_output_funcs, name);
 	if (!output) {
