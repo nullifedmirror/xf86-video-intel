@@ -172,14 +172,13 @@ i830_bind_memory(ScrnInfoPtr pScrn, i830_memory *mem)
 	else
 	   flags |= DRM_BO_FLAG_MEM_TT;
 
-	flags |= DRM_BO_FLAG_NO_EVICT;
+	//flags |= DRM_BO_FLAG_NO_EVICT;
 
 	ret = drmBOSetStatus(pI830->drmSubFD, &mem->bo,
 			     flags,
 			     DRM_BO_MASK_MEM |
 			     DRM_BO_FLAG_READ |
-			     DRM_BO_FLAG_WRITE |
-			     DRM_BO_FLAG_NO_EVICT,
+			     DRM_BO_FLAG_WRITE,
 			     0, 0, 0);
 	if (ret != 0)
 	    return FALSE;
@@ -246,7 +245,7 @@ i830_unbind_memory(ScrnInfoPtr pScrn, i830_memory *mem)
 	int ret;
 
 	ret = drmBOSetStatus(pI830->drmSubFD, &mem->bo,
-			     0, DRM_BO_FLAG_NO_EVICT,
+			     0, 0,
 			     0, 0, 0);
 
 	if (ret == 0) {
