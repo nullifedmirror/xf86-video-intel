@@ -178,6 +178,7 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "xf86_OSproc.h"
 #include "xf86Resources.h"
 #include "xf86RAC.h"
+#include "xf86Priv.h"
 #include "xf86cmap.h"
 #include "compiler.h"
 #include "mibstore.h"
@@ -1044,6 +1045,12 @@ i830SetHotkeyControl(ScrnInfoPtr pScrn, int mode)
 }
 
 #ifdef XF86DRM_MODE
+/*
+ * DRM mode setting Linux only at this point... later on we could
+ * add a wrapper here.
+ */
+#include <linux/kd.h>
+
 static Bool i830_kernel_mode_enabled(ScrnInfoPtr pScrn)
 {
 #if XSERVER_LIBPCIACCESS
@@ -1067,6 +1074,8 @@ static Bool i830_kernel_mode_enabled(ScrnInfoPtr pScrn)
    xfree(busIdString);
    if (ret)
      return FALSE;
+
+   ioctl(xf86Info.consoleFd, KDSETMODE, KD_TEXT);
 
    return TRUE;
 }
@@ -2681,6 +2690,10 @@ I830ScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
        else
 	   pI830->fb_compression = FALSE;
    }
+
+#ifdef XF86DRM_MODE
+	   pI830->fb_compression = FALSE;
+#endif
 
    xf86DrvMsg(pScrn->scrnIndex, X_CONFIG, "Framebuffer compression %sabled\n",
 	      pI830->fb_compression ? "en" : "dis");
