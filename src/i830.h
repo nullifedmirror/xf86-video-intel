@@ -231,6 +231,7 @@ typedef struct {
 #define I830_OUTPUT_LVDS 6
 #define I830_OUTPUT_TVOUT 7
 #define I830_OUTPUT_HDMI 8
+#define I830_OUTPUT_DISPLAYPORT 9
 
 struct _I830DVODriver {
    int type;
@@ -875,6 +876,9 @@ i830PipeHasType (xf86CrtcPtr crtc, int type);
 
 /* i830_crt.c */
 void i830_crt_init(ScrnInfoPtr pScrn);
+
+/* i830_dp.c */
+Bool i830_dp_init(ScrnInfoPtr pScrn, int output_reg);
 
 /* i830_dvo.c */
 void i830_dvo_init(ScrnInfoPtr pScrn);

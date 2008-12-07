@@ -905,21 +905,32 @@ I830SetupOutputs(ScrnInfoPtr pScrn)
       i830_lvds_init(pScrn);
 
    if (IS_I9XX(pI830)) {
-      Bool found = FALSE;
-      if ((INREG(SDVOB) & SDVO_DETECTED)) {
-	 found = i830_sdvo_init(pScrn, SDVOB);
+      if (IS_G4X(pI830) && i830_dp_init(pScrn, DP_B))
+	;
+      else {
+	 Bool found = FALSE;
+	 if ((INREG(SDVOB) & SDVO_DETECTED)) {
+	    found = i830_sdvo_init(pScrn, SDVOB);
 
-	 if (!found && SUPPORTS_INTEGRATED_HDMI(pI830))
-	    i830_hdmi_init(pScrn, SDVOB);
+	    if (!found && SUPPORTS_INTEGRATED_HDMI(pI830))
+	       i830_hdmi_init(pScrn, SDVOB);
+	 }
       }
 
-      if ((INREG(SDVOB) & SDVO_DETECTED))
-	 found = i830_sdvo_init(pScrn, SDVOC);
+      if (IS_G4X(pI830) && i830_dp_init(pScrn, DP_C))
+	;
+      else {
+	 Bool found = FALSE;
+	 if ((INREG(SDVOB) & SDVO_DETECTED))
+	    found = i830_sdvo_init(pScrn, SDVOC);
 
-      if ((INREG(SDVOC) & SDVO_DETECTED) &&
-	    !found && SUPPORTS_INTEGRATED_HDMI(pI830))
-	 i830_hdmi_init(pScrn, SDVOC);
+	 if ((INREG(SDVOC) & SDVO_DETECTED) &&
+	     !found && SUPPORTS_INTEGRATED_HDMI(pI830))
+	    i830_hdmi_init(pScrn, SDVOC);
+      }
 
+      if (IS_GM45(pI830))
+	 i830_dp_init(pScrn, DP_D);
    } else {
       i830_dvo_init(pScrn);
    }

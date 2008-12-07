@@ -530,6 +530,60 @@ DEBUGSTRING(i830_debug_dspclk_gate_d)
 		      OVLUNIT);
 }
 
+DEBUGSTRING(i830_debug_dp)
+{
+    char *enable = val & DP_PORT_EN ? "enabled" : "disabled";
+    char pipe = val & DP_PIPEB_SELECT ? 'B' : 'A';
+    int link_train_v = val & DP_LINK_TRAIN_MASK;
+    char *link_train;
+    int voltage_v = val & DP_VOLTAGE_MASK;
+    char *voltage;
+    int pre_emphasis_v = val & DP_PRE_EMPHASIS_MASK;
+    char *pre_emphasis;
+    int port_width_v = val & DP_PORT_WIDTH_MASK;
+    char *port_width;
+    char *enhanced_framing = val & DP_ENHANCED_FRAMING ? "enhanced" : "normal";
+    char *port_reversal = val & DP_PORT_REVERSAL ? "reversed" : "normal";
+    char *clock_output = val & DP_CLOCK_OUTPUT_ENABLE ? "enabled" : "disabled";
+    char *scrambling = val & DP_SCRAMBLING_DISABLE ? "disabled" : "enabled";
+    char *color_range = val & DP_COLOR_RANGE_16_235 ? "16-235" : "0-255";
+    char *audio_output = val & DP_AUDIO_OUTPUT_ENABLE ? "enabled" : "disabled";
+    char *vs = val & DP_SYNC_VS_HIGH ? "high" : "low";
+    char *hs = val & DP_SYNC_HS_HIGH ? "high" : "low";
+    char *detected = val & DP_DETECTED ? "detected" : "not detected";
+
+    switch (link_train_v) {
+    case DP_LINK_TRAIN_PAT_1: link_train = "pattern 1"; break;
+    case DP_LINK_TRAIN_PAT_2: link_train = "pattern 2"; break;
+    case DP_LINK_TRAIN_PAT_IDLE: link_train = "pattern idle"; break;
+    case DP_LINK_TRAIN_OFF: link_train = "normal pixels"; break;
+    default: link_train = "invalid"; break;
+    }
+    switch (voltage_v) {
+    case DP_VOLTAGE_0_4: voltage = "0.4V"; break;
+    case DP_VOLTAGE_0_6: voltage = "0.6V"; break;
+    case DP_VOLTAGE_0_8: voltage = "0.8V"; break;
+    case DP_VOLTAGE_1_2: voltage = "1.2V"; break;
+    default: voltage = "invalid"; break;
+    }
+    switch (pre_emphasis_v) {
+    case DP_PRE_EMPHASIS_0: pre_emphasis = "0dB"; break;
+    case DP_PRE_EMPHASIS_3_5: pre_emphasis = "3.5dB"; break;
+    case DP_PRE_EMPHASIS_6: pre_emphasis = "6dB"; break;
+    case DP_PRE_EMPHASIS_9_5: pre_emphasis = "9.5dB"; break;
+    default: pre_emphasis = "invalid"; break;
+    }
+    switch (port_width_v) {
+    case DP_PORT_WIDTH_1: port_width = "1"; break;
+    case DP_PORT_WIDTH_2: port_width = "2"; break;
+    case DP_PORT_WIDTH_4: port_width = "4"; break;
+    default: port_width = "invalid"; break;
+    }
+    return XNFprintf ("DisplayPort %s pipe %c train %s voltage %s pre_emphasis %s width %s framing %s port %s clock_debug %s scrambling %s color %s audio %s vsync %s hsync %s %s",
+		      enable, pipe, link_train, voltage, pre_emphasis, port_width, enhanced_framing,
+		      port_reversal, clock_output, scrambling, color_range, audio_output,
+		      vs, hs, detected);
+}
 
 DEBUGSTRING(i810_debug_915_fence)
 {
@@ -745,7 +799,7 @@ static struct i830SnapshotRec {
     DEFINEREG(MI_RDRET_STATE),
     DEFINEREG(ECOSKPD),
 
-    DEFINEREG(DP_B),
+    DEFINEREG2(DP_B, i830_debug_dp),
     DEFINEREG(DPB_AUX_CH_CTL),
     DEFINEREG(DPB_AUX_CH_DATA1),
     DEFINEREG(DPB_AUX_CH_DATA2),
@@ -753,7 +807,7 @@ static struct i830SnapshotRec {
     DEFINEREG(DPB_AUX_CH_DATA4),
     DEFINEREG(DPB_AUX_CH_DATA5),
 
-    DEFINEREG(DP_C),
+    DEFINEREG2(DP_C, i830_debug_dp),
     DEFINEREG(DPC_AUX_CH_CTL),
     DEFINEREG(DPC_AUX_CH_DATA1),
     DEFINEREG(DPC_AUX_CH_DATA2),
@@ -761,7 +815,7 @@ static struct i830SnapshotRec {
     DEFINEREG(DPC_AUX_CH_DATA4),
     DEFINEREG(DPC_AUX_CH_DATA5),
 
-    DEFINEREG(DP_D),
+    DEFINEREG2(DP_D, i830_debug_dp),
     DEFINEREG(DPD_AUX_CH_CTL),
     DEFINEREG(DPD_AUX_CH_DATA1),
     DEFINEREG(DPD_AUX_CH_DATA2),
