@@ -315,6 +315,25 @@ i830_dp_save(xf86OutputPtr output)
     dev_priv->save_DP = INREG(dev_priv->output_reg);
     i830_dp_aux_read(pScrn, dev_priv->output_reg, 0x100,
 		     dev_priv->save_link_configuration, sizeof (dev_priv->save_link_configuration));
+    xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
+	       "link configuration: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
+	       dev_priv->save_link_configuration[0],
+	       dev_priv->save_link_configuration[1],
+	       dev_priv->save_link_configuration[2],
+	       dev_priv->save_link_configuration[3],
+	       dev_priv->save_link_configuration[4],
+	       dev_priv->save_link_configuration[5],
+	       dev_priv->save_link_configuration[6],
+	       dev_priv->save_link_configuration[7],
+	       dev_priv->save_link_configuration[8],
+	       dev_priv->save_link_configuration[9],
+	       dev_priv->save_link_configuration[10],
+	       dev_priv->save_link_configuration[11],
+	       dev_priv->save_link_configuration[12],
+	       dev_priv->save_link_configuration[13],
+	       dev_priv->save_link_configuration[14],
+	       dev_priv->save_link_configuration[15]);
+
     i830_dp_lane_status(output, lane_status);
 }
 
@@ -345,10 +364,10 @@ i830_dp_link_train(xf86OutputPtr output, uint32_t DP)
 	       "adjust_request(%d): %02x %02x\n",
 	       ret, adjust_request[0], adjust_request[1]);
     /* main link disabled */
-    OUTREG(dev_priv->output_reg, DP | DP_LINK_TRAIN_PAT_1);
-    POSTING_READ(dev_priv->output_reg);
     i830_dp_aux_write_1(pScrn, dev_priv->output_reg,
 			DP_TRAINING_PATTERN_SET, DP_TRAINING_PATTERN_1);
+    OUTREG(dev_priv->output_reg, DP | DP_LINK_TRAIN_PAT_1);
+    POSTING_READ(dev_priv->output_reg);
     usleep (15*1000);
     ret = i830_dp_aux_read(pScrn, dev_priv->output_reg,
 			   DP_TRAINING_PATTERN_SET,
@@ -388,10 +407,10 @@ i830_dp_link_train(xf86OutputPtr output, uint32_t DP)
 	}
     }
     /* channel eq pattern */
-    OUTREG(dev_priv->output_reg, DP | DP_LINK_TRAIN_PAT_2);
-    POSTING_READ(dev_priv->output_reg);
     i830_dp_aux_write_1(pScrn, dev_priv->output_reg,
 			DP_TRAINING_PATTERN_SET, DP_TRAINING_PATTERN_2);
+    OUTREG(dev_priv->output_reg, DP | DP_LINK_TRAIN_PAT_2);
+    POSTING_READ(dev_priv->output_reg);
     usleep(15*1000);
     ret = i830_dp_aux_read(pScrn, dev_priv->output_reg,
 			   DP_TRAINING_PATTERN_SET,
@@ -437,11 +456,10 @@ i830_dp_restore(xf86OutputPtr output)
     ScrnInfoPtr pScrn = output->scrn;
     I830OutputPrivatePtr intel_output = output->driver_private;
     struct i830_dp_priv *dev_priv = intel_output->dev_priv;
-    I830Ptr pI830 = I830PTR(pScrn);
 
-    OUTREG(dev_priv->output_reg, dev_priv->save_DP);
     i830_dp_aux_write(pScrn, dev_priv->output_reg, 0x100,
 		     dev_priv->save_link_configuration, sizeof (dev_priv->save_link_configuration));
+    i830_dp_link_train(output, dev_priv->save_DP);
 }
 
 /*
