@@ -251,12 +251,19 @@ i830_dp_aux_native_read(ScrnInfoPtr pScrn, uint32_t output_reg,
 }
 
 /* Run a single AUX_CH I2C transaction, writing/reading data as necessary */
+
+enum dp_aux_i2c_mode {
+    aux_i2c_start,
+    aux_i2c_write,
+    aux_i2c_read,
+    aux_i2c_stop
+};
+
 static int
 i830_dp_aux_i2c_transaction(ScrnInfoPtr pScrn, uint32_t output_reg,
 			    uint16_t address,
-			    uint8_t write_byte, Bool has_write_data,
-			    uint8_t *read_byte, Bool has_read_data,
-			    Bool middle_of_transaction)
+			    enum dp_aux_i2c_mode mode,
+			    uint8_t write_byte, uint8_t *read_byte)
 {
     uint8_t msg[5];
     uint8_t reply[2];
@@ -270,7 +277,7 @@ i830_dp_aux_i2c_transaction(ScrnInfoPtr pScrn, uint32_t output_reg,
     else
 	msg[0] = AUX_I2C_WRITE << 4;
 
-    if (middle_of_transaction)
+    if (mode != aux_i2c_stop)
 	msg[0] |= AUX_I2C_MOT << 4;
 
     /* Note that the AUX_CH I2C stuff wants the read/write
@@ -278,17 +285,28 @@ i830_dp_aux_i2c_transaction(ScrnInfoPtr pScrn, uint32_t output_reg,
      */
     msg[1] = address >> 9;
     msg[2] = address >> 1;
-    msg_bytes = 3;
 
-    if (has_write_data) {
+    switch (mode) {
+    case aux_i2c_start:
+        msg_bytes = 3;
+        reply_bytes = 1;
+	break;
+    case aux_i2c_write:
 	msg[3] = 0;
 	msg[4] = write_byte;
 	msg_bytes = 5;
-    }
-
-    reply_bytes = 1;
-    if (has_read_data)
+	reply_bytes = 1;
+	break;
+    case aux_i2c_read:
+	msg[3] = 0;
+	msg_bytes = 4;
 	reply_bytes = 2;
+	break;
+    case aux_i2c_stop:
+        msg_bytes = 3;
+        reply_bytes = 1;
+	break;
+    }
 
     for (;;) {
 	ret = i830_dp_aux_ch(pScrn, output_reg, msg, msg_bytes,
@@ -299,12 +317,12 @@ i830_dp_aux_i2c_transaction(ScrnInfoPtr pScrn, uint32_t output_reg,
 	    return -1;
 	}
 	if ((reply[0] & AUX_I2C_REPLY_MASK) == AUX_I2C_REPLY_ACK) {
-	    if (has_read_data) {
+	    if (mode == aux_i2c_read) {
 		xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
 			   "i2c_read: %02x\n", reply[1]);
 		*read_byte = reply[1];
 	    }
-	    return 1;
+	    return reply_bytes - 1;
 	}
 	else if ((reply[0] & AUX_I2C_REPLY_MASK) == AUX_I2C_REPLY_DEFER)
 	    usleep(100);
@@ -314,129 +332,6 @@ i830_dp_aux_i2c_transaction(ScrnInfoPtr pScrn, uint32_t output_reg,
 	    return -1;
 	}
     }
-}
-
-/* Start an i2c transaction by sending the i2c address */
-
-static int
-i830_dp_aux_i2c_start(ScrnInfoPtr scrn, uint32_t output_reg,
-		      uint16_t address)
-{
-    return i830_dp_aux_i2c_transaction (scrn, output_reg, address,
-					0, FALSE,
-					NULL, FALSE,
-					TRUE);
-}
-
-/* Write a single byte to an AUX channel in I2C mode */
-static int
-i830_dp_aux_i2c_write(ScrnInfoPtr pScrn, uint32_t output_reg,
-		      uint16_t address, uint8_t byte)
-{
-    int ret;
-    uint8_t ack;
-    uint8_t msg[5];
-    int msg_bytes;
-
-    msg[0] = (AUX_I2C_WRITE|AUX_I2C_MOT) << 4;
-    msg[1] = address >> 9;
-    msg[2] = address >> 1;
-    msg[3] = 0;
-    msg[4] = byte;
-    msg_bytes = 5;
-    for (;;) {
-	ret = i830_dp_aux_ch(pScrn, output_reg, msg, msg_bytes, &ack, 1);
-	if (ret < 0)
-	    return ret;
-	if ((ack & AUX_I2C_REPLY_MASK) == AUX_I2C_REPLY_ACK)
-	    break;
-	else if ((ack & AUX_I2C_REPLY_MASK) == AUX_I2C_REPLY_DEFER)
-	    usleep(100);
-	else {
-	    xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
-		       "aux ch i2c write_1 returns %02x\n", ack);
-	    return -1;
-	}
-    }
-    return 1;
-}
-
-/* Read a single byte from an AUX channel in I2C mode */
-static int
-i830_dp_aux_i2c_read(ScrnInfoPtr pScrn, uint32_t output_reg,
-		     uint16_t address, uint8_t *recv)
-{
-    uint8_t msg[4];
-    int msg_bytes;
-    uint8_t reply[2];
-    uint8_t ack;
-    int reply_bytes;
-    int ret;
-
-    msg[0] = (AUX_I2C_READ | AUX_I2C_MOT) << 4;
-    msg[1] = address >> 9;
-    msg[2] = address >> 1;
-    msg[3] = 0;
-    msg_bytes = 4;
-    reply_bytes = 2;
-
-    for (;;) {
-	ret = i830_dp_aux_ch(pScrn, output_reg, msg, msg_bytes,
-			     reply, reply_bytes);
-	if (ret <= 0) {
-	    xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
-		       "i2c_read: aux_ch error %d\n", ret);
-	    return -1;
-	}
-	ack = reply[0];
-	if ((ack & AUX_I2C_REPLY_MASK) == AUX_I2C_REPLY_ACK) {
-	    xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
-		       "i2c_read: %02x\n", reply[1]);
-	    recv[0] = reply[1];
-	    return 1;
-	}
-	else if ((ack & AUX_I2C_REPLY_MASK) == AUX_I2C_REPLY_DEFER)
-	    usleep(100);
-	else {
-	    xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
-		       "aux ch i2c write returns %02x\n", ack);
-	    return -1;
-	}
-    }
-}
-
-/* Finish an I2C transaction on an AUX channel */
-static int
-i830_dp_aux_i2c_stop(ScrnInfoPtr pScrn, uint32_t output_reg,
-			     uint16_t address)
-{
-    int ret;
-    uint8_t ack;
-    uint8_t msg[3];
-    int msg_bytes;
-
-    if (address & 1)
-	msg[0] = (AUX_I2C_READ) << 4;
-    else
-	msg[0] = (AUX_I2C_WRITE) << 4;
-    msg[1] = address >> 9;
-    msg[2] = address >> 1;
-    msg_bytes = 3;
-    for (;;) {
-	ret = i830_dp_aux_ch(pScrn, output_reg, msg, msg_bytes, &ack, 1);
-	if (ret < 0)
-	    return ret;
-	if ((ack & AUX_I2C_REPLY_MASK) == AUX_I2C_REPLY_ACK)
-	    break;
-	else if ((ack & AUX_I2C_REPLY_MASK) == AUX_I2C_REPLY_DEFER)
-	    usleep(100);
-	else {
-	    xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
-		       "aux ch i2c write_finish returns %02x\n", ack);
-	    return -1;
-	}
-    }
-    return 1;
 }
 
 static void
@@ -678,7 +573,8 @@ i830_dp_i2c_address(I2CDevPtr dev, I2CSlaveAddr addr)
 
     dev_priv->i2c_address = addr;
     dev_priv->i2c_running = TRUE;
-    return i830_dp_aux_i2c_start(scrn, dev_priv->output_reg, addr) >= 0;
+    return i830_dp_aux_i2c_transaction(scrn, dev_priv->output_reg, addr,
+				       aux_i2c_start, 0, NULL) >= 0;
 }
 
 /* DIX never even calls this function, so it better not be necessary */
@@ -702,8 +598,9 @@ i830_dp_i2c_stop(I2CDevPtr dev)
     struct i830_dp_priv *dev_priv = intel_output->dev_priv;
 
     if (dev_priv->i2c_running)
-	(void) i830_dp_aux_i2c_stop(scrn, dev_priv->output_reg,
-				    dev_priv->i2c_address);
+	(void) i830_dp_aux_i2c_transaction(scrn, dev_priv->output_reg,
+					   dev_priv->i2c_address,
+					   aux_i2c_stop, 0, NULL);
     dev_priv->i2c_running = FALSE;
 }
 
@@ -720,9 +617,9 @@ i830_dp_i2c_put_byte(I2CDevPtr dev, I2CByte byte)
     I830OutputPrivatePtr intel_output = output->driver_private;
     struct i830_dp_priv *dev_priv = intel_output->dev_priv;
 
-    return i830_dp_aux_i2c_write(scrn, dev_priv->output_reg,
-				 dev_priv->i2c_address, byte) >= 0;
-    return TRUE;
+    return i830_dp_aux_i2c_transaction(scrn, dev_priv->output_reg,
+				       dev_priv->i2c_address,
+				       aux_i2c_write, byte, NULL) >= 0;
 }
 
 static Bool
@@ -735,9 +632,9 @@ i830_dp_i2c_get_byte(I2CDevPtr dev, I2CByte *byte_ret, Bool last)
     ScrnInfoPtr scrn = output->scrn;
 
     xf86DrvMsg(scrn->scrnIndex, X_ERROR, "i2c_get_byte %d\n", last);
-    return i830_dp_aux_i2c_read(scrn, dev_priv->output_reg,
-				dev_priv->i2c_address,
-				byte_ret) == 1;
+    return i830_dp_aux_i2c_transaction(scrn, dev_priv->output_reg,
+				       dev_priv->i2c_address,
+				       aux_i2c_read, 0, byte_ret) == 1;
 }
 
 static Bool
