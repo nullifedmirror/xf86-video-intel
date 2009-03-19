@@ -821,6 +821,8 @@ i830_dp_detect(xf86OutputPtr output)
     struct i830_dp_priv *dev_priv = intel_output->dev_priv;
     I830Ptr pI830 = I830PTR(pScrn);
     uint32_t temp, bit;
+    xf86OutputStatus status;
+    uint8_t dpcd[4];
 
     dev_priv->has_audio = FALSE;
 
@@ -862,13 +864,20 @@ i830_dp_detect(xf86OutputPtr output)
     if ((temp & bit) == 0)
 	return XF86OutputStatusDisconnected;
 
+    status = XF86OutputStatusDisconnected;
+    if (i830_dp_aux_native_read(pScrn, dev_priv->output_reg,
+				0, dpcd, sizeof (dpcd)) == sizeof (dpcd))
+    {
+	if (dpcd[0] != 0)
+	    status = XF86OutputStatusConnected;
+    }
     if (pI830->debug_modes)
 	xf86DrvMsg(pScrn->scrnIndex, X_INFO,
 		   "DisplayPort monitor detected on DP-%d\n",
 		   (dev_priv->output_reg == DP_B) ? 1 :
 		   (dev_priv->output_reg == DP_C) ? 2 : 3);
 
-    return XF86OutputStatusConnected;
+    return status;
 }
 
 static void
