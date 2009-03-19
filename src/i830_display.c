@@ -1403,7 +1403,7 @@ i830_crtc_mode_set(xf86CrtcPtr crtc, DisplayModePtr mode,
 	    dpll |= DPLLB_MODE_LVDS;
 	else
 	    dpll |= DPLLB_MODE_DAC_SERIAL;
-	if (is_sdvo || is_dp)
+	if (is_sdvo)
 	{
 	    dpll |= DPLL_DVO_HIGH_SPEED;
 	    if ((IS_I945G(pI830) || IS_I945GM(pI830) || IS_G33CLASS(pI830)))
@@ -1412,6 +1412,8 @@ i830_crtc_mode_set(xf86CrtcPtr crtc, DisplayModePtr mode,
 		dpll |= (sdvo_pixel_multiply - 1) << SDVO_MULTIPLIER_SHIFT_HIRES;
 	    }
 	}
+	if (is_dp)
+	    dpll |= DPLL_DVO_HIGH_SPEED;
 	
 	/* compute bitmask from p1 value */
 	if (IS_IGD(pI830))
@@ -1592,11 +1594,11 @@ i830_crtc_mode_set(xf86CrtcPtr crtc, DisplayModePtr mode,
     usleep(150);
     
     if (IS_I965G(pI830)) {
-	int sdvo_pixel_multiply = adjusted_mode->Clock / mode->Clock;
-/*	OUTREG(dpll_md_reg, (0 << DPLL_MD_UDI_DIVIDER_SHIFT) |
-	       ((sdvo_pixel_multiply - 1) << DPLL_MD_UDI_MULTIPLIER_SHIFT)); */
-	OUTREG(dpll_md_reg, (0 << DPLL_MD_UDI_DIVIDER_SHIFT) |
-	       ((sdvo_pixel_multiply - 1) << 0));
+	if (is_sdvo) {
+	    int sdvo_pixel_multiply = adjusted_mode->Clock / mode->Clock;
+	    OUTREG(dpll_md_reg, (0 << DPLL_MD_UDI_DIVIDER_SHIFT) |
+		   ((sdvo_pixel_multiply - 1) << DPLL_MD_UDI_MULTIPLIER_SHIFT));
+	}
     } else {
 	/* write it again -- the BIOS does, after all */
 	OUTREG(dpll_reg, dpll);

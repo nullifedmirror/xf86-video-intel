@@ -60,25 +60,12 @@ i830_dp_mode_valid(xf86OutputPtr output, DisplayModePtr mode)
     return MODE_OK;
 }
 
-static int
-i830_dp_get_pixel_multiplier(DisplayModePtr pMode)
-{
-    if (pMode->Clock >= 100000)
-	return 1;
-    else if (pMode->Clock >= 50000)
-	return 2;
-    else
-	return 4;
-}
-
 static Bool
 i830_dp_mode_fixup(xf86OutputPtr output, DisplayModePtr mode,
 		     DisplayModePtr adjusted_mode)
 {
-    /* Make the CRTC code factor in the SDVO pixel multiplier.  The SDVO
-     * device will be told of the multiplier during mode_set.
-     */
-    adjusted_mode->Clock *= i830_dp_get_pixel_multiplier(mode);
+    /* Pin the CRTC to the LS_Clk value (162 or 270 MHz) */
+    adjusted_mode->Clock = 162000;
     return TRUE;
 }
 
@@ -341,6 +328,74 @@ i830_dp_aux_i2c_transaction(ScrnInfoPtr pScrn, uint32_t output_reg,
     }
 }
 
+struct i830_dp_m_n {
+	uint32_t	tu;
+	uint32_t	gmch_m;
+	uint32_t	gmch_n;
+	uint32_t	link_m;
+	uint32_t	link_n;
+	int		lanes;
+};
+
+static void
+i830_reduce_ratio(uint32_t *num, uint32_t *den)
+{
+	while (*num > 0xffffff || *den > 0xffffff) {
+		*num >>= 1;
+		*den >>= 1;
+	}
+}
+
+static void
+i830_dp_compute_m_n(int bytes_per_pixel,
+		    int pixel_clock,
+		    int link_clock,
+		    struct i830_dp_m_n *m_n)
+{
+	m_n->tu = 64;
+	m_n->lanes = 4;
+	m_n->gmch_m = pixel_clock * bytes_per_pixel;
+	/*
+	 * I do not understand this one -- the docs say nlanes,
+	 * and yet (nlanes + 1) appears to be the correct value
+	 */
+	m_n->gmch_n = link_clock * (m_n->lanes + 1);
+	i830_reduce_ratio(&m_n->gmch_m, &m_n->gmch_n);
+	m_n->link_m = pixel_clock;
+	m_n->link_n = link_clock;
+	i830_reduce_ratio(&m_n->link_m, &m_n->link_n);
+}
+
+static void
+i830_dp_set_m_n(xf86CrtcPtr crtc, DisplayModePtr mode,
+		DisplayModePtr adjusted_mode)
+{
+    ScrnInfoPtr pScrn = crtc->scrn;
+    I830Ptr pI830 = I830PTR(pScrn);
+    I830CrtcPrivatePtr intel_crtc = crtc->driver_private;
+    struct i830_dp_m_n m_n;
+
+    i830_dp_compute_m_n(pI830->cpp, mode->Clock, adjusted_mode->Clock, &m_n);
+
+    if (intel_crtc->pipe == 0) {
+	OUTREG(PIPEA_GMCH_DATA_M,
+	       ((m_n.tu - 1) << PIPE_GMCH_DATA_M_TU_SIZE_SHIFT) |
+	       m_n.gmch_m);
+	OUTREG(PIPEA_GMCH_DATA_N,
+	       m_n.gmch_n);
+	OUTREG(PIPEA_DP_LINK_M, m_n.link_m);
+	OUTREG(PIPEA_DP_LINK_N, m_n.link_n);
+    } else {
+	OUTREG(PIPEB_GMCH_DATA_M,
+	       ((m_n.tu - 1) << PIPE_GMCH_DATA_M_TU_SIZE_SHIFT) |
+	       m_n.gmch_m);
+	OUTREG(PIPEB_GMCH_DATA_N,
+	       m_n.gmch_n);
+	OUTREG(PIPEB_DP_LINK_M, m_n.link_m);
+	OUTREG(PIPEB_DP_LINK_N, m_n.link_n);
+    }
+}
+
 static void
 i830_dp_mode_set(xf86OutputPtr output, DisplayModePtr mode,
 		   DisplayModePtr adjusted_mode)
@@ -352,15 +407,29 @@ i830_dp_mode_set(xf86OutputPtr output, DisplayModePtr mode,
     xf86CrtcPtr crtc = output->crtc;
     I830CrtcPrivatePtr intel_crtc = crtc->driver_private;
     uint32_t dp;
+    struct i830_dp_m_n m_n;
+
+    i830_dp_set_m_n(crtc, mode, adjusted_mode);
+    i830_dp_compute_m_n(pI830->cpp, mode->Clock, adjusted_mode->Clock, &m_n);
 
     dp = (DP_LINK_TRAIN_OFF |
 	  DP_VOLTAGE_0_4 |
 	  DP_PRE_EMPHASIS_0 |
-	  DP_PORT_WIDTH_4 |
 	  DP_ENHANCED_FRAMING |
 	  DP_SYNC_VS_HIGH |
 	  DP_SYNC_HS_HIGH);
 
+    switch (m_n.lanes) {
+    case 1:
+	dp |= DP_PORT_WIDTH_1;
+	break;
+    case 2:
+	dp |= DP_PORT_WIDTH_2;
+	break;
+    case 4:
+	dp |= DP_PORT_WIDTH_4;
+	break;
+    }
     if (dev_priv->has_audio)
 	    dp |= DP_AUDIO_OUTPUT_ENABLE;
 
@@ -389,11 +458,6 @@ i830_dp_dpms(xf86OutputPtr output, int mode)
 	temp = INREG(dev_priv->output_reg);
 	temp |= DP_PORT_EN;
 
-	i830_dp_aux_native_write(pScrn, dev_priv->output_reg, 0x100,
-				 dev_priv->save_link_configuration, sizeof (dev_priv->save_link_configuration));
-	xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-		   "%s: i830_dp_link_train\n", __func__);
-	i830DumpRegs(pScrn);
 	i830_dp_link_train(output, temp);
     }
 }
@@ -834,26 +898,26 @@ i830_dp_init(ScrnInfoPtr pScrn, int output_reg)
     if ((dp & DP_DETECTED) == 0)
 	return FALSE;
 
+    /* XXX
+     * This is wrong -- we cannot distinguish between HDMI and DP,
+     * so we assert that we always have DP_C and never HDMI for
+     * testing on machines that have DP connected on channel C
+     *
+     * We need to grub through the BIOS tables to make this work
+     * right
+     */
+    if (output_reg != DP_C)
+	return TRUE;
+
     /* The DP_DETECTED bits are not reliable; see if there's anyone
      * home
      */
     if (i830_dp_aux_native_read(pScrn, output_reg,
-			 0, dpcd, sizeof (dpcd)) != sizeof (dpcd) ||
+				0, dpcd, sizeof (dpcd)) != sizeof (dpcd) ||
 	(dpcd[0] == 0))
     {
 	return TRUE;
     }
-#if 0
-    ret = i830_dp_aux_i2c_address(pScrn, output_reg, 0xa1);
-    xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "send EDID address %d\n", ret);
-    for (i = 0; i < 16; i++) {
-	ret = i830_dp_aux_i2c_read_1(pScrn, output_reg,
-				     0xa1, &edid[i], i == 15 ? TRUE : FALSE);
-	xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "get(%d) EDID[%d]=%02x\n", ret, i, edid[i]);
-    }
-    return TRUE;
-#endif
-
     output = xf86OutputCreate(pScrn, &i830_dp_output_funcs,
 			      (output_reg == DP_B) ? "DP-1" :
 			      (output_reg == DP_C) ? "DP-2" : "DP-3");
