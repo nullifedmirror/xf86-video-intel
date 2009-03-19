@@ -461,10 +461,9 @@ i830_dp_link_train(xf86OutputPtr output, uint32_t DP)
 
     xf86DrvMsg(pScrn->scrnIndex, X_INFO,
 	       "i830_dp_link_train dp 0x%08x\n", DP);
-    OUTREG(dev_priv->output_reg, DP);
-    POSTING_READ(dev_priv->output_reg);
-
     if ((DP & DP_PORT_EN) == 0) {
+	OUTREG(dev_priv->output_reg, DP);
+	POSTING_READ(dev_priv->output_reg);
 	return;
     }
     DP &= ~DP_LINK_TRAIN_MASK;
