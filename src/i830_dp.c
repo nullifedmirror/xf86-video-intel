@@ -39,7 +39,7 @@
 struct i830_dp_priv {
     uint32_t output_reg;
     uint32_t save_DP;
-    uint8_t  save_link_configuration[0x10];
+    uint8_t  save_link_configuration[0x9];
     Bool has_audio;
     uint16_t i2c_address;
     Bool i2c_running;
@@ -60,13 +60,25 @@ i830_dp_mode_valid(xf86OutputPtr output, DisplayModePtr mode)
     return MODE_OK;
 }
 
+static int
+i830_dp_get_pixel_multiplier(DisplayModePtr pMode)
+{
+    if (pMode->Clock >= 100000)
+	return 1;
+    else if (pMode->Clock >= 50000)
+	return 2;
+    else
+	return 4;
+}
+
 static Bool
 i830_dp_mode_fixup(xf86OutputPtr output, DisplayModePtr mode,
 		     DisplayModePtr adjusted_mode)
 {
-    /* The DP output doesn't need the pixel multiplication that SDVO does,
-     * so no fixup.
+    /* Make the CRTC code factor in the SDVO pixel multiplier.  The SDVO
+     * device will be told of the multiplier during mode_set.
      */
+    adjusted_mode->Clock *= i830_dp_get_pixel_multiplier(mode);
     return TRUE;
 }
 
@@ -288,6 +300,8 @@ i830_dp_aux_i2c_transaction(ScrnInfoPtr pScrn, uint32_t output_reg,
 
     switch (mode) {
     case aux_i2c_start:
+    case aux_i2c_stop:
+    default:
         msg_bytes = 3;
         reply_bytes = 1;
 	break;
@@ -302,10 +316,6 @@ i830_dp_aux_i2c_transaction(ScrnInfoPtr pScrn, uint32_t output_reg,
 	msg_bytes = 4;
 	reply_bytes = 2;
 	break;
-    case aux_i2c_stop:
-        msg_bytes = 3;
-        reply_bytes = 1;
-	break;
     }
 
     for (;;) {
@@ -317,11 +327,8 @@ i830_dp_aux_i2c_transaction(ScrnInfoPtr pScrn, uint32_t output_reg,
 	    return -1;
 	}
 	if ((reply[0] & AUX_I2C_REPLY_MASK) == AUX_I2C_REPLY_ACK) {
-	    if (mode == aux_i2c_read) {
-		xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
-			   "i2c_read: %02x\n", reply[1]);
+	    if (mode == aux_i2c_read)
 		*read_byte = reply[1];
-	    }
 	    return reply_bytes - 1;
 	}
 	else if ((reply[0] & AUX_I2C_REPLY_MASK) == AUX_I2C_REPLY_DEFER)
@@ -346,8 +353,7 @@ i830_dp_mode_set(xf86OutputPtr output, DisplayModePtr mode,
     I830CrtcPrivatePtr intel_crtc = crtc->driver_private;
     uint32_t dp;
 
-    dp = (DP_PORT_EN |
-	  DP_LINK_TRAIN_OFF |
+    dp = (DP_LINK_TRAIN_OFF |
 	  DP_VOLTAGE_0_4 |
 	  DP_PRE_EMPHASIS_0 |
 	  DP_PORT_WIDTH_4 |
@@ -365,6 +371,8 @@ i830_dp_mode_set(xf86OutputPtr output, DisplayModePtr mode,
     POSTING_READ(dev_priv->output_reg);
 }
 
+#include "i830_debug.h"
+
 static void
 i830_dp_dpms(xf86OutputPtr output, int mode)
 {
@@ -380,6 +388,12 @@ i830_dp_dpms(xf86OutputPtr output, int mode)
     } else {
 	temp = INREG(dev_priv->output_reg);
 	temp |= DP_PORT_EN;
+
+	i830_dp_aux_native_write(pScrn, dev_priv->output_reg, 0x100,
+				 dev_priv->save_link_configuration, sizeof (dev_priv->save_link_configuration));
+	xf86DrvMsg(pScrn->scrnIndex, X_INFO,
+		   "%s: i830_dp_link_train\n", __func__);
+	i830DumpRegs(pScrn);
 	i830_dp_link_train(output, temp);
     }
 }
@@ -414,7 +428,7 @@ i830_dp_save(xf86OutputPtr output)
     i830_dp_aux_native_read(pScrn, dev_priv->output_reg, 0x100,
 		     dev_priv->save_link_configuration, sizeof (dev_priv->save_link_configuration));
     xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
-	       "link configuration: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
+	       "link configuration: %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
 	       dev_priv->save_link_configuration[0],
 	       dev_priv->save_link_configuration[1],
 	       dev_priv->save_link_configuration[2],
@@ -423,14 +437,7 @@ i830_dp_save(xf86OutputPtr output)
 	       dev_priv->save_link_configuration[5],
 	       dev_priv->save_link_configuration[6],
 	       dev_priv->save_link_configuration[7],
-	       dev_priv->save_link_configuration[8],
-	       dev_priv->save_link_configuration[9],
-	       dev_priv->save_link_configuration[10],
-	       dev_priv->save_link_configuration[11],
-	       dev_priv->save_link_configuration[12],
-	       dev_priv->save_link_configuration[13],
-	       dev_priv->save_link_configuration[14],
-	       dev_priv->save_link_configuration[15]);
+	       dev_priv->save_link_configuration[8]);
 
     i830_dp_lane_status(output, lane_status);
 }
@@ -447,16 +454,22 @@ i830_dp_link_train(xf86OutputPtr output, uint32_t DP)
     uint8_t lane_status[3];
     uint8_t adjust_request[10];
     int ret;
-    int tries;
     int i;
+    int voltage;
+    int pre_emphasis;
+    Bool clock_recovery = FALSE;
 
-    xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
+    xf86DrvMsg(pScrn->scrnIndex, X_INFO,
 	       "i830_dp_link_train dp 0x%08x\n", DP);
+    OUTREG(dev_priv->output_reg, DP);
+    POSTING_READ(dev_priv->output_reg);
+
     if ((DP & DP_PORT_EN) == 0) {
-	OUTREG(dev_priv->output_reg, DP);
 	return;
     }
     DP &= ~DP_LINK_TRAIN_MASK;
+
+    usleep (20*1000);
 
     ret = i830_dp_aux_native_read(pScrn, dev_priv->output_reg,
 			   0x206, adjust_request, 2);
@@ -475,37 +488,46 @@ i830_dp_link_train(xf86OutputPtr output, uint32_t DP)
 			   training, 1);
     xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
 	       "training pattern 1: %02x\n", training[0]);
-    memset(train_set, '\0', sizeof (train_set));
-    train_set[0] = (3 << 3) | (0 << 0);
-    train_set[1] = (3 << 3) | (0 << 0);
-    train_set[2] = (3 << 3) | (0 << 0);
-    train_set[3] = (3 << 3) | (0 << 0);
     /* clock recovery pattern */
-    tries = 0;
-    for (i = 0; i < 4; i++) {
-
-	ret = i830_dp_aux_native_write(pScrn, dev_priv->output_reg,
-				DP_TRAINING_LANE0_SET, train_set, 4);
-	if (ret != 4) {
-	    xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
-		       "voltage swing set failed\n");
-	    break;
+    for (voltage = 0; voltage < 4; voltage++) {
+	for (pre_emphasis = 0; pre_emphasis < 4; pre_emphasis++) {
+	    memset(train_set, (voltage << 0) | (pre_emphasis << 3), 4);
+	    ret = i830_dp_aux_native_write(pScrn, dev_priv->output_reg,
+					   DP_TRAINING_LANE0_SET, train_set, 4);
+	    if (ret != 4) {
+		xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
+			   "voltage %d pre_emphasis %d set failed\n",
+			   voltage, pre_emphasis);
+		continue;
+	    }
+	    for (i = 0; i < 4; i++) {
+		usleep (15*1000);
+		ret = i830_dp_lane_status(output, lane_status);
+		if (ret != 3)
+		    continue;
+		if ((lane_status[0] & DP_LANE_CR_DONE) &&
+		    (lane_status[0] & (DP_LANE_CR_DONE << 4)) &&
+		    (lane_status[1] & DP_LANE_CR_DONE) &&
+		    (lane_status[1] & (DP_LANE_CR_DONE << 4)))
+		{
+		    clock_recovery = TRUE;
+		}
+		if (clock_recovery)
+		    break;
+	    }
+	    if (clock_recovery)
+		break;
 	}
-
-	usleep (15*1000);
-	ret = i830_dp_lane_status(output, lane_status);
-	if (ret != 3)
+	if (clock_recovery)
 	    break;
-	if ((lane_status[0] & DP_LANE_CR_DONE) &&
-	    (lane_status[0] & (DP_LANE_CR_DONE << 4)) &&
-	    (lane_status[1] & DP_LANE_CR_DONE) &&
-	    (lane_status[1] & (DP_LANE_CR_DONE << 4)))
-	    break;
-	if (i == 3) {
-	    xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
-		       "clock recovery failed\n");
-	    break;
-	}
+    }
+    if (!clock_recovery) {
+	xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
+		   "clock recovery failed\n");
+    } else {
+	xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
+		   "clock recovery at voltage %d pre_emphasis %d\n",
+		   voltage, pre_emphasis);
     }
     /* channel eq pattern */
     OUTREG(dev_priv->output_reg, DP | DP_LINK_TRAIN_PAT_2);
@@ -631,7 +653,6 @@ i830_dp_i2c_get_byte(I2CDevPtr dev, I2CByte *byte_ret, Bool last)
     struct i830_dp_priv *dev_priv = intel_output->dev_priv;
     ScrnInfoPtr scrn = output->scrn;
 
-    xf86DrvMsg(scrn->scrnIndex, X_ERROR, "i2c_get_byte %d\n", last);
     return i830_dp_aux_i2c_transaction(scrn, dev_priv->output_reg,
 				       dev_priv->i2c_address,
 				       aux_i2c_read, 0, byte_ret) == 1;
@@ -686,6 +707,9 @@ i830_dp_restore(xf86OutputPtr output)
 
     i830_dp_aux_native_write(pScrn, dev_priv->output_reg, 0x100,
 		     dev_priv->save_link_configuration, sizeof (dev_priv->save_link_configuration));
+    xf86DrvMsg(pScrn->scrnIndex, X_INFO,
+	       "%s: i830_dp_link_train\n", __func__);
+    i830DumpRegs(pScrn);
     i830_dp_link_train(output, dev_priv->save_DP);
 }
 

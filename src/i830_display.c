@@ -1303,7 +1303,7 @@ i830_crtc_mode_set(xf86CrtcPtr crtc, DisplayModePtr mode,
     int refclk;
     intel_clock_t clock;
     uint32_t dpll = 0, fp = 0, dspcntr, pipeconf, lvds_bits = 0;
-    Bool ok, is_sdvo = FALSE, is_dvo = FALSE;
+    Bool ok, is_sdvo = FALSE, is_dvo = FALSE, is_dp = FALSE;
     Bool is_crt = FALSE, is_lvds = FALSE, is_tv = FALSE;
 
     /* Set up some convenient bools for what outputs are connected to
@@ -1323,7 +1323,6 @@ i830_crtc_mode_set(xf86CrtcPtr crtc, DisplayModePtr mode,
 	    break;
 	case I830_OUTPUT_SDVO:
 	case I830_OUTPUT_HDMI:
-	case I830_OUTPUT_DISPLAYPORT:
 	    is_sdvo = TRUE;
 	    if (intel_output->needs_tv_clock)
 		is_tv = TRUE;
@@ -1338,6 +1337,9 @@ i830_crtc_mode_set(xf86CrtcPtr crtc, DisplayModePtr mode,
 	    break;
 	case I830_OUTPUT_ANALOG:
 	    is_crt = TRUE;
+	    break;
+	case I830_OUTPUT_DISPLAYPORT:
+	    is_dp = TRUE;
 	    break;
 	}
 
@@ -1401,7 +1403,7 @@ i830_crtc_mode_set(xf86CrtcPtr crtc, DisplayModePtr mode,
 	    dpll |= DPLLB_MODE_LVDS;
 	else
 	    dpll |= DPLLB_MODE_DAC_SERIAL;
-	if (is_sdvo)
+	if (is_sdvo || is_dp)
 	{
 	    dpll |= DPLL_DVO_HIGH_SPEED;
 	    if ((IS_I945G(pI830) || IS_I945GM(pI830) || IS_G33CLASS(pI830)))
@@ -1430,7 +1432,7 @@ i830_crtc_mode_set(xf86CrtcPtr crtc, DisplayModePtr mode,
 	    dpll |= DPLLB_LVDS_P2_CLOCK_DIV_14;
 	    break;
 	}
-	if (IS_I965G(pI830) && !IS_GM45(pI830))
+	if (IS_I965G(pI830) /* && !IS_GM45(pI830) */)
 	    dpll |= (6 << PLL_LOAD_PULSE_PHASE_SHIFT);
     } else {
 	if (is_lvds) {
@@ -1591,8 +1593,10 @@ i830_crtc_mode_set(xf86CrtcPtr crtc, DisplayModePtr mode,
     
     if (IS_I965G(pI830)) {
 	int sdvo_pixel_multiply = adjusted_mode->Clock / mode->Clock;
+/*	OUTREG(dpll_md_reg, (0 << DPLL_MD_UDI_DIVIDER_SHIFT) |
+	       ((sdvo_pixel_multiply - 1) << DPLL_MD_UDI_MULTIPLIER_SHIFT)); */
 	OUTREG(dpll_md_reg, (0 << DPLL_MD_UDI_DIVIDER_SHIFT) |
-	       ((sdvo_pixel_multiply - 1) << DPLL_MD_UDI_MULTIPLIER_SHIFT));
+	       ((sdvo_pixel_multiply - 1) << 0));
     } else {
 	/* write it again -- the BIOS does, after all */
 	OUTREG(dpll_reg, dpll);
