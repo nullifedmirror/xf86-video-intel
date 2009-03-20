@@ -45,21 +45,47 @@ struct i830_dp_priv {
     uint8_t link_bw;
     uint8_t lane_count;
     Bool i2c_running;
+    uint8_t dpcd[4];
 };
 
 static void
 i830_dp_link_train(xf86OutputPtr output, uint32_t DP);
 
 static int
-i830_dp_mode_valid(xf86OutputPtr output, DisplayModePtr mode)
+i830_dp_max_lane_count(xf86OutputPtr output)
 {
-    if (mode->Clock > 270000)
-	return MODE_CLOCK_HIGH;
+    I830OutputPrivatePtr intel_output = output->driver_private;
+    struct i830_dp_priv *dev_priv = intel_output->dev_priv;
+    int max_lane_count = 4;
 
-    if (mode->Clock < 20000)
-	return MODE_CLOCK_LOW;
+    if (dev_priv->dpcd[0] >= 0x11) {
+	max_lane_count = dev_priv->dpcd[2] & 0x1f;
+	switch (max_lane_count) {
+	case 1: case 2: case 4:
+	    break;
+	default:
+	    max_lane_count = 4;
+	}
+    }
+    return max_lane_count;
+}
 
-    return MODE_OK;
+static int
+i830_dp_max_link_bw(xf86OutputPtr output)
+{
+    I830OutputPrivatePtr intel_output = output->driver_private;
+    struct i830_dp_priv *dev_priv = intel_output->dev_priv;
+    int max_link_bw = dev_priv->dpcd[1];
+
+    switch (max_link_bw) {
+    case DP_LINK_BW_1_62:
+    case DP_LINK_BW_2_7:
+	break;
+    default:
+	max_link_bw = DP_LINK_BW_1_62;
+	break;
+    }
+    return max_link_bw;
 }
 
 static int
@@ -71,19 +97,25 @@ i830_dp_link_clock(uint8_t link_bw)
 	return 162000;
 }
 
-static Bool
-i830_dp_mode_fixup(xf86OutputPtr output, DisplayModePtr mode,
-		     DisplayModePtr adjusted_mode)
+static int
+i830_dp_link_required(int pixel_clock)
 {
-    I830OutputPrivatePtr intel_output = output->driver_private;
-    struct i830_dp_priv *dev_priv = intel_output->dev_priv;
+    return pixel_clock * 3;
+}
 
-    /* XXX compute these values instead of just setting them */
-    dev_priv->link_bw = DP_LINK_BW_1_62;
-    dev_priv->lane_count = 4;
-    /* Pin the CRTC to the LS_Clk value (162 or 270 MHz) */
-    adjusted_mode->Clock = i830_dp_link_clock(dev_priv->link_bw);
-    return TRUE;
+static int
+i830_dp_mode_valid(xf86OutputPtr output, DisplayModePtr mode)
+{
+    int max_link_clock = i830_dp_link_clock(i830_dp_max_link_bw(output));
+    int max_lanes = i830_dp_max_lane_count(output);
+
+    if (i830_dp_link_required(mode->Clock) > max_link_clock * max_lanes)
+	return MODE_CLOCK_HIGH;
+
+    if (mode->Clock < 10000)
+	return MODE_CLOCK_LOW;
+
+    return MODE_OK;
 }
 
 static uint32_t
@@ -345,6 +377,38 @@ i830_dp_aux_i2c_transaction(ScrnInfoPtr pScrn, uint32_t output_reg,
     }
 }
 
+static Bool
+i830_dp_mode_fixup(xf86OutputPtr output, DisplayModePtr mode,
+		     DisplayModePtr adjusted_mode)
+{
+    I830OutputPrivatePtr intel_output = output->driver_private;
+    struct i830_dp_priv *dev_priv = intel_output->dev_priv;
+    int	lane_count, clock;
+    int max_lane_count = i830_dp_max_lane_count(output);
+    int max_clock = i830_dp_max_link_bw(output) == DP_LINK_BW_2_7 ? 1 : 0;;
+    static int bws[2] = { DP_LINK_BW_1_62, DP_LINK_BW_2_7 };
+
+    for (lane_count = 1; lane_count <= max_lane_count; lane_count <<= 1)
+    {
+	for (clock = 0; clock <= max_clock; clock++)
+	{
+	    int link_avail = i830_dp_link_clock(bws[clock]) * lane_count;
+
+	    if (i830_dp_link_required(mode->Clock) <= link_avail)
+	    {
+		dev_priv->link_bw = bws[clock];
+		dev_priv->lane_count = lane_count;
+		adjusted_mode->Clock = i830_dp_link_clock(dev_priv->link_bw);
+		xf86DrvMsg(0, X_INFO,
+			   "link_bw %d lane_count %d clock %d\n",
+			   dev_priv->link_bw, dev_priv->lane_count, adjusted_mode->Clock);
+		return TRUE;
+	    }
+	}
+    }
+    return FALSE;
+}
+
 struct i830_dp_m_n {
 	uint32_t	tu;
 	uint32_t	gmch_m;
@@ -395,7 +459,6 @@ i830_dp_mode_set(xf86OutputPtr output, DisplayModePtr mode,
     uint32_t dp;
     struct i830_dp_m_n m_n;
     uint8_t link_configuration[0x9];
-    uint8_t dpcd[4];
 
     /*
      * Compute the GMCH and Link ratios. The '3' here is
@@ -451,13 +514,9 @@ i830_dp_mode_set(xf86OutputPtr output, DisplayModePtr mode,
      * Check for DPCD version > 1.1,
      * enable enahanced frame stuff in that case
      */
-    if (i830_dp_aux_native_read(pScrn, dev_priv->output_reg,
-				0, dpcd, sizeof (dpcd)) == sizeof (dpcd))
-    {
-	if (dpcd[0] >= 0x11) {
-	    link_configuration[1] |= DP_LANE_COUNT_ENHANCED_FRAME_EN;
-	    dp |= DP_ENHANCED_FRAMING;
-	}
+    if (dev_priv->dpcd[0] >= 0x11) {
+	link_configuration[1] |= DP_LANE_COUNT_ENHANCED_FRAME_EN;
+	dp |= DP_ENHANCED_FRAMING;
     }
 
     i830_dp_aux_native_write(pScrn, dev_priv->output_reg, 0x100,
@@ -827,7 +886,6 @@ i830_dp_detect(xf86OutputPtr output)
     I830Ptr pI830 = I830PTR(pScrn);
     uint32_t temp, bit;
     xf86OutputStatus status;
-    uint8_t dpcd[4];
 
     dev_priv->has_audio = FALSE;
 
@@ -871,9 +929,10 @@ i830_dp_detect(xf86OutputPtr output)
 
     status = XF86OutputStatusDisconnected;
     if (i830_dp_aux_native_read(pScrn, dev_priv->output_reg,
-				0, dpcd, sizeof (dpcd)) == sizeof (dpcd))
+				0, dev_priv->dpcd,
+				sizeof (dev_priv->dpcd)) == sizeof (dev_priv->dpcd))
     {
-	if (dpcd[0] != 0)
+	if (dev_priv->dpcd[0] != 0)
 	    status = XF86OutputStatusConnected;
     }
     if (pI830->debug_modes)
