@@ -375,7 +375,7 @@ i830_dp_compute_m_n(int bytes_per_pixel,
 	 * I do not understand this one -- the docs say nlanes,
 	 * and yet (nlanes + 1) appears to be the correct value
 	 */
-	m_n->gmch_n = link_clock * (nlanes + 1);
+	m_n->gmch_n = link_clock * nlanes;
 	i830_reduce_ratio(&m_n->gmch_m, &m_n->gmch_n);
 	m_n->link_m = pixel_clock;
 	m_n->link_n = link_clock;
@@ -397,7 +397,12 @@ i830_dp_mode_set(xf86OutputPtr output, DisplayModePtr mode,
     uint8_t link_configuration[0x9];
     uint8_t dpcd[4];
 
-    i830_dp_compute_m_n(pI830->cpp, dev_priv->lane_count,
+    /*
+     * Compute the GMCH and Link ratios. The '3' here is
+     * the number of bytes_per_pixel post-LUT, which we always
+     * set up for 8-bits of R/G/B, or 3 bytes total.
+     */
+    i830_dp_compute_m_n(3, dev_priv->lane_count,
 			mode->Clock, adjusted_mode->Clock, &m_n);
 
     if (intel_crtc->pipe == 0) {

@@ -2297,6 +2297,10 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  * ls_clk (we assume) is the DP link clock (1.62 or 2.7 GHz)
  *
  * The GMCH value is used internally
+ *
+ * bytes_per_pixel is the number of bytes coming out of the plane,
+ * which is after the LUTs, so we want the bytes for our color format.
+ * For our current usage, this is always 3, one byte for R, G and B.
  */
 #define PIPEA_GMCH_DATA_M	0x70050
 
