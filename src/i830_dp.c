@@ -1155,17 +1155,6 @@ i830_dp_init(ScrnInfoPtr pScrn, int output_reg)
     if ((dp & DP_DETECTED) == 0)
 	return FALSE;
 
-    /* XXX
-     * This is wrong -- we cannot distinguish between HDMI and DP,
-     * so we assert that we always have DP_C and never HDMI for
-     * testing on machines that have DP connected on channel C
-     *
-     * We need to grub through the BIOS tables to make this work
-     * right
-     */
-    if (output_reg != DP_C)
-	return TRUE;
-
     output = xf86OutputCreate(pScrn, &i830_dp_output_funcs,
 			      (output_reg == DP_B) ? "DP-1" :
 			      (output_reg == DP_C) ? "DP-2" : "DP-3");

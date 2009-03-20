@@ -905,31 +905,47 @@ I830SetupOutputs(ScrnInfoPtr pScrn)
       i830_lvds_init(pScrn);
 
    if (IS_I9XX(pI830)) {
-      if (IS_G4X(pI830) && i830_dp_init(pScrn, DP_B))
-	;
-      else {
-	 Bool found = FALSE;
-	 if ((INREG(SDVOB) & SDVO_DETECTED)) {
-	    found = i830_sdvo_init(pScrn, SDVOB);
+      Bool found;
 
-	    if (!found && SUPPORTS_INTEGRATED_HDMI(pI830))
-	       i830_hdmi_init(pScrn, SDVOB);
-	 }
-      }
+      /* Check the digital output B
+       *
+       * Note that SDVOB, HDMI_B and DP_B all share
+       * a single GPIO pin. We can detect SDVO by
+       * poking the SDVO chip through I2C, but we
+       * cannot distinguish between HDMI and DP, so
+       * we simply enable both ports.
+       */
+      found = FALSE;
+      if ((INREG(SDVOB) & SDVO_DETECTED))
+	 found = i830_sdvo_init(pScrn, SDVOB);
 
-      if (IS_G4X(pI830) && i830_dp_init(pScrn, DP_C))
-	;
-      else {
-	 Bool found = FALSE;
-	 if ((INREG(SDVOB) & SDVO_DETECTED))
-	    found = i830_sdvo_init(pScrn, SDVOC);
+      if (!found && SUPPORTS_INTEGRATED_HDMI(pI830) &&
+	  (INREG(SDVOB) & SDVO_DETECTED))
+	 i830_hdmi_init(pScrn, SDVOB);
+      if (!found && IS_G4X(pI830) && (INREG(DP_B) & DP_DETECTED))
+	    i830_dp_init(pScrn, DP_B);
 
-	 if ((INREG(SDVOC) & SDVO_DETECTED) &&
-	     !found && SUPPORTS_INTEGRATED_HDMI(pI830))
-	    i830_hdmi_init(pScrn, SDVOC);
-      }
+      /* Check for digital output C
+       *
+       * SDVOC uses the same GPIO pin as SDVOB, while
+       * HDMI_C and DP_C use a separate pin. So, we
+       * use the SDVOB pin to determine whether to
+       * check for SDVOC, but then if that is present,
+       * we know there cannot be either HDMI_C or DP_C
+       */
+      found = FALSE;
+      if ((INREG(SDVOB) & SDVO_DETECTED))
+	 found = i830_sdvo_init(pScrn, SDVOC);
 
-      if (IS_GM45(pI830))
+      if (!found && SUPPORTS_INTEGRATED_HDMI(pI830) &&
+	  (INREG(SDVOC) & SDVO_DETECTED))
+	 i830_hdmi_init(pScrn, SDVOC);
+
+      if (!found && IS_G4X(pI830) && (INREG(DP_C) & DP_DETECTED))
+	 i830_dp_init(pScrn, DP_C);
+
+      /* Check for digital output D */
+      if (IS_G4X(pI830) && (INREG(DP_D) & DP_DETECTED))
 	 i830_dp_init(pScrn, DP_D);
    } else {
       i830_dvo_init(pScrn);
