@@ -36,6 +36,9 @@
 #include "i830_dp.h"
 #include <unistd.h>
 
+#define DP_LINK_STATUS_SIZE	6
+#define DP_LINK_CHECK_TIMEOUT	(10 * 1000)
+
 struct i830_dp_priv {
     uint32_t output_reg;
     uint32_t save_DP;
@@ -46,6 +49,7 @@ struct i830_dp_priv {
     uint8_t lane_count;
     Bool i2c_running;
     uint8_t dpcd[4];
+    OsTimerPtr link_check_timer;
 };
 
 static void
@@ -529,7 +533,8 @@ i830_dp_mode_set(xf86OutputPtr output, DisplayModePtr mode,
     POSTING_READ(dev_priv->output_reg);
 }
 
-#include "i830_debug.h"
+static CARD32
+i830_dp_link_check_timer(OsTimerPtr timer, CARD32 now, pointer arg);
 
 static void
 i830_dp_dpms(xf86OutputPtr output, int mode)
@@ -543,18 +548,27 @@ i830_dp_dpms(xf86OutputPtr output, int mode)
     if (mode == DPMSModeOff) {
 	temp = INREG(dev_priv->output_reg);
 	OUTREG(dev_priv->output_reg, temp & ~DP_PORT_EN);
+	if (dev_priv->link_check_timer) {
+	    TimerFree(dev_priv->link_check_timer);
+	    dev_priv->link_check_timer = NULL;
+	}
     } else {
 	temp = INREG(dev_priv->output_reg);
 	temp |= DP_PORT_EN;
 
 	i830_dp_link_train(output, temp);
+	dev_priv->link_check_timer = TimerSet(NULL, 0, DP_LINK_CHECK_TIMEOUT,
+					      i830_dp_link_check_timer, output);
     }
 }
 
-#define DP_LANE_STATUS_SIZE	6
-
+/*
+ * Fetch AUX CH registers 0x202 - 0x207 which contain
+ * link status information
+ */
 static Bool
-i830_dp_lane_status(xf86OutputPtr output, uint8_t lane_status[DP_LANE_STATUS_SIZE])
+i830_dp_get_link_status(xf86OutputPtr output,
+			uint8_t link_status[DP_LINK_STATUS_SIZE])
 {
     ScrnInfoPtr pScrn = output->scrn;
     I830OutputPrivatePtr intel_output = output->driver_private;
@@ -563,13 +577,19 @@ i830_dp_lane_status(xf86OutputPtr output, uint8_t lane_status[DP_LANE_STATUS_SIZ
 
     ret = i830_dp_aux_native_read(pScrn,
 				  dev_priv->output_reg, DP_LANE0_1_STATUS,
-				  lane_status, DP_LANE_STATUS_SIZE);
-    if (ret != DP_LANE_STATUS_SIZE) {
-	xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-		   "lane status failed\n");
+				  link_status, DP_LINK_STATUS_SIZE);
+    if (ret != DP_LINK_STATUS_SIZE) {
+	xf86DrvMsg(pScrn->scrnIndex, X_INFO, "dp link status failed\n");
 	return FALSE;
     }
-    return ret == 6;
+    return TRUE;
+}
+
+static uint8_t
+i830_dp_link_status(uint8_t link_status[DP_LINK_STATUS_SIZE],
+		    int r)
+{
+	return link_status[r - DP_LANE0_1_STATUS];
 }
 
 static void
@@ -599,36 +619,41 @@ i830_dp_save(xf86OutputPtr output)
 }
 
 static uint8_t
-i830_get_adjust_request_voltage(uint8_t lane_status[DP_LANE_STATUS_SIZE],
+i830_get_adjust_request_voltage(uint8_t link_status[DP_LINK_STATUS_SIZE],
 				int lane)
 {
-    int	    i = DP_ADJUST_REQUEST_LANE0_1 - DP_LANE0_1_STATUS + (lane >> 1);
-    int	    s = (lane & 1) ? DP_ADJUST_VOLTAGE_SWING_LANE1_SHIFT : DP_ADJUST_VOLTAGE_SWING_LANE0_SHIFT;
-    uint8_t l = lane_status[i];
+    int	    i = DP_ADJUST_REQUEST_LANE0_1 + (lane >> 1);
+    int	    s = ((lane & 1) ?
+		 DP_ADJUST_VOLTAGE_SWING_LANE1_SHIFT :
+		 DP_ADJUST_VOLTAGE_SWING_LANE0_SHIFT);
+    uint8_t l = i830_dp_link_status(link_status, i);
 
     return (l >> s) & 3;
 }
 
 static uint8_t
-i830_get_adjust_request_pre_emphasis(uint8_t lane_status[DP_LANE_STATUS_SIZE],
+i830_get_adjust_request_pre_emphasis(uint8_t link_status[DP_LINK_STATUS_SIZE],
 				     int lane)
 {
-    int	    i = DP_ADJUST_REQUEST_LANE0_1 - DP_LANE0_1_STATUS + (lane >> 1);
-    int	    s = (lane & 1) ? DP_ADJUST_PRE_EMPHASIS_LANE1_SHIFT : DP_ADJUST_PRE_EMPHASIS_LANE0_SHIFT;
-    uint8_t l = lane_status[i];
+    int	    i = DP_ADJUST_REQUEST_LANE0_1 + (lane >> 1);
+    int	    s = ((lane & 1) ?
+		 DP_ADJUST_PRE_EMPHASIS_LANE1_SHIFT :
+		 DP_ADJUST_PRE_EMPHASIS_LANE0_SHIFT);
+    uint8_t l = i830_dp_link_status(link_status, i);
 
     return (l >> s) & 3;
 }
 
 static uint8_t
-i830_get_adjust_train(uint8_t lane_status[DP_LANE_STATUS_SIZE],
+i830_get_adjust_train(uint8_t link_status[DP_LINK_STATUS_SIZE],
 		      int lane)
 {
-    uint8_t v = i830_get_adjust_request_voltage(lane_status, lane);
-    uint8_t p = i830_get_adjust_request_pre_emphasis(lane_status, lane);
+    uint8_t v = i830_get_adjust_request_voltage(link_status, lane);
+    uint8_t p = i830_get_adjust_request_pre_emphasis(link_status, lane);
     uint8_t t;
 
-    t = (v << DP_TRAIN_VOLTAGE_SWING_SET_SHIFT) | (p << DP_TRAIN_PRE_EMPHASIS_SHIFT);
+    t = ((v << DP_TRAIN_VOLTAGE_SWING_SET_SHIFT) |
+	 (p << DP_TRAIN_PRE_EMPHASIS_SHIFT));
     if (v == 3)
 	t |= DP_TRAIN_MAX_SWING_REACHED;
     if (v + p == 3)
@@ -637,14 +662,81 @@ i830_get_adjust_train(uint8_t lane_status[DP_LANE_STATUS_SIZE],
 }
 
 static uint8_t
-i830_get_lane_status(uint8_t lane_status[DP_LANE_STATUS_SIZE],
+i830_get_lane_status(uint8_t link_status[DP_LINK_STATUS_SIZE],
 		     int lane)
 {
-    int i = (lane >> 1);
+    int i = DP_LANE0_1_STATUS + (lane >> 1);
     int s = (lane & 1) * 4;
-    uint8_t l = lane_status[i];
+    uint8_t l = i830_dp_link_status(link_status, i);
 
     return (l >> s) & 0xf;
+}
+
+/* Check for clock recovery is done on all channels */
+static Bool
+i830_clock_recovery_ok(uint8_t link_status[DP_LINK_STATUS_SIZE], int lane_count)
+{
+	int lane;
+	uint8_t lane_status;
+
+	for (lane = 0; lane < lane_count; lane++) {
+		lane_status = i830_get_lane_status(link_status, lane);
+		if ((lane_status & DP_LANE_CR_DONE) == 0)
+			return FALSE;
+	}
+	return TRUE;
+}
+
+/* Check to see if channel eq is done on all channels */
+#define CHANNEL_EQ_BITS (DP_LANE_CR_DONE|\
+			 DP_LANE_CHANNEL_EQ_DONE|\
+			 DP_LANE_SYMBOL_LOCKED)
+static Bool
+i830_channel_eq_ok(uint8_t link_status[DP_LINK_STATUS_SIZE], int lane_count)
+{
+	uint8_t lane_align;
+	uint8_t lane_status;
+	int lane;
+
+	lane_align = i830_dp_link_status(link_status,
+					 DP_LANE_ALIGN_STATUS_UPDATED);
+	if ((lane_align & DP_INTERLANE_ALIGN_DONE) == 0)
+		return FALSE;
+	for (lane = 0; lane < lane_count; lane++) {
+		lane_status = i830_get_lane_status(link_status, lane);
+		if ((lane_status & CHANNEL_EQ_BITS) != CHANNEL_EQ_BITS)
+			return FALSE;
+	}
+	return TRUE;
+}
+
+static Bool
+i830_dp_set_link_train(xf86OutputPtr output,
+		       uint32_t dp_reg_value,
+		       uint8_t dp_train_pat,
+		       uint8_t train_set[4])
+{
+	ScrnInfoPtr pScrn = output->scrn;
+	I830OutputPrivatePtr intel_output = output->driver_private;
+	struct i830_dp_priv *dev_priv = intel_output->dev_priv;
+	I830Ptr pI830 = I830PTR(pScrn);
+	int ret;
+
+	OUTREG(dev_priv->output_reg, dp_reg_value);
+	POSTING_READ(dev_priv->output_reg);
+
+	i830_dp_aux_native_write_1(pScrn, dev_priv->output_reg,
+				   DP_TRAINING_PATTERN_SET,
+				   dp_train_pat);
+
+	ret = i830_dp_aux_native_write(pScrn, dev_priv->output_reg,
+				       DP_TRAINING_LANE0_SET, train_set, 4);
+	if (ret != 4) {
+		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
+			   "dp could't write train set\n");
+		return FALSE;
+	}
+	return TRUE;
 }
 
 static void
@@ -655,11 +747,9 @@ i830_dp_link_train(xf86OutputPtr output, uint32_t DP)
     struct i830_dp_priv *dev_priv = intel_output->dev_priv;
     I830Ptr pI830 = I830PTR(pScrn);
     uint8_t	train_set[4];
-    uint8_t lane_status[DP_LANE_STATUS_SIZE];
-    int ret;
+    uint8_t link_status[DP_LINK_STATUS_SIZE];
     int i;
-    uint8_t voltage = 0;
-    uint8_t pre_emphasis = 0;
+    uint8_t voltage;
     Bool clock_recovery = FALSE;
     Bool channel_eq = FALSE;
     int tries;
@@ -676,35 +766,17 @@ i830_dp_link_train(xf86OutputPtr output, uint32_t DP)
     tries = 0;
     clock_recovery = FALSE;
     for (;;) {
-	/* Set training pattern 1 */
-	OUTREG(dev_priv->output_reg, DP | DP_LINK_TRAIN_PAT_1);
-	POSTING_READ(dev_priv->output_reg);
-	i830_dp_aux_native_write_1(pScrn, dev_priv->output_reg,
-				   DP_TRAINING_PATTERN_SET, DP_TRAINING_PATTERN_1);
-
-	ret = i830_dp_aux_native_write(pScrn, dev_priv->output_reg,
-				       DP_TRAINING_LANE0_SET, train_set, 4);
-	if (ret != 4) {
-	    xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-		       "clock recovery failed: couldn't write train set\n");
-	    break;
-	}
-
-	usleep(400);
-        if (!i830_dp_lane_status(output, lane_status))
-	    break;
-
-	/* Check for DONE on all channels */
-	for (i = 0; i < dev_priv->lane_count; i++) {
-	    uint8_t s = i830_get_lane_status(lane_status, i);
-	    if ((s & DP_LANE_CR_DONE) == 0) {
+	if (!i830_dp_set_link_train(output, DP | DP_LINK_TRAIN_PAT_1,
+				    DP_TRAINING_PATTERN_1, train_set))
 		break;
-	    }
-	}
-	if (i == dev_priv->lane_count) {
+	/* Set training pattern 1 */
+
+	usleep(100);
+        if (!i830_dp_get_link_status(output, link_status))
+	    break;
+
+	if (i830_clock_recovery_ok(link_status, dev_priv->lane_count)) {
 	    clock_recovery = TRUE;
-	    voltage = train_set[0] & DP_TRAIN_VOLTAGE_SWING_SET_MASK;
-	    pre_emphasis = (train_set[0] & DP_TRAIN_PRE_EMPHASIS_MASK) >> DP_TRAIN_PRE_EMPHASIS_SHIFT;
 	    break;
 	}
 
@@ -732,7 +804,7 @@ i830_dp_link_train(xf86OutputPtr output, uint32_t DP)
 
 	/* Compute new train_set as requested by target */
 	for (i = 0; i < dev_priv->lane_count; i++)
-	    train_set[i] = i830_get_adjust_train(lane_status, i);
+	    train_set[i] = i830_get_adjust_train(link_status, i);
     }
     if (!clock_recovery)
 	xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
@@ -740,51 +812,25 @@ i830_dp_link_train(xf86OutputPtr output, uint32_t DP)
     else if (pI830->debug_modes)
 	xf86DrvMsg(pScrn->scrnIndex, X_INFO,
 		   "clock recovery at voltage %d pre-emphasis %d\n",
-		   voltage, pre_emphasis);
+		   train_set[0] & DP_TRAIN_VOLTAGE_SWING_SET_MASK,
+		   (train_set[0] & DP_TRAIN_PRE_EMPHASIS_MASK) >>
+		   DP_TRAIN_PRE_EMPHASIS_SHIFT);
 
     /* channel equalization */
     tries = 0;
     channel_eq = FALSE;
     for (;;) {
 	/* channel eq pattern */
-	OUTREG(dev_priv->output_reg, DP | DP_LINK_TRAIN_PAT_2);
-	POSTING_READ(dev_priv->output_reg);
-	i830_dp_aux_native_write_1(pScrn, dev_priv->output_reg,
-				   DP_TRAINING_PATTERN_SET, DP_TRAINING_PATTERN_2);
-
-	/* assign the current training values */
-	ret = i830_dp_aux_native_write(pScrn, dev_priv->output_reg,
-				       DP_TRAINING_LANE0_SET, train_set, 4);
-	if (ret != 4) {
-	    xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
-		       "train set failed\n");
-	    break;
-	}
+	if (!i830_dp_set_link_train(output, DP | DP_LINK_TRAIN_PAT_2,
+				    DP_TRAINING_PATTERN_2, train_set))
+		break;
 
 	usleep(400);
-        if (!i830_dp_lane_status(output, lane_status))
+        if (!i830_dp_get_link_status(output, link_status))
 	    break;
 
-	channel_eq = TRUE;
-#define CHANNEL_EQ_BITS (DP_LANE_CR_DONE|\
-			 DP_LANE_CHANNEL_EQ_DONE|\
-			 DP_LANE_SYMBOL_LOCKED)
-
-	/* Check for DONE|EQ_DONE|SYMBOL_LOCKED on all channels */
-	for (i = 0; i < dev_priv->lane_count; i++) {
-	    uint8_t s = i830_get_lane_status(lane_status, i);
-	    if ((s & (CHANNEL_EQ_BITS)) != CHANNEL_EQ_BITS)
-		break;
-	}
-
-	/* Check for INTERLANE_ALIGN */
-	if (i == dev_priv->lane_count &&
-	    (lane_status[DP_LANE_ALIGN_STATUS_UPDATED -
-	    DP_LANE0_1_STATUS] & DP_INTERLANE_ALIGN_DONE) != 0)
-	{
+	if (i830_channel_eq_ok(link_status, dev_priv->lane_count)) {
 	    channel_eq = TRUE;
-	    voltage = train_set[0] & DP_TRAIN_VOLTAGE_SWING_SET_MASK;
-	    pre_emphasis = (train_set[0] & DP_TRAIN_PRE_EMPHASIS_MASK) >> DP_TRAIN_PRE_EMPHASIS_SHIFT;
 	    break;
 	}
 
@@ -797,7 +843,7 @@ i830_dp_link_train(xf86OutputPtr output, uint32_t DP)
 
 	/* Compute new train_set as requested by target */
 	for (i = 0; i < dev_priv->lane_count; i++)
-	    train_set[i] = i830_get_adjust_train(lane_status, i);
+	    train_set[i] = i830_get_adjust_train(link_status, i);
 	++tries;
     }
     if (!channel_eq)
@@ -806,7 +852,9 @@ i830_dp_link_train(xf86OutputPtr output, uint32_t DP)
     else if (pI830->debug_modes)
 	xf86DrvMsg(pScrn->scrnIndex, X_INFO,
 		   "channel eq at voltage %d pre-emphasis %d\n",
-		   voltage, pre_emphasis);
+		   train_set[0] & DP_TRAIN_VOLTAGE_SWING_SET_MASK,
+		   (train_set[0] & DP_TRAIN_PRE_EMPHASIS_MASK)
+		   >> DP_TRAIN_PRE_EMPHASIS_SHIFT);
 
     OUTREG(dev_priv->output_reg, DP | DP_LINK_TRAIN_OFF);
     POSTING_READ(dev_priv->output_reg);
@@ -960,6 +1008,34 @@ i830_dp_restore(xf86OutputPtr output)
  *  4. Check link status on receipt of hot-plug interrupt
 */
 
+static void
+i830_dp_check_link_status(xf86OutputPtr output)
+{
+	ScrnInfoPtr	pScrn = output->scrn;
+	I830OutputPrivatePtr intel_output = output->driver_private;
+	struct i830_dp_priv *dev_priv = intel_output->dev_priv;
+	I830Ptr pI830 = I830PTR(pScrn);
+	uint8_t link_status[DP_LINK_STATUS_SIZE];
+
+	if (!output->crtc)
+		return;
+
+	if (!i830_dp_get_link_status(output, link_status))
+		return;
+
+	if (!i830_channel_eq_ok(link_status, dev_priv->lane_count))
+		i830_dp_link_train(output, INREG(dev_priv->output_reg));
+}
+
+static CARD32
+i830_dp_link_check_timer(OsTimerPtr timer, CARD32 now, pointer arg)
+{
+	xf86OutputPtr output = (xf86OutputPtr) arg;
+
+	i830_dp_check_link_status(output);
+	return DP_LINK_CHECK_TIMEOUT;
+}
+
 /**
  * Uses CRT_HOTPLUG_EN and CRT_HOTPLUG_STAT to detect DP connection.
  *
@@ -1037,9 +1113,12 @@ static void
 i830_dp_destroy (xf86OutputPtr output)
 {
     I830OutputPrivatePtr intel_output = output->driver_private;
+    struct i830_dp_priv *dev_priv = intel_output->dev_priv;
 
     if (intel_output != NULL) {
 	xf86DestroyI2CBusRec(intel_output->pDDCBus, FALSE, FALSE);
+	if (dev_priv->link_check_timer)
+	    TimerFree(dev_priv->link_check_timer);
 	xfree(intel_output);
     }
 }
