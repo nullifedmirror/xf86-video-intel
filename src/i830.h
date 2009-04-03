@@ -703,6 +703,14 @@ typedef struct _I830Rec {
    uint32_t saveDSPCLK_GATE_D;
    uint32_t saveRAMCLK_GATE_D;
    uint32_t savePWRCTXA;
+   uint32_t savePIPEA_GMCH_DATA_M;
+   uint32_t savePIPEA_GMCH_DATA_N;
+   uint32_t savePIPEA_DP_LINK_M;
+   uint32_t savePIPEA_DP_LINK_N;
+   uint32_t savePIPEB_GMCH_DATA_M;
+   uint32_t savePIPEB_GMCH_DATA_N;
+   uint32_t savePIPEB_DP_LINK_M;
+   uint32_t savePIPEB_DP_LINK_N;
 
    enum last_3d last_3d;
 
@@ -879,6 +887,8 @@ void i830_crt_init(ScrnInfoPtr pScrn);
 
 /* i830_dp.c */
 Bool i830_dp_init(ScrnInfoPtr pScrn, int output_reg);
+void i830_dp_set_m_n(xf86CrtcPtr crtc, DisplayModePtr mode,
+		     DisplayModePtr adjusted_mode);
 
 /* i830_dvo.c */
 void i830_dvo_init(ScrnInfoPtr pScrn);

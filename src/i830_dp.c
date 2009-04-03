@@ -39,10 +39,14 @@
 #define DP_LINK_STATUS_SIZE	6
 #define DP_LINK_CHECK_TIMEOUT	(10 * 1000)
 
+#define DP_LINK_CONFIGURATION_SIZE	9
+
 struct i830_dp_priv {
     uint32_t output_reg;
+    uint32_t DP;
+    uint8_t  link_configuration[DP_LINK_CONFIGURATION_SIZE];
     uint32_t save_DP;
-    uint8_t  save_link_configuration[0x9];
+    uint8_t  save_link_configuration[DP_LINK_CONFIGURATION_SIZE];
     Bool has_audio;
     uint16_t i2c_address;
     uint8_t link_bw;
@@ -53,7 +57,11 @@ struct i830_dp_priv {
 };
 
 static void
-i830_dp_link_train(xf86OutputPtr output, uint32_t DP);
+i830_dp_link_train(xf86OutputPtr output, uint32_t DP,
+		   uint8_t link_configuration[DP_LINK_CONFIGURATION_SIZE]);
+
+static void
+i830_dp_link_down(xf86OutputPtr output, uint32_t DP);
 
 static int
 i830_dp_max_lane_count(xf86OutputPtr output)
@@ -445,10 +453,6 @@ i830_dp_compute_m_n(int bytes_per_pixel,
 {
 	m_n->tu = 64;
 	m_n->gmch_m = pixel_clock * bytes_per_pixel;
-	/*
-	 * I do not understand this one -- the docs say nlanes,
-	 * and yet (nlanes + 1) appears to be the correct value
-	 */
 	m_n->gmch_n = link_clock * nlanes;
 	i830_reduce_ratio(&m_n->gmch_m, &m_n->gmch_n);
 	m_n->link_m = pixel_clock;
@@ -456,26 +460,38 @@ i830_dp_compute_m_n(int bytes_per_pixel,
 	i830_reduce_ratio(&m_n->link_m, &m_n->link_n);
 }
 
-static void
-i830_dp_mode_set(xf86OutputPtr output, DisplayModePtr mode,
+void
+i830_dp_set_m_n(xf86CrtcPtr crtc, DisplayModePtr mode,
 		   DisplayModePtr adjusted_mode)
 {
-    ScrnInfoPtr pScrn = output->scrn;
-    I830OutputPrivatePtr intel_output = output->driver_private;
-    struct i830_dp_priv *dev_priv = intel_output->dev_priv;
-    I830Ptr pI830 = I830PTR(pScrn);
-    xf86CrtcPtr crtc = output->crtc;
+    ScrnInfoPtr pScrn = crtc->scrn;
+    xf86CrtcConfigPtr xf86_config = XF86_CRTC_CONFIG_PTR(pScrn);
     I830CrtcPrivatePtr intel_crtc = crtc->driver_private;
-    uint32_t dp;
+    I830Ptr pI830 = I830PTR(pScrn);
+    int lane_count = 4;
+    int i;
     struct i830_dp_m_n m_n;
-    uint8_t link_configuration[0x9];
+
+    /*
+     * Find the lane count in the output private
+     */
+    for (i = 0; i < xf86_config->num_output; i++) {
+	xf86OutputPtr output = xf86_config->output[i];
+	I830OutputPrivatePtr intel_output = output->driver_private;
+	struct i830_dp_priv *dev_priv = intel_output->dev_priv;
+
+	if (output->crtc == crtc && intel_output->type == I830_OUTPUT_DISPLAYPORT) {
+	    lane_count = dev_priv->lane_count;
+	    break;
+	}
+    }
 
     /*
      * Compute the GMCH and Link ratios. The '3' here is
      * the number of bytes_per_pixel post-LUT, which we always
      * set up for 8-bits of R/G/B, or 3 bytes total.
      */
-    i830_dp_compute_m_n(3, dev_priv->lane_count,
+    i830_dp_compute_m_n(3, lane_count,
 			mode->Clock, adjusted_mode->Clock, &m_n);
 
     if (intel_crtc->pipe == 0) {
@@ -495,49 +511,55 @@ i830_dp_mode_set(xf86OutputPtr output, DisplayModePtr mode,
 	OUTREG(PIPEB_DP_LINK_M, m_n.link_m);
 	OUTREG(PIPEB_DP_LINK_N, m_n.link_n);
     }
+}
 
-    dp = (DP_LINK_TRAIN_OFF |
-	  DP_VOLTAGE_0_4 |
-	  DP_PRE_EMPHASIS_0 |
-	  DP_SYNC_VS_HIGH |
-	  DP_SYNC_HS_HIGH);
+static void
+i830_dp_mode_set(xf86OutputPtr output, DisplayModePtr mode,
+		   DisplayModePtr adjusted_mode)
+{
+    I830OutputPrivatePtr intel_output = output->driver_private;
+    struct i830_dp_priv *dev_priv = intel_output->dev_priv;
+    xf86CrtcPtr crtc = output->crtc;
+    I830CrtcPrivatePtr intel_crtc = crtc->driver_private;
+
+    dev_priv->DP = (DP_LINK_TRAIN_OFF |
+		    DP_VOLTAGE_0_4 |
+		    DP_PRE_EMPHASIS_0 |
+		    DP_SYNC_VS_HIGH |
+		    DP_SYNC_HS_HIGH);
 
     switch (dev_priv->lane_count) {
     case 1:
-	dp |= DP_PORT_WIDTH_1;
+	dev_priv->DP |= DP_PORT_WIDTH_1;
 	break;
     case 2:
-	dp |= DP_PORT_WIDTH_2;
+	dev_priv->DP |= DP_PORT_WIDTH_2;
 	break;
     case 4:
-	dp |= DP_PORT_WIDTH_4;
+	dev_priv->DP |= DP_PORT_WIDTH_4;
 	break;
     }
     if (dev_priv->has_audio)
-	    dp |= DP_AUDIO_OUTPUT_ENABLE;
+	dev_priv->DP |= DP_AUDIO_OUTPUT_ENABLE;
 
-    memset(link_configuration, 0, sizeof (link_configuration));
-    link_configuration[0] = dev_priv->link_bw;
-    link_configuration[1] = dev_priv->lane_count;
+    memset(dev_priv->link_configuration, 0, DP_LINK_CONFIGURATION_SIZE);
+    dev_priv->link_configuration[0] = dev_priv->link_bw;
+    dev_priv->link_configuration[1] = dev_priv->lane_count;
 
     /*
      * Check for DPCD version > 1.1,
      * enable enahanced frame stuff in that case
      */
     if (dev_priv->dpcd[0] >= 0x11) {
-	link_configuration[1] |= DP_LANE_COUNT_ENHANCED_FRAME_EN;
-	dp |= DP_ENHANCED_FRAMING;
+	dev_priv->link_configuration[1] |= DP_LANE_COUNT_ENHANCED_FRAME_EN;
+	dev_priv->DP |= DP_ENHANCED_FRAMING;
     }
 
-    i830_dp_aux_native_write(pScrn, dev_priv->output_reg, 0x100,
-			     link_configuration, sizeof (link_configuration));
-
     if (intel_crtc->pipe == 1)
-	dp |= DP_PIPEB_SELECT;
-
-    OUTREG(dev_priv->output_reg, dp);
-    POSTING_READ(dev_priv->output_reg);
+	dev_priv->DP |= DP_PIPEB_SELECT;
 }
+
+#include "i830_debug.h"
 
 static CARD32
 i830_dp_link_check_timer(OsTimerPtr timer, CARD32 now, pointer arg);
@@ -549,22 +571,48 @@ i830_dp_dpms(xf86OutputPtr output, int mode)
     I830OutputPrivatePtr intel_output = output->driver_private;
     struct i830_dp_priv *dev_priv = intel_output->dev_priv;
     I830Ptr pI830 = I830PTR(pScrn);
-    uint32_t  temp;
+    uint32_t  dp_reg = INREG(dev_priv->output_reg);
 
     if (mode == DPMSModeOff) {
-	temp = INREG(dev_priv->output_reg);
-	OUTREG(dev_priv->output_reg, temp & ~DP_PORT_EN);
+	if (dp_reg & DP_PORT_EN)
+	    i830_dp_link_down(output, dev_priv->DP);
 	if (dev_priv->link_check_timer) {
 	    TimerFree(dev_priv->link_check_timer);
 	    dev_priv->link_check_timer = NULL;
 	}
     } else {
-	temp = INREG(dev_priv->output_reg);
-	temp |= DP_PORT_EN;
+	if (!(dp_reg & DP_PORT_EN)) {
+	    uint32_t	pipestat;
+	    uint32_t	pipestat_reg;
+	    xf86CrtcPtr crtc = output->crtc;
+	    I830CrtcPrivatePtr intel_crtc = crtc->driver_private;
 
-	i830_dp_link_train(output, temp);
-	dev_priv->link_check_timer = TimerSet(NULL, 0, DP_LINK_CHECK_TIMEOUT,
-					      i830_dp_link_check_timer, output);
+	    if (intel_crtc->pipe == 1)
+		pipestat_reg = PIPEBSTAT;
+	    else
+		pipestat_reg = PIPEASTAT;
+	    OUTREG(pipestat_reg, INREG(pipestat_reg));	/* clear interrupt status */
+	    do {
+		pipestat = INREG(pipestat_reg);
+	    } while (!(pipestat & VSYNC_INT_STATUS));
+	    xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Registers before link training\n");
+	    i830DumpRegs(pScrn);
+	    i830_dp_link_train(output, dev_priv->DP, dev_priv->link_configuration);
+
+	    i830WaitForVblank(pScrn);
+	    i830_dp_link_down(output, dev_priv->DP);
+	    i830WaitForVblank(pScrn);
+	    crtc->funcs->dpms(crtc, DPMSModeOff);
+	    i830WaitForVblank(pScrn);
+	    crtc->funcs->dpms(crtc, DPMSModeOn);
+	    i830WaitForVblank(pScrn);
+	    i830_dp_link_train(output, dev_priv->DP, dev_priv->link_configuration);
+	    i830WaitForVblank(pScrn);
+
+	    if (!dev_priv->link_check_timer)
+		dev_priv->link_check_timer = TimerSet(NULL, 0, DP_LINK_CHECK_TIMEOUT,
+						      i830_dp_link_check_timer, output);
+	}
     }
 }
 
@@ -802,7 +850,7 @@ i830_dp_set_link_train(xf86OutputPtr output,
 
 	OUTREG(dev_priv->output_reg, dp_reg_value);
 	POSTING_READ(dev_priv->output_reg);
-	if (first)
+//	if (first)
 		i830WaitForVblank(pScrn);
 
 	i830_dp_aux_native_write_1(pScrn, dev_priv->output_reg,
@@ -820,7 +868,8 @@ i830_dp_set_link_train(xf86OutputPtr output,
 }
 
 static void
-i830_dp_link_train(xf86OutputPtr output, uint32_t DP)
+i830_dp_link_train(xf86OutputPtr output, uint32_t DP,
+		   uint8_t link_configuration[DP_LINK_CONFIGURATION_SIZE])
 {
     ScrnInfoPtr pScrn = output->scrn;
     I830OutputPrivatePtr intel_output = output->driver_private;
@@ -835,15 +884,13 @@ i830_dp_link_train(xf86OutputPtr output, uint32_t DP)
     Bool first = TRUE;
     int tries;
 
-    if ((DP & DP_PORT_EN) == 0) {
-	OUTREG(dev_priv->output_reg, DP);
-	POSTING_READ(dev_priv->output_reg);
-	return;
-    }
+    /* Write the link configuration data */
+    i830_dp_aux_native_write(pScrn, dev_priv->output_reg, 0x100,
+			     link_configuration, DP_LINK_CONFIGURATION_SIZE);
+
+    DP |= DP_PORT_EN;
     DP &= ~DP_LINK_TRAIN_MASK;
-
     memset(train_set, 0, 4);
-
     voltage = 0xff;
     tries = 0;
     clock_recovery = FALSE;
@@ -948,10 +995,20 @@ i830_dp_link_train(xf86OutputPtr output, uint32_t DP)
 
     OUTREG(dev_priv->output_reg, DP | DP_LINK_TRAIN_OFF);
     POSTING_READ(dev_priv->output_reg);
-    usleep (15*1000);
     i830_dp_aux_native_write_1(pScrn, dev_priv->output_reg,
 			DP_TRAINING_PATTERN_SET, DP_TRAINING_PATTERN_DISABLE);
-    usleep (15*1000);
+}
+
+static void
+i830_dp_link_down(xf86OutputPtr output, uint32_t DP)
+{
+    ScrnInfoPtr pScrn = output->scrn;
+    I830OutputPrivatePtr intel_output = output->driver_private;
+    struct i830_dp_priv *dev_priv = intel_output->dev_priv;
+    I830Ptr pI830 = I830PTR(pScrn);
+
+    OUTREG(dev_priv->output_reg, DP & ~DP_PORT_EN);
+    POSTING_READ(dev_priv->output_reg);
 }
 
 /*
@@ -1080,13 +1137,13 @@ i830_dp_i2c_init(ScrnInfoPtr pScrn, I2CBusPtr *bus_ptr,
 static void
 i830_dp_restore(xf86OutputPtr output)
 {
-    ScrnInfoPtr pScrn = output->scrn;
     I830OutputPrivatePtr intel_output = output->driver_private;
     struct i830_dp_priv *dev_priv = intel_output->dev_priv;
 
-    i830_dp_aux_native_write(pScrn, dev_priv->output_reg, 0x100,
-		     dev_priv->save_link_configuration, sizeof (dev_priv->save_link_configuration));
-    i830_dp_link_train(output, dev_priv->save_DP);
+    if (dev_priv->save_DP & DP_PORT_EN)
+	i830_dp_link_train(output, dev_priv->save_DP, dev_priv->save_link_configuration);
+    else
+	i830_dp_link_down(output,  dev_priv->save_DP);
 }
 
 /*
@@ -1101,24 +1158,20 @@ i830_dp_restore(xf86OutputPtr output)
 static void
 i830_dp_check_link_status(xf86OutputPtr output)
 {
-	ScrnInfoPtr	pScrn = output->scrn;
 	I830OutputPrivatePtr intel_output = output->driver_private;
 	struct i830_dp_priv *dev_priv = intel_output->dev_priv;
-	I830Ptr pI830 = I830PTR(pScrn);
 	uint8_t link_status[DP_LINK_STATUS_SIZE];
 
 	if (!output->crtc)
 		return;
 
 	if (!i830_dp_get_link_status(output, link_status)) {
-		OUTREG(dev_priv->output_reg,
-		       INREG(dev_priv->output_reg) & ~DP_PORT_EN);
+		i830_dp_link_down(output, dev_priv->DP);
 		return;
 	}
 
 	if (!i830_channel_eq_ok(link_status, dev_priv->lane_count))
-		i830_dp_link_train(output,
-				   INREG(dev_priv->output_reg) | DP_PORT_EN);
+		i830_dp_link_train(output, dev_priv->DP, dev_priv->link_configuration);
 }
 
 static CARD32

@@ -1539,6 +1539,11 @@ i830_crtc_mode_set(xf86CrtcPtr crtc, DisplayModePtr mode,
 	usleep(150);
     }
 
+    /* The Display Port M/N ratio needs to be set before the DPLL is enabled
+     */
+    if (is_dp)
+	i830_dp_set_m_n(crtc, mode, adjusted_mode);
+
     /* The LVDS pin pair needs to be on before the DPLLs are enabled.
      * This is an exception to the general rule that mode_set doesn't turn
      * things on.
