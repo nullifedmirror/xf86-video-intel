@@ -253,7 +253,8 @@ i830_bind_memory(ScrnInfoPtr pScrn, i830_memory *mem)
 	mem->bound = TRUE;
     }
 
-    if (mem->tiling != TILE_NONE && !pI830->use_drm_mode) {
+    if (mem->tiling != TILE_NONE && !pI830->use_drm_mode &&
+	!pI830->kernel_exec_fencing) {
 	mem->fence_nr = i830_set_tiling(pScrn, mem->offset, mem->pitch,
 					mem->allocated_size, mem->tiling);
     }
@@ -269,7 +270,8 @@ i830_unbind_memory(ScrnInfoPtr pScrn, i830_memory *mem)
     if (mem == NULL || !mem->bound)
 	return TRUE;
 
-    if (mem->tiling != TILE_NONE && !pI830->use_drm_mode)
+    if (mem->tiling != TILE_NONE && !pI830->use_drm_mode &&
+	!pI830->kernel_exec_fencing)
 	i830_clear_tiling(pScrn, mem->fence_nr);
 
 #ifdef XF86DRI
@@ -532,12 +534,8 @@ i830_allocator_init(ScrnInfoPtr pScrn, unsigned long offset, unsigned long size)
 		int ret;
 
 		sp.param = I915_SETPARAM_NUM_USED_FENCES;
-		if (pI830->use_drm_mode)
-		    sp.value = 0; /* kernel gets them all */
-		else if (pI830->directRenderingType == DRI_XF86DRI)
-		    sp.value = 3; /* front/back/depth */
-		else
-		    sp.value = 2; /* just front for DRI2 (both old & new though) */
+		sp.value = 0; /* kernel gets them all */
+
 		ret = drmCommandWrite(pI830->drmSubFD, DRM_I915_SETPARAM, &sp,
 				      sizeof(sp));
 		if (ret == 0)
@@ -959,8 +957,6 @@ i830_allocate_memory(ScrnInfoPtr pScrn, const char *name,
 	    return NULL;
 	}
     }
-
-    mem->tiling = TILE_NONE;
 
     return mem;
 }

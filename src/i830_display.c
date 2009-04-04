@@ -67,10 +67,13 @@ typedef struct {
 
 #define INTEL_P2_NUM		      2
 
-typedef struct {
+typedef struct intel_limit intel_limit_t;
+struct intel_limit {
     intel_range_t   dot, vco, n, m, m1, m2, p, p1;
     intel_p2_t	    p2;
-} intel_limit_t;
+    Bool (* find_pll)(const intel_limit_t *, xf86CrtcPtr,
+                      int, int, intel_clock_t *);
+};
 
 #define I8XX_DOT_MIN		  25000
 #define I8XX_DOT_MAX		 350000
@@ -153,6 +156,95 @@ typedef struct {
 #define INTEL_LIMIT_I9XX_LVDS	    3
 #define INTEL_LIMIT_IGD_SDVO_DAC    4
 #define INTEL_LIMIT_IGD_LVDS	    5
+#define INTEL_LIMIT_G4X_SDVO	    6
+#define INTEL_LIMIT_G4X_HDMI_DAC    7
+#define INTEL_LIMIT_G4X_SINGLE_LVDS 8
+#define INTEL_LIMIT_G4X_DUAL_LVDS   9
+
+/*The parameter is for SDVO on G4x platform*/
+#define G4X_VCO_MIN                1750000
+#define G4X_VCO_MAX                3500000
+#define G4X_DOT_SDVO_MIN           25000
+#define G4X_DOT_SDVO_MAX           270000
+#define G4X_N_SDVO_MIN             1
+#define G4X_N_SDVO_MAX             4
+#define G4X_M_SDVO_MIN             104
+#define G4X_M_SDVO_MAX             138
+#define G4X_M1_SDVO_MIN            17
+#define G4X_M1_SDVO_MAX            23
+#define G4X_M2_SDVO_MIN            5
+#define G4X_M2_SDVO_MAX            11
+#define G4X_P_SDVO_MIN             10
+#define G4X_P_SDVO_MAX             30
+#define G4X_P1_SDVO_MIN            1
+#define G4X_P1_SDVO_MAX            3
+#define G4X_P2_SDVO_SLOW           10
+#define G4X_P2_SDVO_FAST           10
+#define G4X_P2_SDVO_LIMIT          270000
+
+/*The parameter is for HDMI_DAC on G4x platform*/
+#define G4X_DOT_HDMI_DAC_MIN           22000
+#define G4X_DOT_HDMI_DAC_MAX           400000
+#define G4X_N_HDMI_DAC_MIN             1
+#define G4X_N_HDMI_DAC_MAX             4
+#define G4X_M_HDMI_DAC_MIN             104
+#define G4X_M_HDMI_DAC_MAX             138
+#define G4X_M1_HDMI_DAC_MIN            16
+#define G4X_M1_HDMI_DAC_MAX            23
+#define G4X_M2_HDMI_DAC_MIN            5
+#define G4X_M2_HDMI_DAC_MAX            11
+#define G4X_P_HDMI_DAC_MIN             5
+#define G4X_P_HDMI_DAC_MAX             80
+#define G4X_P1_HDMI_DAC_MIN            1
+#define G4X_P1_HDMI_DAC_MAX            8
+#define G4X_P2_HDMI_DAC_SLOW           10
+#define G4X_P2_HDMI_DAC_FAST           5
+#define G4X_P2_HDMI_DAC_LIMIT          165000
+
+/*The parameter is for SINGLE_LVDS on G4x platform*/
+#define G4X_DOT_SINGLE_LVDS_MIN           20000
+#define G4X_DOT_SINGLE_LVDS_MAX           115000
+#define G4X_N_SINGLE_LVDS_MIN             1
+#define G4X_N_SINGLE_LVDS_MAX             3
+#define G4X_M_SINGLE_LVDS_MIN             104
+#define G4X_M_SINGLE_LVDS_MAX             138
+#define G4X_M1_SINGLE_LVDS_MIN            17
+#define G4X_M1_SINGLE_LVDS_MAX            23
+#define G4X_M2_SINGLE_LVDS_MIN            5
+#define G4X_M2_SINGLE_LVDS_MAX            11
+#define G4X_P_SINGLE_LVDS_MIN             28
+#define G4X_P_SINGLE_LVDS_MAX             112
+#define G4X_P1_SINGLE_LVDS_MIN            2
+#define G4X_P1_SINGLE_LVDS_MAX            8
+#define G4X_P2_SINGLE_LVDS_SLOW           14
+#define G4X_P2_SINGLE_LVDS_FAST           14
+#define G4X_P2_SINGLE_LVDS_LIMIT          0
+
+/*The parameter is for DUAL_LVDS on G4x platform*/
+#define G4X_DOT_DUAL_LVDS_MIN           80000
+#define G4X_DOT_DUAL_LVDS_MAX           224000
+#define G4X_N_DUAL_LVDS_MIN             1
+#define G4X_N_DUAL_LVDS_MAX             3
+#define G4X_M_DUAL_LVDS_MIN             104
+#define G4X_M_DUAL_LVDS_MAX             138
+#define G4X_M1_DUAL_LVDS_MIN            17
+#define G4X_M1_DUAL_LVDS_MAX            23
+#define G4X_M2_DUAL_LVDS_MIN            5
+#define G4X_M2_DUAL_LVDS_MAX            11
+#define G4X_P_DUAL_LVDS_MIN             14
+#define G4X_P_DUAL_LVDS_MAX             42
+#define G4X_P1_DUAL_LVDS_MIN            2
+#define G4X_P1_DUAL_LVDS_MAX            6
+#define G4X_P2_DUAL_LVDS_SLOW           7
+#define G4X_P2_DUAL_LVDS_FAST           7
+#define G4X_P2_DUAL_LVDS_LIMIT          0
+
+static Bool
+intel_find_pll_i8xx_and_i9xx(const intel_limit_t *, xf86CrtcPtr,
+                             int, int, intel_clock_t *);
+static Bool
+intel_find_pll_g4x(const intel_limit_t *, xf86CrtcPtr,
+                   int, int, intel_clock_t *);
 
 static const intel_limit_t intel_limits[] = {
     { /* INTEL_LIMIT_I8XX_DVO_DAC */
@@ -166,6 +258,7 @@ static const intel_limit_t intel_limits[] = {
         .p1  = { .min = I8XX_P1_MIN,		.max = I8XX_P1_MAX },
 	.p2  = { .dot_limit = I8XX_P2_SLOW_LIMIT,
 		 .p2_slow = I8XX_P2_SLOW,	.p2_fast = I8XX_P2_FAST },
+        .find_pll = intel_find_pll_i8xx_and_i9xx,
     },
     { /* INTEL_LIMIT_I8XX_LVDS */
         .dot = { .min = I8XX_DOT_MIN,		.max = I8XX_DOT_MAX },
@@ -178,6 +271,7 @@ static const intel_limit_t intel_limits[] = {
         .p1  = { .min = I8XX_P1_LVDS_MIN,	.max = I8XX_P1_LVDS_MAX },
 	.p2  = { .dot_limit = I8XX_P2_SLOW_LIMIT,
 		 .p2_slow = I8XX_P2_LVDS_SLOW,	.p2_fast = I8XX_P2_LVDS_FAST },
+        .find_pll = intel_find_pll_i8xx_and_i9xx,
     },
     { /* INTEL_LIMIT_I9XX_SDVO_DAC */
         .dot = { .min = I9XX_DOT_MIN,		.max = I9XX_DOT_MAX },
@@ -190,6 +284,7 @@ static const intel_limit_t intel_limits[] = {
         .p1  = { .min = I9XX_P1_MIN,		.max = I9XX_P1_MAX },
 	.p2  = { .dot_limit = I9XX_P2_SDVO_DAC_SLOW_LIMIT,
 		 .p2_slow = I9XX_P2_SDVO_DAC_SLOW,	.p2_fast = I9XX_P2_SDVO_DAC_FAST },
+        .find_pll = intel_find_pll_i8xx_and_i9xx,
     },
     { /* INTEL_LIMIT_I9XX_LVDS */
         .dot = { .min = I9XX_DOT_MIN,		.max = I9XX_DOT_MAX },
@@ -205,6 +300,7 @@ static const intel_limit_t intel_limits[] = {
 	 */
 	.p2  = { .dot_limit = I9XX_P2_LVDS_SLOW_LIMIT,
 		 .p2_slow = I9XX_P2_LVDS_SLOW,	.p2_fast = I9XX_P2_LVDS_FAST },
+        .find_pll = intel_find_pll_i8xx_and_i9xx,
     },
     { /* INTEL_LIMIT_IGD_SDVO */
         .dot = { .min = I9XX_DOT_MIN,		.max = I9XX_DOT_MAX},
@@ -217,6 +313,7 @@ static const intel_limit_t intel_limits[] = {
         .p1  = { .min = I9XX_P1_MIN,		.max = I9XX_P1_MAX },
 	.p2  = { .dot_limit = I9XX_P2_SDVO_DAC_SLOW_LIMIT,
 		 .p2_slow = I9XX_P2_SDVO_DAC_SLOW,	.p2_fast = I9XX_P2_SDVO_DAC_FAST },
+        .find_pll = intel_find_pll_i8xx_and_i9xx,
     },
     { /* INTEL_LIMIT_IGD_LVDS */
         .dot = { .min = I9XX_DOT_MIN,		.max = I9XX_DOT_MAX },
@@ -230,8 +327,104 @@ static const intel_limit_t intel_limits[] = {
 	/* IGD only supports single-channel mode. */
 	.p2  = { .dot_limit = I9XX_P2_LVDS_SLOW_LIMIT,
 		 .p2_slow = I9XX_P2_LVDS_SLOW,	.p2_fast = I9XX_P2_LVDS_SLOW },
+        .find_pll = intel_find_pll_i8xx_and_i9xx,
+    },
+    /* below parameter and function is for G4X Chipset Family*/
+    {   /* INTEL_LIMIT_G4X_SDVO */
+        .dot = { .min = G4X_DOT_SDVO_MIN,       .max = G4X_DOT_SDVO_MAX },
+        .vco = { .min = G4X_VCO_MIN,            .max = G4X_VCO_MAX},
+        .n   = { .min = G4X_N_SDVO_MIN,         .max = G4X_N_SDVO_MAX },
+        .m   = { .min = G4X_M_SDVO_MIN,         .max = G4X_M_SDVO_MAX },
+        .m1  = { .min = G4X_M1_SDVO_MIN,        .max = G4X_M1_SDVO_MAX },
+        .m2  = { .min = G4X_M2_SDVO_MIN,        .max = G4X_M2_SDVO_MAX },
+        .p   = { .min = G4X_P_SDVO_MIN,         .max = G4X_P_SDVO_MAX },
+        .p1  = { .min = G4X_P1_SDVO_MIN,        .max = G4X_P1_SDVO_MAX},
+        .p2  = { .dot_limit = G4X_P2_SDVO_LIMIT,
+                 .p2_slow = G4X_P2_SDVO_SLOW,
+                 .p2_fast = G4X_P2_SDVO_FAST },
+        .find_pll = intel_find_pll_g4x,
+    },
+    {   /* INTEL_LIMIT_G4X_HDMI_DAC */
+        .dot = { .min = G4X_DOT_HDMI_DAC_MIN,	.max = G4X_DOT_HDMI_DAC_MAX },
+        .vco = { .min = G4X_VCO_MIN,	        .max = G4X_VCO_MAX},
+        .n   = { .min = G4X_N_HDMI_DAC_MIN,	.max = G4X_N_HDMI_DAC_MAX },
+        .m   = { .min = G4X_M_HDMI_DAC_MIN,	.max = G4X_M_HDMI_DAC_MAX },
+        .m1  = { .min = G4X_M1_HDMI_DAC_MIN,	.max = G4X_M1_HDMI_DAC_MAX },
+        .m2  = { .min = G4X_M2_HDMI_DAC_MIN,	.max = G4X_M2_HDMI_DAC_MAX },
+        .p   = { .min = G4X_P_HDMI_DAC_MIN,	.max = G4X_P_HDMI_DAC_MAX },
+        .p1  = { .min = G4X_P1_HDMI_DAC_MIN,	.max = G4X_P1_HDMI_DAC_MAX},
+        .p2  = { .dot_limit = G4X_P2_HDMI_DAC_LIMIT,
+                 .p2_slow = G4X_P2_HDMI_DAC_SLOW,
+                 .p2_fast = G4X_P2_HDMI_DAC_FAST },
+        .find_pll = intel_find_pll_g4x,
+    },
+    {   /* INTEL_LIMIT_G4X_SINGLE_LVDS */
+        .dot = { .min = G4X_DOT_SINGLE_LVDS_MIN,
+                 .max = G4X_DOT_SINGLE_LVDS_MAX },
+        .vco = { .min = G4X_VCO_MIN,
+                 .max = G4X_VCO_MAX },
+        .n   = { .min = G4X_N_SINGLE_LVDS_MIN,
+                 .max = G4X_N_SINGLE_LVDS_MAX },
+        .m   = { .min = G4X_M_SINGLE_LVDS_MIN,
+                 .max = G4X_M_SINGLE_LVDS_MAX },
+        .m1  = { .min = G4X_M1_SINGLE_LVDS_MIN,
+                 .max = G4X_M1_SINGLE_LVDS_MAX },
+        .m2  = { .min = G4X_M2_SINGLE_LVDS_MIN,
+                 .max = G4X_M2_SINGLE_LVDS_MAX },
+        .p   = { .min = G4X_P_SINGLE_LVDS_MIN,
+                 .max = G4X_P_SINGLE_LVDS_MAX },
+        .p1  = { .min = G4X_P1_SINGLE_LVDS_MIN,
+                 .max = G4X_P1_SINGLE_LVDS_MAX },
+        .p2  = { .dot_limit = G4X_P2_SINGLE_LVDS_LIMIT,
+                 .p2_slow = G4X_P2_SINGLE_LVDS_SLOW,
+                 .p2_fast = G4X_P2_SINGLE_LVDS_FAST },
+        .find_pll = intel_find_pll_g4x,
+    },
+    {   /* INTEL_LIMIT_G4X_DUAL_LVDS */
+        .dot = { .min = G4X_DOT_DUAL_LVDS_MIN,
+                 .max = G4X_DOT_DUAL_LVDS_MAX },
+        .vco = { .min = G4X_VCO_MIN,
+                 .max = G4X_VCO_MAX},
+        .n   = { .min = G4X_N_DUAL_LVDS_MIN,
+                 .max = G4X_N_DUAL_LVDS_MAX },
+        .m   = { .min = G4X_M_DUAL_LVDS_MIN,
+                 .max = G4X_M_DUAL_LVDS_MAX },
+        .m1  = { .min = G4X_M1_DUAL_LVDS_MIN,
+                 .max = G4X_M1_DUAL_LVDS_MAX },
+        .m2  = { .min = G4X_M2_DUAL_LVDS_MIN,
+                 .max = G4X_M2_DUAL_LVDS_MAX },
+        .p   = { .min = G4X_P_DUAL_LVDS_MIN,
+                 .max = G4X_P_DUAL_LVDS_MAX },
+        .p1  = { .min = G4X_P1_DUAL_LVDS_MIN,
+                 .max = G4X_P1_DUAL_LVDS_MAX},
+        .p2  = { .dot_limit = G4X_P2_DUAL_LVDS_LIMIT,
+                 .p2_slow = G4X_P2_DUAL_LVDS_SLOW,
+                 .p2_fast = G4X_P2_DUAL_LVDS_FAST },
+        .find_pll = intel_find_pll_g4x,
     },
 };
+
+static const intel_limit_t *intel_limit_g4x (xf86CrtcPtr crtc)
+{
+    ScrnInfoPtr	pScrn = crtc->scrn;
+    I830Ptr	pI830 = I830PTR(pScrn);
+    const intel_limit_t *limit;
+
+    if (i830PipeHasType (crtc, I830_OUTPUT_LVDS)) {
+        if ((INREG(LVDS) & LVDS_CLKB_POWER_MASK) == LVDS_CLKB_POWER_UP) {
+            /* LVDS with dual channel */
+            limit = &intel_limits[INTEL_LIMIT_G4X_DUAL_LVDS];
+        } else /* LVDS with single channel */
+            limit = &intel_limits[INTEL_LIMIT_G4X_SINGLE_LVDS];
+    } else if (i830PipeHasType (crtc, I830_OUTPUT_HDMI) ||
+               i830PipeHasType (crtc, I830_OUTPUT_ANALOG)) {
+        limit = &intel_limits[INTEL_LIMIT_G4X_HDMI_DAC];
+    } else if (i830PipeHasType (crtc, I830_OUTPUT_SDVO)) {
+        limit = &intel_limits[INTEL_LIMIT_G4X_SDVO];
+    } else /* The option is for other outputs */
+        limit = &intel_limits[INTEL_LIMIT_I9XX_SDVO_DAC];
+    return limit;
+}
 
 static const intel_limit_t *intel_limit (xf86CrtcPtr crtc)
 {
@@ -239,7 +432,9 @@ static const intel_limit_t *intel_limit (xf86CrtcPtr crtc)
     I830Ptr	pI830 = I830PTR(pScrn);
     const intel_limit_t *limit;
 
-    if (IS_I9XX(pI830) && !IS_IGD(pI830)) {
+    if (IS_G4X(pI830)) {
+        limit = intel_limit_g4x(crtc);
+    } else if (IS_I9XX(pI830) && !IS_IGD(pI830)) {
 	if (i830PipeHasType (crtc, I830_OUTPUT_LVDS))
 	    limit = &intel_limits[INTEL_LIMIT_I9XX_LVDS];
 	else
@@ -372,18 +567,13 @@ i830PllIsValid(xf86CrtcPtr crtc, intel_clock_t *clock)
     return TRUE;
 }
 
-/**
- * Returns a set of divisors for the desired target clock with the given
- * refclk, or FALSE.  The returned values represent the clock equation:
- * reflck * (5 * (m1 + 2) + (m2 + 2)) / (n + 2) / p1 / p2.
- */
 static Bool
-i830FindBestPLL(xf86CrtcPtr crtc, int target, int refclk, intel_clock_t *best_clock)
+intel_find_pll_i8xx_and_i9xx(const intel_limit_t * limit, xf86CrtcPtr crtc,
+	                     int target, int refclk, intel_clock_t *best_clock)
 {
     ScrnInfoPtr pScrn = crtc->scrn;
     I830Ptr pI830 = I830PTR(pScrn);
-    intel_clock_t   clock;
-    const intel_limit_t   *limit = intel_limit (crtc);
+    intel_clock_t clock;
     int err = target;
 
     if (i830PipeHasType(crtc, I830_OUTPUT_LVDS))
@@ -433,6 +623,64 @@ i830FindBestPLL(xf86CrtcPtr crtc, int target, int refclk, intel_clock_t *best_cl
 	}
     }
     return (err != target);
+}
+
+static Bool
+intel_find_pll_g4x(const intel_limit_t * limit, xf86CrtcPtr crtc,
+                   int target, int refclk, intel_clock_t *best_clock)
+{
+    ScrnInfoPtr pScrn = crtc->scrn;
+    I830Ptr pI830 = I830PTR(pScrn);
+    intel_clock_t clock;
+    int  max_n;
+    Bool found = FALSE;
+    int err_most = target * 0.0048;
+
+    if (i830PipeHasType(crtc, I830_OUTPUT_LVDS))
+    {
+        /* For LVDS, if the panel is on, just rely on its current settings for
+         * dual-channel.  We haven't figured out how to reliably set up
+         * different single/dual channel state, if we even can.
+         */
+        if ((INREG(LVDS) & LVDS_CLKB_POWER_MASK) == LVDS_CLKB_POWER_UP)
+            clock.p2 = limit->p2.p2_fast;
+        else
+            clock.p2 = limit->p2.p2_slow;
+    } else {
+        if (target < limit->p2.dot_limit)
+            clock.p2 = limit->p2.p2_slow;
+        else
+            clock.p2 = limit->p2.p2_fast;
+    }
+
+    max_n = limit->n.max;
+    /* based on hardware requirement prefer smaller n to precision */
+    for (clock.n = limit->n.min; clock.n <= max_n; clock.n++) {
+        /* based on hardware requirement prefere larger m1,m2, p1*/
+        for (clock.m1 = limit->m1.max;
+            clock.m1 >= limit->m1.min; clock.m1--) {
+            for (clock.m2 = limit->m2.max;
+                clock.m2 >= limit->m2.min; clock.m2--) {
+                for (clock.p1 = limit->p1.max;
+                    clock.p1 >= limit->p1.min; clock.p1--) {
+                    int this_err;
+
+                    intel_clock (pI830, refclk, &clock);
+                    if (!i830PllIsValid(crtc, &clock))
+                        continue;
+                    this_err = abs(clock.dot - target) ;
+                    if (this_err < err_most) {
+                        memcpy(best_clock, &clock, sizeof(intel_clock_t));
+                        err_most = this_err;
+                        /* prefer smaller n to precision */
+                        max_n = clock.n;
+                        found = TRUE;
+                    }
+                }
+            }
+        }
+    }
+    return found;
 }
 
 void
@@ -865,12 +1113,143 @@ i830_disable_vga_plane (xf86CrtcPtr crtc)
     sr01 = INREG8(SRX + 1);
     OUTREG8(SRX + 1, sr01 | (1 << 5));
     usleep(30);
+    /* disable center mode on 965GM and G4X platform */
+    if (IS_I965GM(pI830) || IS_G4X(pI830))
+        vgacntrl &= ~(3 << 24);
 
     vgacntrl |= VGA_DISP_DISABLE;
 
     OUTREG(VGACNTRL, vgacntrl);
     i830WaitForVblank(pScrn);
 
+}
+
+void
+i830_crtc_enable(xf86CrtcPtr crtc)
+{
+    ScrnInfoPtr pScrn = crtc->scrn;
+    I830Ptr pI830 = I830PTR(pScrn);
+    I830CrtcPrivatePtr intel_crtc = crtc->driver_private;
+    int pipe = intel_crtc->pipe;
+    int plane = intel_crtc->plane;
+    int dpll_reg = (pipe == 0) ? DPLL_A : DPLL_B;
+    int pipeconf_reg = (pipe == 0) ? PIPEACONF : PIPEBCONF;
+    int dspcntr_reg = (plane == 0) ? DSPACNTR : DSPBCNTR;
+    int dspbase_reg = (plane == 0) ? DSPABASE : DSPBBASE;
+    uint32_t temp;
+
+    /* Enable the DPLL */
+    temp = INREG(dpll_reg);
+    if ((temp & DPLL_VCO_ENABLE) == 0)
+    {
+	OUTREG(dpll_reg, temp);
+	POSTING_READ(dpll_reg);
+	/* Wait for the clocks to stabilize. */
+	usleep(150);
+	OUTREG(dpll_reg, temp | DPLL_VCO_ENABLE);
+	POSTING_READ(dpll_reg);
+	/* Wait for the clocks to stabilize. */
+	usleep(150);
+	OUTREG(dpll_reg, temp | DPLL_VCO_ENABLE);
+	POSTING_READ(dpll_reg);
+	/* Wait for the clocks to stabilize. */
+	usleep(150);
+    }
+
+    /* Enable the pipe */
+    temp = INREG(pipeconf_reg);
+    if ((temp & PIPEACONF_ENABLE) == 0)
+	OUTREG(pipeconf_reg, temp | PIPEACONF_ENABLE);
+
+    /* Enable the plane */
+    temp = INREG(dspcntr_reg);
+    if ((temp & DISPLAY_PLANE_ENABLE) == 0)
+    {
+	OUTREG(dspcntr_reg, temp | DISPLAY_PLANE_ENABLE);
+	/* Flush the plane changes */
+	OUTREG(dspbase_reg, INREG(dspbase_reg));
+    }
+
+    i830_crtc_load_lut(crtc);
+
+    /* Give the overlay scaler a chance to enable if it's on this pipe */
+    i830_crtc_dpms_video(crtc, TRUE);
+
+    /* Reenable compression if needed */
+    if (i830_use_fb_compression(crtc))
+	i830_enable_fb_compression(crtc);
+    i830_modeset_ctl(crtc, 0);
+}
+
+void
+i830_crtc_disable(xf86CrtcPtr crtc, Bool disable_pipe)
+{
+    ScrnInfoPtr pScrn = crtc->scrn;
+    I830Ptr pI830 = I830PTR(pScrn);
+    I830CrtcPrivatePtr intel_crtc = crtc->driver_private;
+    int pipe = intel_crtc->pipe;
+    int plane = intel_crtc->plane;
+    int dpll_reg = (pipe == 0) ? DPLL_A : DPLL_B;
+    int pipeconf_reg = (pipe == 0) ? PIPEACONF : PIPEBCONF;
+    int dspcntr_reg = (plane == 0) ? DSPACNTR : DSPBCNTR;
+    int dspbase_reg = (plane == 0) ? DSPABASE : DSPBBASE;
+    uint32_t temp;
+
+    i830_modeset_ctl(crtc, 1);
+    /* Shut off compression if in use */
+    if (i830_use_fb_compression(crtc))
+	i830_disable_fb_compression(crtc);
+
+    /* Give the overlay scaler a chance to disable if it's on this pipe */
+    i830_crtc_dpms_video(crtc, FALSE);
+
+    /* 
+     * The documentation says :
+     * - Disable planes (VGA or hires)
+     * - Disable pipe
+     * - Disable VGA display
+     */
+
+    /* Disable display plane */
+    temp = INREG(dspcntr_reg);
+    if ((temp & DISPLAY_PLANE_ENABLE) != 0)
+    {
+	OUTREG(dspcntr_reg, temp & ~DISPLAY_PLANE_ENABLE);
+	/* Flush the plane changes */
+	OUTREG(dspbase_reg, INREG(dspbase_reg));
+	POSTING_READ(dspbase_reg);
+    }
+
+    if (!IS_I9XX(pI830)) {
+	/* Wait for vblank for the disable to take effect */
+	i830WaitForVblank(pScrn);
+    }
+
+    /* May need to leave pipe A on */
+    if (disable_pipe)
+    {
+	/* Next, disable display pipes */
+	temp = INREG(pipeconf_reg);
+	if ((temp & PIPEACONF_ENABLE) != 0) {
+	    OUTREG(pipeconf_reg, temp & ~PIPEACONF_ENABLE);
+	    POSTING_READ(pipeconf_reg);
+	}
+
+	/* Wait for vblank for the disable to take effect. */
+	i830WaitForVblank(pScrn);
+
+	temp = INREG(dpll_reg);
+	if ((temp & DPLL_VCO_ENABLE) != 0) {
+	    OUTREG(dpll_reg, temp & ~DPLL_VCO_ENABLE);
+	    POSTING_READ(dpll_reg);
+	}
+
+	/* Wait for the clocks to turn off. */
+	usleep(150);
+    }
+
+    /* Disable the VGA plane that we never use. */
+    i830_disable_vga_plane (crtc);
 }
 
 /**
@@ -886,12 +1265,7 @@ i830_crtc_dpms(xf86CrtcPtr crtc, int mode)
     I830Ptr pI830 = I830PTR(pScrn);
     I830CrtcPrivatePtr intel_crtc = crtc->driver_private;
     int pipe = intel_crtc->pipe;
-    int plane = intel_crtc->plane;
-    int dpll_reg = (pipe == 0) ? DPLL_A : DPLL_B;
-    int pipeconf_reg = (pipe == 0) ? PIPEACONF : PIPEBCONF;
-    int dspcntr_reg = (plane == 0) ? DSPACNTR : DSPBCNTR;
-    int dspbase_reg = (plane == 0) ? DSPABASE : DSPBBASE;
-    uint32_t temp;
+    Bool disable_pipe = TRUE;
 
     /* XXX: When our outputs are all unaware of DPMS modes other than off and
      * on, we should map those modes to DPMSModeOff in the CRTC.
@@ -900,105 +1274,12 @@ i830_crtc_dpms(xf86CrtcPtr crtc, int mode)
     case DPMSModeOn:
     case DPMSModeStandby:
     case DPMSModeSuspend:
-	/* Enable the DPLL */
-	temp = INREG(dpll_reg);
-	if ((temp & DPLL_VCO_ENABLE) == 0)
-	{
-	    OUTREG(dpll_reg, temp);
-	    POSTING_READ(dpll_reg);
-	    /* Wait for the clocks to stabilize. */
-	    usleep(150);
-	    OUTREG(dpll_reg, temp | DPLL_VCO_ENABLE);
-	    POSTING_READ(dpll_reg);
-	    /* Wait for the clocks to stabilize. */
-	    usleep(150);
-	    OUTREG(dpll_reg, temp | DPLL_VCO_ENABLE);
-	    POSTING_READ(dpll_reg);
-	    /* Wait for the clocks to stabilize. */
-	    usleep(150);
-	}
-
-	/* Enable the pipe */
-	temp = INREG(pipeconf_reg);
-	if ((temp & PIPEACONF_ENABLE) == 0)
-	    OUTREG(pipeconf_reg, temp | PIPEACONF_ENABLE);
-
-	/* Enable the plane */
-	temp = INREG(dspcntr_reg);
-	if ((temp & DISPLAY_PLANE_ENABLE) == 0)
-	{
-	    OUTREG(dspcntr_reg, temp | DISPLAY_PLANE_ENABLE);
-	    /* Flush the plane changes */
-	    OUTREG(dspbase_reg, INREG(dspbase_reg));
-	}
-
-	i830_crtc_load_lut(crtc);
-
-	/* Give the overlay scaler a chance to enable if it's on this pipe */
-	i830_crtc_dpms_video(crtc, TRUE);
-
-	/* Reenable compression if needed */
-	if (i830_use_fb_compression(crtc))
-	    i830_enable_fb_compression(crtc);
-	i830_modeset_ctl(crtc, 0);
+	i830_crtc_enable(crtc);
 	break;
     case DPMSModeOff:
-	i830_modeset_ctl(crtc, 1);
-	/* Shut off compression if in use */
-	if (i830_use_fb_compression(crtc))
-	    i830_disable_fb_compression(crtc);
-
-	/* Give the overlay scaler a chance to disable if it's on this pipe */
-	i830_crtc_dpms_video(crtc, FALSE);
-
-	/* 
-	 * The documentation says :
-	 * - Disable planes (VGA or hires)
-	 * - Disable pipe
-	 * - Disable VGA display
-	 */
-
-	/* Disable display plane */
-	temp = INREG(dspcntr_reg);
-	if ((temp & DISPLAY_PLANE_ENABLE) != 0)
-	{
-	    OUTREG(dspcntr_reg, temp & ~DISPLAY_PLANE_ENABLE);
-	    /* Flush the plane changes */
-	    OUTREG(dspbase_reg, INREG(dspbase_reg));
-	    POSTING_READ(dspbase_reg);
-	}
-
-	if (!IS_I9XX(pI830)) {
-	    /* Wait for vblank for the disable to take effect */
-	    i830WaitForVblank(pScrn);
-	}
-
-	/* May need to leave pipe A on */
-	if ((pipe != 0) || !(pI830->quirk_flag & QUIRK_PIPEA_FORCE))
-	{
-		/* Next, disable display pipes */
-		temp = INREG(pipeconf_reg);
-		if ((temp & PIPEACONF_ENABLE) != 0) {
-		    OUTREG(pipeconf_reg, temp & ~PIPEACONF_ENABLE);
-		    POSTING_READ(pipeconf_reg);
-		}
-
-		/* Wait for vblank for the disable to take effect. */
-		i830WaitForVblank(pScrn);
-
-		temp = INREG(dpll_reg);
-		if ((temp & DPLL_VCO_ENABLE) != 0) {
-		    OUTREG(dpll_reg, temp & ~DPLL_VCO_ENABLE);
-		    POSTING_READ(dpll_reg);
-		}
-
-		/* Wait for the clocks to turn off. */
-		usleep(150);
-	}
-
-	/* Disable the VGA plane that we never use. */
-	i830_disable_vga_plane (crtc);
-
+	if ((pipe == 0) && (pI830->quirk_flag & QUIRK_PIPEA_FORCE))
+	    disable_pipe = FALSE;
+	i830_crtc_disable(crtc, disable_pipe);
 	break;
     }
 
@@ -1305,6 +1586,7 @@ i830_crtc_mode_set(xf86CrtcPtr crtc, DisplayModePtr mode,
     uint32_t dpll = 0, fp = 0, dspcntr, pipeconf, lvds_bits = 0;
     Bool ok, is_sdvo = FALSE, is_dvo = FALSE, is_dp = FALSE;
     Bool is_crt = FALSE, is_lvds = FALSE, is_tv = FALSE;
+    const intel_limit_t *limit;
 
     /* Set up some convenient bools for what outputs are connected to
      * our pipe, used in DPLL setup.
@@ -1360,7 +1642,13 @@ i830_crtc_mode_set(xf86CrtcPtr crtc, DisplayModePtr mode,
 	refclk = 48000;
     }
 
-    ok = i830FindBestPLL(crtc, adjusted_mode->Clock, refclk, &clock);
+    /*
+     * Returns a set of divisors for the desired target clock with the given
+     * refclk, or FALSE.  The returned values represent the clock equation:
+     * reflck * (5 * (m1 + 2) + (m2 + 2)) / (n + 2) / p1 / p2.
+     */
+    limit = intel_limit (crtc);
+    ok = limit->find_pll(limit, crtc, adjusted_mode->Clock, refclk, &clock);
     if (!ok)
 	FatalError("Couldn't find PLL settings for mode!\n");
 
