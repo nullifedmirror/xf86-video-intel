@@ -582,32 +582,7 @@ i830_dp_dpms(xf86OutputPtr output, int mode)
 	}
     } else {
 	if (!(dp_reg & DP_PORT_EN)) {
-	    uint32_t	pipestat;
-	    uint32_t	pipestat_reg;
-	    xf86CrtcPtr crtc = output->crtc;
-	    I830CrtcPrivatePtr intel_crtc = crtc->driver_private;
-
-	    if (intel_crtc->pipe == 1)
-		pipestat_reg = PIPEBSTAT;
-	    else
-		pipestat_reg = PIPEASTAT;
-	    OUTREG(pipestat_reg, INREG(pipestat_reg));	/* clear interrupt status */
-	    do {
-		pipestat = INREG(pipestat_reg);
-	    } while (!(pipestat & VSYNC_INT_STATUS));
-	    xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Registers before link training\n");
-	    i830DumpRegs(pScrn);
 	    i830_dp_link_train(output, dev_priv->DP, dev_priv->link_configuration);
-
-	    i830WaitForVblank(pScrn);
-	    i830_dp_link_down(output, dev_priv->DP);
-	    i830WaitForVblank(pScrn);
-	    crtc->funcs->dpms(crtc, DPMSModeOff);
-	    i830WaitForVblank(pScrn);
-	    crtc->funcs->dpms(crtc, DPMSModeOn);
-	    i830WaitForVblank(pScrn);
-	    i830_dp_link_train(output, dev_priv->DP, dev_priv->link_configuration);
-	    i830WaitForVblank(pScrn);
 
 	    if (!dev_priv->link_check_timer)
 		dev_priv->link_check_timer = TimerSet(NULL, 0, DP_LINK_CHECK_TIMEOUT,
