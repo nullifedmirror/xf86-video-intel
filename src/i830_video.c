@@ -1019,7 +1019,7 @@ I830SetupImageVideoTextured(ScreenPtr pScreen)
 	pPriv->doubleBuffer = 0;
 
 	pPriv->rotation = RR_Rotate_0;
-	pPriv->SyncToVblank = -1;
+	pPriv->SyncToVblank = 1;
 
 	/* gotta uninit this someplace, XXX: shouldn't be necessary for textured */
 	REGION_NULL(pScreen, &pPriv->clip);
@@ -2513,44 +2513,31 @@ I830PutImage(ScrnInfoPtr pScrn,
             sync = FALSE;
         } else if (pPriv->SyncToVblank == 0) {
             sync = FALSE;
-        } else if (pPriv->SyncToVblank == -1) {
-            BoxRec crtc_box;
-            BoxPtr pbox;
-            int nbox, crtc_area, coverage = 0;
-
-            i830_crtc_box(crtc, &crtc_box);
-            crtc_area = i830_box_area(&crtc_box);
-            pbox = REGION_RECTS(clipBoxes);
-            nbox = REGION_NUM_RECTS(clipBoxes);
-            
-            while (nbox--) {
-                coverage += i830_box_area(pbox);
-                pbox++;
-            }
-
-            if ((coverage << 2) < crtc_area)
-                sync = FALSE;
         }
 
         if (sync) {
-            I830CrtcPrivatePtr intel_crtc = crtc->driver_private;
-            int event;
+	    BoxPtr box;
+            int event, pipe;
+	    I830CrtcPrivatePtr intel_crtc = crtc->driver_private;
 
-            if (IS_I965G(pI830)) {
-                if (intel_crtc->pipe == 0)
-                    event = MI_WAIT_FOR_PIPEA_SVBLANK;
-                else
-                    event = MI_WAIT_FOR_PIPEB_SVBLANK;
-            } else {
-                if (intel_crtc->pipe == 0)
-                    event = MI_WAIT_FOR_PIPEA_VBLANK;
-                else
-                    event = MI_WAIT_FOR_PIPEB_VBLANK;
-            }
+	    if (intel_crtc->pipe == 0) {
+		event = MI_WAIT_FOR_PIPEA_SCAN_LINE_WINDOW;
+		pipe = MI_LOAD_SCAN_LINES_DISPLAY_PIPEA;
+	    } else {
+		event = MI_WAIT_FOR_PIPEB_SCAN_LINE_WINDOW;
+		pipe = MI_LOAD_SCAN_LINES_DISPLAY_PIPEB;
+	    }
 
-            BEGIN_BATCH(2);
+	    box = REGION_EXTENTS(unused, clipBoxes);
+
+            BEGIN_BATCH(5);
+	    /* The documentation says that the LOAD_SCAN_LINES command
+	     * always comes in pairs. Don't ask me why. */
+	    OUT_BATCH(MI_LOAD_SCAN_LINES_INCL | pipe);
+	    OUT_BATCH((box->y1 << 16) | box->y2);
+	    OUT_BATCH(MI_LOAD_SCAN_LINES_INCL | pipe);
+	    OUT_BATCH((box->y1 << 16) | box->y2);
             OUT_BATCH(MI_WAIT_FOR_EVENT | event);
-            OUT_BATCH(MI_NOOP);
             ADVANCE_BATCH();
         }
 
