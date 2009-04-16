@@ -2146,7 +2146,8 @@ i830_clip_video_helper (ScrnInfoPtr pScrn,
 						   pPriv->desired_crtc,
 						   &crtc_box);
 	
-	if (crtc)
+	/* For textured video, we don't actually want to clip at all. */
+	if (crtc && !pPriv->textured)
 	{
 	    REGION_INIT (pScreen, &crtc_region_local, &crtc_box, 1);
 	    crtc_region = &crtc_region_local;
@@ -2517,6 +2518,7 @@ I830PutImage(ScrnInfoPtr pScrn,
 
         if (sync) {
 	    BoxPtr box;
+	    int y1, y2;
             int event, pipe;
 	    I830CrtcPrivatePtr intel_crtc = crtc->driver_private;
 
@@ -2529,14 +2531,16 @@ I830PutImage(ScrnInfoPtr pScrn,
 	    }
 
 	    box = REGION_EXTENTS(unused, clipBoxes);
+	    y1 = box->y1 - crtc->y;
+	    y2 = box->y2 - crtc->y;
 
             BEGIN_BATCH(5);
 	    /* The documentation says that the LOAD_SCAN_LINES command
 	     * always comes in pairs. Don't ask me why. */
 	    OUT_BATCH(MI_LOAD_SCAN_LINES_INCL | pipe);
-	    OUT_BATCH((box->y1 << 16) | box->y2);
+	    OUT_BATCH((y1 << 16) | y2);
 	    OUT_BATCH(MI_LOAD_SCAN_LINES_INCL | pipe);
-	    OUT_BATCH((box->y1 << 16) | box->y2);
+	    OUT_BATCH((y1 << 16) | y2);
             OUT_BATCH(MI_WAIT_FOR_EVENT | event);
             ADVANCE_BATCH();
         }
