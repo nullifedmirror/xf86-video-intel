@@ -160,6 +160,7 @@ struct intel_limit {
 #define INTEL_LIMIT_G4X_HDMI_DAC    7
 #define INTEL_LIMIT_G4X_SINGLE_LVDS 8
 #define INTEL_LIMIT_G4X_DUAL_LVDS   9
+#define INTEL_LIMIT_G4X_DISPLAY_PORT 10
 
 /*The parameter is for SDVO on G4x platform*/
 #define G4X_VCO_MIN                1750000
@@ -239,12 +240,35 @@ struct intel_limit {
 #define G4X_P2_DUAL_LVDS_FAST           7
 #define G4X_P2_DUAL_LVDS_LIMIT          0
 
+/*The parameter is for DISPLAY PORT on G4x platform*/
+#define G4X_DOT_DISPLAY_PORT_MIN           161670
+#define G4X_DOT_DISPLAY_PORT_MAX           227000
+#define G4X_N_DISPLAY_PORT_MIN             1
+#define G4X_N_DISPLAY_PORT_MAX             2
+#define G4X_M_DISPLAY_PORT_MIN             97
+#define G4X_M_DISPLAY_PORT_MAX             108
+#define G4X_M1_DISPLAY_PORT_MIN            0x10
+#define G4X_M1_DISPLAY_PORT_MAX            0x12
+#define G4X_M2_DISPLAY_PORT_MIN            0x05
+#define G4X_M2_DISPLAY_PORT_MAX            0x06
+#define G4X_P_DISPLAY_PORT_MIN             10
+#define G4X_P_DISPLAY_PORT_MAX             20
+#define G4X_P1_DISPLAY_PORT_MIN            1
+#define G4X_P1_DISPLAY_PORT_MAX            2
+#define G4X_P2_DISPLAY_PORT_SLOW           10
+#define G4X_P2_DISPLAY_PORT_FAST           10
+#define G4X_P2_DISPLAY_PORT_LIMIT          0
+
 static Bool
 intel_find_pll_i8xx_and_i9xx(const intel_limit_t *, xf86CrtcPtr,
                              int, int, intel_clock_t *);
 static Bool
 intel_find_pll_g4x(const intel_limit_t *, xf86CrtcPtr,
                    int, int, intel_clock_t *);
+
+static Bool
+intel_find_pll_g4x_dp(const intel_limit_t *, xf86CrtcPtr,
+		      int, int, intel_clock_t *);
 
 static const intel_limit_t intel_limits[] = {
     { /* INTEL_LIMIT_I8XX_DVO_DAC */
@@ -402,6 +426,28 @@ static const intel_limit_t intel_limits[] = {
                  .p2_fast = G4X_P2_DUAL_LVDS_FAST },
         .find_pll = intel_find_pll_g4x,
     },
+    {   /* INTEL_LIMIT_G4X_DISPLAY_PORT */
+        .dot = { .min = G4X_DOT_DISPLAY_PORT_MIN,
+                 .max = G4X_DOT_DISPLAY_PORT_MAX },
+        .vco = { .min = G4X_VCO_MIN,
+                 .max = G4X_VCO_MAX},
+        .n   = { .min = G4X_N_DISPLAY_PORT_MIN,
+                 .max = G4X_N_DISPLAY_PORT_MAX },
+        .m   = { .min = G4X_M_DISPLAY_PORT_MIN,
+                 .max = G4X_M_DISPLAY_PORT_MAX },
+        .m1  = { .min = G4X_M1_DISPLAY_PORT_MIN,
+                 .max = G4X_M1_DISPLAY_PORT_MAX },
+        .m2  = { .min = G4X_M2_DISPLAY_PORT_MIN,
+                 .max = G4X_M2_DISPLAY_PORT_MAX },
+        .p   = { .min = G4X_P_DISPLAY_PORT_MIN,
+                 .max = G4X_P_DISPLAY_PORT_MAX },
+        .p1  = { .min = G4X_P1_DISPLAY_PORT_MIN,
+                 .max = G4X_P1_DISPLAY_PORT_MAX},
+        .p2  = { .dot_limit = G4X_P2_DISPLAY_PORT_LIMIT,
+                 .p2_slow = G4X_P2_DISPLAY_PORT_SLOW,
+                 .p2_fast = G4X_P2_DISPLAY_PORT_FAST },
+        .find_pll = intel_find_pll_g4x_dp,
+    },
 };
 
 static const intel_limit_t *intel_limit_g4x (xf86CrtcPtr crtc)
@@ -421,6 +467,8 @@ static const intel_limit_t *intel_limit_g4x (xf86CrtcPtr crtc)
         limit = &intel_limits[INTEL_LIMIT_G4X_HDMI_DAC];
     } else if (i830PipeHasType (crtc, I830_OUTPUT_SDVO)) {
         limit = &intel_limits[INTEL_LIMIT_G4X_SDVO];
+    } else if (i830PipeHasType (crtc, I830_OUTPUT_DISPLAYPORT)) {
+	limit = &intel_limits[INTEL_LIMIT_G4X_DISPLAY_PORT];
     } else /* The option is for other outputs */
         limit = &intel_limits[INTEL_LIMIT_I9XX_SDVO_DAC];
     return limit;
@@ -623,6 +671,35 @@ intel_find_pll_i8xx_and_i9xx(const intel_limit_t * limit, xf86CrtcPtr crtc,
 	}
     }
     return (err != target);
+}
+
+/* DisplayPort has only two frequencies, 162MHz and 270MHz */
+static Bool
+intel_find_pll_g4x_dp(const intel_limit_t * limit, xf86CrtcPtr crtc,
+		      int target, int refclk, intel_clock_t *best_clock)
+{
+    intel_clock_t clock;
+    if (target < 200000) {
+	clock.dot = 161670;
+	clock.p = 20;
+	clock.p1 = 2;
+	clock.p2 = 10;
+	clock.n = 0x01;
+	clock.m = 97;
+	clock.m1 = 0x10;
+	clock.m2 = 0x05;
+    } else {
+	clock.dot = 270000;
+	clock.p = 10;
+	clock.p1 = 1;
+	clock.p2 = 10;
+	clock.n = 0x02;
+	clock.m = 108;
+	clock.m1 = 0x12;
+	clock.m2 = 0x06;
+    }
+    memcpy(best_clock, &clock, sizeof(intel_clock_t));
+    return TRUE;
 }
 
 static Bool
