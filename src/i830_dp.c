@@ -109,6 +109,7 @@ i830_dp_link_clock(uint8_t link_bw)
 	return 162000;
 }
 
+/* I think this is a fiction */
 static int
 i830_dp_link_required(int pixel_clock)
 {
@@ -673,6 +674,17 @@ i830_get_adjust_request_pre_emphasis(uint8_t link_status[DP_LINK_STATUS_SIZE],
     return ((l >> s) & 3) << DP_TRAIN_PRE_EMPHASIS_SHIFT;
 }
 
+
+static char	*voltage_names[] = {
+	"0.4V", "0.6V", "0.8V", "1.2V"
+};
+static char	*pre_emph_names[] = {
+	"0dB", "3.5dB", "6dB", "9.5dB"
+};
+static char	*link_train_names[] = {
+	"pattern 1", "pattern 2", "idle", "off"
+};
+
 /*
  * These are source-specific values; current Intel hardware supports
  * a maximum voltage of 800mV and a maximum pre-emphasis of 6dB
@@ -686,8 +698,9 @@ i830_dp_pre_emphasis_max(uint8_t voltage_swing)
     case DP_TRAIN_VOLTAGE_SWING_400:
 	return DP_TRAIN_PRE_EMPHASIS_6;
     case DP_TRAIN_VOLTAGE_SWING_600:
-	return DP_TRAIN_PRE_EMPHASIS_3_5;
+	return DP_TRAIN_PRE_EMPHASIS_6;
     case DP_TRAIN_VOLTAGE_SWING_800:
+	return DP_TRAIN_PRE_EMPHASIS_3_5;
     case DP_TRAIN_VOLTAGE_SWING_1200:
     default:
 	return DP_TRAIN_PRE_EMPHASIS_0;
@@ -695,10 +708,13 @@ i830_dp_pre_emphasis_max(uint8_t voltage_swing)
 }
 
 static void
-i830_get_adjust_train(uint8_t link_status[DP_LINK_STATUS_SIZE],
+i830_get_adjust_train(xf86OutputPtr output,
+		      uint8_t link_status[DP_LINK_STATUS_SIZE],
 		      int lane_count,
 		      uint8_t train_set[4])
 {
+    ScrnInfoPtr pScrn = output->scrn;
+    I830Ptr pI830 = I830PTR(pScrn);
     uint8_t v = 0;
     uint8_t p = 0;
     int lane;
@@ -707,6 +723,13 @@ i830_get_adjust_train(uint8_t link_status[DP_LINK_STATUS_SIZE],
 	uint8_t this_v = i830_get_adjust_request_voltage(link_status, lane);
 	uint8_t this_p = i830_get_adjust_request_pre_emphasis(link_status, lane);
 
+	if (pI830->debug_modes) {
+	    xf86DrvMsg(pScrn->scrnIndex, X_INFO,
+		       "requested signal parameters: lane %d voltage %s pre_emph %s\n",
+		       lane,
+		       voltage_names[this_v >> DP_TRAIN_VOLTAGE_SWING_SHIFT],
+		       pre_emph_names[this_p >> DP_TRAIN_PRE_EMPHASIS_SHIFT]);
+	}
 	if (this_v > v)
 	    v = this_v;
 	if (this_p > p)
@@ -719,6 +742,12 @@ i830_get_adjust_train(uint8_t link_status[DP_LINK_STATUS_SIZE],
     if (p >= i830_dp_pre_emphasis_max(v))
 	p = i830_dp_pre_emphasis_max(v) | DP_TRAIN_MAX_PRE_EMPHASIS_REACHED;
 
+    if (pI830->debug_modes) {
+	xf86DrvMsg(pScrn->scrnIndex, X_INFO,
+		   "using signal parameters: voltage %s pre_emph %s\n",
+		   voltage_names[(v & DP_TRAIN_VOLTAGE_SWING_MASK) >> DP_TRAIN_VOLTAGE_SWING_SHIFT],
+		   pre_emph_names[(p & DP_TRAIN_PRE_EMPHASIS_MASK) >> DP_TRAIN_PRE_EMPHASIS_SHIFT]);
+    }
     for (lane = 0; lane < 4; lane++)
 	train_set[lane] = v | p;
 }
@@ -823,9 +852,19 @@ i830_dp_set_link_train(xf86OutputPtr output,
 	I830Ptr pI830 = I830PTR(pScrn);
 	int ret;
 
+	if (pI830->debug_modes) {
+		uint32_t	voltage = (dp_reg_value & DP_VOLTAGE_MASK) >> DP_VOLTAGE_SHIFT;
+		uint32_t	pre_emph = (dp_reg_value & DP_PRE_EMPHASIS_MASK) >> DP_PRE_EMPHASIS_SHIFT;
+		uint32_t	pattern = (dp_reg_value & DP_LINK_TRAIN_MASK) >> DP_LINK_TRAIN_SHIFT;
+		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
+			   "Training %s trying link voltage %s pre-emphasis %s\n",
+			   link_train_names[pattern],
+			   voltage_names[voltage],
+			   pre_emph_names[pre_emph]);
+	}
 	OUTREG(dev_priv->output_reg, dp_reg_value);
 	POSTING_READ(dev_priv->output_reg);
-//	if (first)
+	if (first)
 		i830WaitForVblank(pScrn);
 
 	i830_dp_aux_native_write_1(pScrn, dev_priv->output_reg,
@@ -912,7 +951,7 @@ i830_dp_link_train(xf86OutputPtr output, uint32_t DP,
 	voltage = train_set[0] & DP_TRAIN_VOLTAGE_SWING_MASK;
 
 	/* Compute new train_set as requested by target */
-        i830_get_adjust_train(link_status, dev_priv->lane_count, train_set);
+        i830_get_adjust_train(output, link_status, dev_priv->lane_count, train_set);
     }
     if (!clock_recovery)
 	xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
@@ -955,7 +994,7 @@ i830_dp_link_train(xf86OutputPtr output, uint32_t DP,
 	}
 
 	/* Compute new train_set as requested by target */
-        i830_get_adjust_train(link_status, dev_priv->lane_count, train_set);
+        i830_get_adjust_train(output, link_status, dev_priv->lane_count, train_set);
 	++tries;
     }
     if (!channel_eq)

@@ -1518,18 +1518,21 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 # define DP_LINK_TRAIN_PAT_IDLE	(2 << 28)
 # define DP_LINK_TRAIN_OFF	(3 << 28)
 # define DP_LINK_TRAIN_MASK	(3 << 28)
+# define DP_LINK_TRAIN_SHIFT	28
 
 # define DP_VOLTAGE_0_4		(0 << 25)
 # define DP_VOLTAGE_0_6		(1 << 25)
 # define DP_VOLTAGE_0_8		(2 << 25)
 # define DP_VOLTAGE_1_2		(3 << 25)
 # define DP_VOLTAGE_MASK	(7 << 25)
+# define DP_VOLTAGE_SHIFT	25
 
 # define DP_PRE_EMPHASIS_0	(0 << 22)
 # define DP_PRE_EMPHASIS_3_5	(1 << 22)
 # define DP_PRE_EMPHASIS_6	(2 << 22)
 # define DP_PRE_EMPHASIS_9_5	(3 << 22)
 # define DP_PRE_EMPHASIS_MASK	(7 << 22)
+# define DP_PRE_EMPHASIS_SHIFT	22
 
 # define DP_PORT_WIDTH_1	(0 << 19)
 # define DP_PORT_WIDTH_2	(1 << 19)
