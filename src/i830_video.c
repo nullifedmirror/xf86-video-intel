@@ -70,8 +70,6 @@
 #include "i830_video.h"
 #include "xf86xv.h"
 #include <X11/extensions/Xv.h>
-#include "xaa.h"
-#include "xaalocal.h"
 #include "dixstruct.h"
 #include "fourcc.h"
 
@@ -138,11 +136,6 @@ static Atom xvSyncToVblank;
 #define OVERLAY_DEBUG ErrorF
 #else
 #define OVERLAY_DEBUG if (0) ErrorF
-#endif
-
-/* Oops, I never exported this function in EXA.  I meant to. */
-#ifndef exaMoveInPixmap
-void exaMoveInPixmap (PixmapPtr pPixmap);
 #endif
 
 /*
@@ -468,7 +461,7 @@ i830_overlay_on(ScrnInfoPtr pScrn)
     OUT_BATCH(MI_WAIT_FOR_EVENT | MI_WAIT_FOR_OVERLAY_FLIP);
     OUT_BATCH(MI_NOOP);
     ADVANCE_BATCH();
-    i830WaitSync(pScrn);
+    I830Sync(pScrn);
     
     /*
      * If we turned pipe A on up above, turn it
@@ -521,7 +514,7 @@ i830_overlay_off(ScrnInfoPtr pScrn)
 
     /*
      * Wait for overlay to go idle. This has to be
-     * separated from the turning off state by a WaitSync
+     * separated from the turning off state by a Sync
      * to ensure the overlay will not read OCMD early and
      * disable the overlay before the commands here are
      * executed
@@ -531,7 +524,7 @@ i830_overlay_off(ScrnInfoPtr pScrn)
 	OUT_BATCH(MI_WAIT_FOR_EVENT | MI_WAIT_FOR_OVERLAY_FLIP);
 	OUT_BATCH(MI_NOOP);
 	ADVANCE_BATCH();
-	i830WaitSync(pScrn);
+	I830Sync(pScrn);
     }
     
     /*
@@ -552,7 +545,7 @@ i830_overlay_off(ScrnInfoPtr pScrn)
 	OUT_BATCH(MI_WAIT_FOR_EVENT | MI_WAIT_FOR_OVERLAY_FLIP);
 	OUT_BATCH(MI_NOOP);
 	ADVANCE_BATCH();
-	i830WaitSync(pScrn);
+	I830Sync(pScrn);
     }
     pI830->overlayOn = FALSE;
     OVERLAY_DEBUG("overlay_off\n");
@@ -2392,6 +2385,7 @@ I830PutImage(ScrnInfoPtr pScrn,
                 return BadAlloc;
             if (!pPriv->textured && drm_intel_bo_pin(pPriv->buf, 4096) != 0) {
                 drm_intel_bo_unreference(pPriv->buf);
+                pPriv->buf = NULL;
                 xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
                            "Failed to pin xv buffer\n");
                 return BadAlloc;
@@ -2478,23 +2472,6 @@ I830PutImage(ScrnInfoPtr pScrn,
 	pPixmap = (*pScreen->GetWindowPixmap)((WindowPtr)pDraw);
     } else {
 	pPixmap = (PixmapPtr)pDraw;
-    }
-
-#ifdef I830_USE_EXA
-    if (pPriv->textured && pI830->accel == ACCEL_EXA) {
-	/* Force the pixmap into framebuffer so we can draw to it. */
-	exaMoveInPixmap(pPixmap);
-    }
-#endif
-
-    if (pPriv->textured && pI830->accel <= ACCEL_XAA &&
-	    (((char *)pPixmap->devPrivate.ptr < (char *)pI830->FbBase) ||
-	     ((char *)pPixmap->devPrivate.ptr >= (char *)pI830->FbBase +
-	      pI830->FbMapSize))) {
-	/* If the pixmap wasn't in framebuffer, then we have no way in XAA to
-	 * force it there.  So, we simply refuse to draw and fail.
-	 */
-	return BadAlloc;
     }
 
     if (!pPriv->textured) {
@@ -2885,10 +2862,11 @@ I830InitOffscreenImages(ScreenPtr pScreen)
     ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
     I830Ptr pI830 = I830PTR(pScrn);
 
-    /* need to free this someplace */
     if (!(offscreenImages = xalloc(sizeof(XF86OffscreenImageRec)))) {
 	return;
     }
+
+    pI830->offscreenImages = offscreenImages;
 
     offscreenImages[0].image = &Images[0];
     offscreenImages[0].flags = VIDEO_OVERLAID_IMAGES /*| VIDEO_CLIP_TO_VIEWPORT*/;
