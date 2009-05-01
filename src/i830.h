@@ -65,6 +65,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "sarea.h"
 #define _XF86DRI_SERVER_
 #include "dri.h"
+#include "dri2.h"
 #include "GL/glxint.h"
 #include "i830_dri.h"
 #include "intel_bufmgr.h"
@@ -395,6 +396,7 @@ typedef struct _I830Rec {
 #endif
 
    XF86ModReqInfo shadowReq; /* to test for later libshadow */
+   Bool shadow_present;
    Rotation rotation;
    void (*PointerMoved)(int, int, int);
    CreateScreenResourcesProcPtr    CreateScreenResources;
@@ -495,6 +497,8 @@ typedef struct _I830Rec {
    Bool directRenderingOpen;
    int drmSubFD;
    char deviceName[64];
+
+   Bool use_swap_buffers;
 
    /* Broken-out options. */
    OptionInfoPtr Options;
@@ -691,6 +695,8 @@ void I830DRI2CloseScreen(ScreenPtr pScreen);
 extern Bool drmmode_pre_init(ScrnInfoPtr pScrn, int fd, int cpp);
 extern int drmmode_get_pipe_from_crtc_id(drm_intel_bufmgr *bufmgr, xf86CrtcPtr crtc);
 extern int drmmode_output_dpms_status(xf86OutputPtr output);
+extern Bool drmmode_do_pageflip(DrawablePtr pDraw, dri_bo *new_front,
+				dri_bo *old_front);
 
 extern Bool i830_crtc_on(xf86CrtcPtr crtc);
 extern int i830_crtc_to_pipe(xf86CrtcPtr crtc);

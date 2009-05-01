@@ -30,6 +30,7 @@
 #endif
 
 #include <errno.h>
+#include <poll.h>
 
 #include "xorgVersion.h"
 
@@ -343,6 +344,7 @@ static PixmapPtr
 drmmode_crtc_shadow_create(xf86CrtcPtr crtc, void *data, int width, int height)
 {
 	ScrnInfoPtr pScrn = crtc->scrn;
+	I830Ptr     pI830 = I830PTR(pScrn);
 	drmmode_crtc_private_ptr drmmode_crtc = crtc->driver_private;
 	drmmode_ptr drmmode = drmmode_crtc->drmmode;
 	unsigned long rotate_pitch;
@@ -375,12 +377,16 @@ drmmode_crtc_shadow_create(xf86CrtcPtr crtc, void *data, int width, int height)
 	if (drmmode_crtc->rotate_bo)
 		i830_set_pixmap_bo(rotate_pixmap, drmmode_crtc->rotate_bo);
 
+	pI830->shadow_present = TRUE;
+
 	return rotate_pixmap;
 }
 
 static void
 drmmode_crtc_shadow_destroy(xf86CrtcPtr crtc, PixmapPtr rotate_pixmap, void *data)
 {
+	ScrnInfoPtr pScrn = crtc->scrn;
+	I830Ptr     pI830 = I830PTR(pScrn);
 	drmmode_crtc_private_ptr drmmode_crtc = crtc->driver_private;
 	drmmode_ptr drmmode = drmmode_crtc->drmmode;
 
@@ -398,6 +404,7 @@ drmmode_crtc_shadow_destroy(xf86CrtcPtr crtc, PixmapPtr rotate_pixmap, void *dat
 		dri_bo_unreference(drmmode_crtc->rotate_bo);
 		drmmode_crtc->rotate_bo = NULL;
 	}
+	pI830->shadow_present = FALSE;
 }
 
 static void
@@ -1085,6 +1092,88 @@ drmmode_xf86crtc_resize (ScrnInfoPtr scrn, int width, int height)
 	return FALSE;
 }
 
+Bool
+drmmode_do_pageflip(DrawablePtr pDraw, dri_bo *new_front, dri_bo *old_front)
+{
+    ScreenPtr pScreen = pDraw->pScreen;
+    ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+    I830Ptr pI830 = I830PTR(pScrn);
+    xf86CrtcConfigPtr config = XF86_CRTC_CONFIG_PTR(pScrn);
+    drmmode_crtc_private_ptr drmmode_crtc = config->crtc[0]->driver_private;
+    drmmode_ptr drmmode = drmmode_crtc->drmmode;
+    unsigned int pitch = pScrn->displayWidth * pI830->cpp;
+    int i, old_fb_id;
+    unsigned int crtc_id;
+    struct pollfd drmpoll;
+    drmEventContext handler = { .page_flip_handler = NULL };
+
+    /*
+     * Create a new handle for the back buffer
+     */
+    old_fb_id = drmmode->fb_id;
+    if (drmModeAddFB(drmmode->fd, pScrn->virtualX, pScrn->virtualY,
+		     pScrn->depth, pScrn->bitsPerPixel, pitch,
+		     new_front->handle, &drmmode->fb_id))
+	    goto error_out;
+
+    /*
+     * Queue flips on all enabled CRTCs
+     * Note that if/when we get per-CRTC buffers, we'll have to update this.
+     * Right now it assumes a single shared fb across all CRTCs, with the
+     * kernel fixing up the offset of each CRTC as necessary.
+     *
+     * Also, flips queued on disabled or incorrectly configured displays
+     * may never complete; this is a configuration error.
+     */
+    for (i = 0; i < config->num_crtc; i++) {
+	    xf86CrtcPtr crtc = config->crtc[i];
+
+	    if (!crtc->enabled)
+		    continue;
+
+	    drmmode_crtc = crtc->driver_private;
+	    crtc_id = drmmode_crtc->mode_crtc->crtc_id;
+	    if (drmModePageFlip(drmmode->fd, crtc_id, drmmode->fb_id, NULL)) {
+		    xf86DrvMsg(pScrn->scrnIndex, X_WARNING,
+			       "flip queue failed: %s\n", strerror(errno));
+		    goto error_undo;
+	    }
+    }
+
+retry:
+    drmpoll.fd = drmmode->fd;
+    drmpoll.events = POLLIN;
+    if (poll(&drmpoll, 1, -1) < 0) {
+	    if (errno == EINTR)
+		    goto retry;
+	    xf86DrvMsg(pScrn->scrnIndex, X_WARNING, "poll failed: %s\n",
+		       strerror(errno));
+	    goto error_undo;
+    }
+
+    drmHandleEvent(drmmode->fd, &handler);
+
+    dri_bo_pin(new_front, 0);
+    dri_bo_unpin(new_front);
+
+    pScrn->fbOffset = new_front->offset;
+    pI830->front_buffer->bo = new_front;
+    pI830->front_buffer->offset = new_front->offset;
+
+    drmModeRmFB(drmmode->fd, old_fb_id);
+
+    return TRUE;
+
+error_undo:
+    drmModeRmFB(drmmode->fd, drmmode->fb_id);
+    drmmode->fb_id = old_fb_id;
+
+error_out:
+    xf86DrvMsg(pScrn->scrnIndex, X_WARNING, "Page flip failed: %s\n",
+	       strerror(errno));
+    return FALSE;
+}
+
 static const xf86CrtcConfigFuncsRec drmmode_xf86crtc_config_funcs = {
 	drmmode_xf86crtc_resize
 };
@@ -1092,8 +1181,10 @@ static const xf86CrtcConfigFuncsRec drmmode_xf86crtc_config_funcs = {
 Bool drmmode_pre_init(ScrnInfoPtr pScrn, int fd, int cpp)
 {
 	xf86CrtcConfigPtr   xf86_config;
+	I830Ptr pI830 = I830PTR(pScrn);
 	drmmode_ptr drmmode;
-	int i;
+	unsigned int i, bad_crtc = 0;
+	int ret;
 
 	drmmode = xnfalloc(sizeof *drmmode);
 	drmmode->fd = fd;
@@ -1119,6 +1210,14 @@ Bool drmmode_pre_init(ScrnInfoPtr pScrn, int fd, int cpp)
 		drmmode_output_init(pScrn, drmmode, i);
 
 	xf86InitialConfiguration(pScrn, TRUE);
+
+	/* Check for swapbuffers support */
+	ret = drmModePageFlip(drmmode->fd, bad_crtc, 1, NULL);
+	if (ret < 0 && errno == ENOENT) { /* bad CRTC or FB number */
+		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
+			   "Kernel page flipping support detected, enabling\n");
+		pI830->use_swap_buffers = TRUE;
+	}
 
 	return TRUE;
 }

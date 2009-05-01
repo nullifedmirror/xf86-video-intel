@@ -45,6 +45,8 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <errno.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <sys/time.h>
+#include <time.h>
 
 #include "xf86.h"
 #include "xf86_OSproc.h"
@@ -72,11 +74,6 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 extern XF86ModuleData dri2ModuleData;
 #endif
-
-typedef struct {
-    PixmapPtr pPixmap;
-    unsigned int attachment;
-} I830DRI2BufferPrivateRec, *I830DRI2BufferPrivatePtr;
 
 #ifndef USE_DRI2_1_1_0
 static DRI2BufferPtr
@@ -359,6 +356,70 @@ I830DRI2CopyRegion(DrawablePtr pDraw, RegionPtr pRegion,
 
 }
 
+#if DRI2INFOREC_VERSION >= 4
+/* Check various flip constraints (drawable parameters vs screen params) */
+static Bool
+i830_flip_ok(DrawablePtr pDraw)
+{
+    ScreenPtr pScreen = pDraw->pScreen;
+    ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+    I830Ptr pI830 = I830PTR(pScrn);
+
+    if (pI830->shadow_present)
+	return FALSE;
+    if (pDraw->width != pScrn->virtualX)
+	return FALSE;
+    if (pDraw->height != pScrn->virtualY)
+	return FALSE;
+    if (pDraw->depth != pScrn->depth)
+	return FALSE;
+
+    return TRUE;
+}
+
+/*
+ * DRI2SwapBuffers should try to do a buffer swap if possible, however:
+ *   - if we're swapping buffers smaller than the screen, we have to blit
+ *   - if the back buffer doesn't match the screen depth, we have to blit
+ *   - otherwise we try to swap, and return to the caller the new front
+ *     and back buffers
+ */
+static Bool
+I830DRI2SwapBuffers(DrawablePtr pDraw, DRI2BufferPtr front, DRI2BufferPtr back)
+{
+    ScreenPtr pScreen = pDraw->pScreen;
+    I830DRI2BufferPrivatePtr front_priv, back_priv;
+    dri_bo *tmp_bo;
+    int tmp;
+
+    front_priv = front->driverPrivate;
+    back_priv = back->driverPrivate;
+
+    if (!i830_flip_ok(pDraw))
+	return FALSE;
+
+    /* Swap BO names so DRI works */
+    tmp = front->name;
+    front->name = back->name;
+    back->name = tmp;
+
+    /* Swap pixmap bos */
+    dri_bo_reference(i830_get_pixmap_bo(front_priv->pPixmap));
+
+    tmp_bo = i830_get_pixmap_bo(front_priv->pPixmap);
+    i830_set_pixmap_bo(front_priv->pPixmap,
+		       i830_get_pixmap_bo(back_priv->pPixmap));
+    i830_set_pixmap_bo(back_priv->pPixmap, tmp_bo); /* should be screen */
+
+    if (front_priv->pPixmap != pScreen->GetScreenPixmap(pScreen))
+	FatalError("swapbuffers with bad front\n");
+
+    /* Page flip the full screen buffer */
+    return drmmode_do_pageflip(pDraw, i830_get_pixmap_bo(front_priv->pPixmap),
+			       i830_get_pixmap_bo(back_priv->pPixmap));
+}
+#endif
+
 Bool I830DRI2ScreenInit(ScreenPtr pScreen)
 {
     ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
@@ -426,6 +487,13 @@ Bool I830DRI2ScreenInit(ScreenPtr pScreen)
     info.CreateBuffers = I830DRI2CreateBuffers;
     info.DestroyBuffers = I830DRI2DestroyBuffers;
 # endif
+#endif
+
+#if DRI2INFOREC_VERSION >= 4
+    if (pI830->use_swap_buffers) {
+	info.version = 4;
+	info.SwapBuffers = I830DRI2SwapBuffers;
+    }
 #endif
 
     info.CopyRegion = I830DRI2CopyRegion;
