@@ -167,6 +167,11 @@ i830_dp_aux_ch(ScrnInfoPtr pScrn, uint32_t output_reg,
     uint32_t	ctl;
     uint32_t	status;
 
+//	ErrorF("dp_aux_ch 0x%08x send %d:",
+//	       output_reg, send_bytes);
+//	for (i = 0; i < send_bytes; i++)
+//		ErrorF(" %02x", send[i]);
+//	ErrorF("\n");
     /* Load the send data into the aux channel data registers */
     for (i = 0; i < send_bytes; i += 4) {
 	uint32_t    d = pack_aux(send + i, send_bytes - i);;
@@ -186,6 +191,8 @@ i830_dp_aux_ch(ScrnInfoPtr pScrn, uint32_t output_reg,
 	   (133 << DP_AUX_CH_CTL_BIT_CLOCK_2X_SHIFT) |
 	   DP_AUX_CH_CTL_TIME_OUT_ERROR |
 	   DP_AUX_CH_CTL_RECEIVE_ERROR);
+
+//	ErrorF("out ch_ctl 0x%08x 0x%08x\n", ch_ctl, ctl);
 
     /* Send the command and wait for it to complete */
     OUTREG(ch_ctl, ctl);
@@ -213,8 +220,10 @@ i830_dp_aux_ch(ScrnInfoPtr pScrn, uint32_t output_reg,
     /* Check for timeout or receive error.
      * Timeouts occur when the sink is not connected
      */
-    if (status & (DP_AUX_CH_CTL_TIME_OUT_ERROR | DP_AUX_CH_CTL_RECEIVE_ERROR))
+    if (status & (DP_AUX_CH_CTL_TIME_OUT_ERROR | DP_AUX_CH_CTL_RECEIVE_ERROR)) {
+	ErrorF("dp_aux_ch error status 0x%08x\n", status);
 	return -1;
+    }
 
     /* Unload any bytes sent back from the other side */
     recv_bytes = ((status & DP_AUX_CH_CTL_MESSAGE_SIZE_MASK) >>
@@ -225,9 +234,14 @@ i830_dp_aux_ch(ScrnInfoPtr pScrn, uint32_t output_reg,
     for (i = 0; i < recv_bytes; i += 4) {
 	uint32_t    d = INREG(ch_data + i);
 
+//	ErrorF("bytes %d-%d: 0x%08x\n", i, i + 3, d);
 	unpack_aux(d, recv + i, recv_bytes - i);
     }
 
+//	ErrorF("    0x%08x: %d:", status, recv_bytes);
+//	for (i = 0; i < recv_bytes; i ++)
+//		ErrorF(" %02x", recv[i]);
+//	ErrorF("\n");
     return recv_bytes;
 }
 
@@ -377,14 +391,21 @@ i830_dp_aux_i2c_transaction(ScrnInfoPtr pScrn, uint32_t output_reg,
 		       "i2c_read: aux_ch error %d\n", ret);
 	    return -1;
 	}
-	if ((reply[0] & AUX_I2C_REPLY_MASK) == AUX_I2C_REPLY_ACK) {
+	switch (reply[0] & AUX_I2C_REPLY_MASK) {
+	case AUX_I2C_REPLY_ACK:
 	    if (mode == aux_i2c_read)
 		*read_byte = reply[1];
 	    return reply_bytes - 1;
-	}
-	else if ((reply[0] & AUX_I2C_REPLY_MASK) == AUX_I2C_REPLY_DEFER)
+	case AUX_I2C_REPLY_DEFER:
+	    xf86DrvMsg(pScrn->scrnIndex, X_INFO,
+		       "aux ch i2c defer\n");
 	    usleep(100);
-	else {
+	    break;
+	case AUX_I2C_REPLY_NACK:
+	    xf86DrvMsg(pScrn->scrnIndex, X_INFO,
+		       "aux ch i2c nack\n");
+	    return 0;
+	default:
 	    xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
 		       "aux ch i2c write returns %02x\n", reply[0]);
 	    return -1;

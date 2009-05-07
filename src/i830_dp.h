@@ -29,15 +29,15 @@
 #define AUX_I2C_STATUS		0x2
 #define AUX_I2C_MOT		0x4
 
-#define AUX_NATIVE_REPLY_ACK	0x0
-#define AUX_NATIVE_REPLY_NACK	0x1
-#define AUX_NATIVE_REPLY_DEFER	0x2
-#define AUX_NATIVE_REPLY_MASK	0x3
+#define AUX_NATIVE_REPLY_ACK	(0x0 << 4)
+#define AUX_NATIVE_REPLY_NACK	(0x1 << 4)
+#define AUX_NATIVE_REPLY_DEFER	(0x2 << 4)
+#define AUX_NATIVE_REPLY_MASK	(0x3 << 4)
 
-#define AUX_I2C_REPLY_ACK	(0x0 << 2)
-#define AUX_I2C_REPLY_NACK	(0x1 << 2)
-#define AUX_I2C_REPLY_DEFER	(0x2 << 2)
-#define AUX_I2C_REPLY_MASK	(0x3 << 2)
+#define AUX_I2C_REPLY_ACK	(0x0 << 6)
+#define AUX_I2C_REPLY_NACK	(0x1 << 6)
+#define AUX_I2C_REPLY_DEFER	(0x2 << 6)
+#define AUX_I2C_REPLY_MASK	(0x3 << 6)
 
 /* AUX CH addresses */
 #define	DP_LINK_BW_SET		0x100
