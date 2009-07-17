@@ -357,25 +357,6 @@ I830DRI2CopyRegion(DrawablePtr pDraw, RegionPtr pRegion,
 }
 
 #if DRI2INFOREC_VERSION >= 4
-/* Check various flip constraints (drawable parameters vs screen params) */
-static Bool
-i830_flip_ok(DrawablePtr pDraw)
-{
-    ScreenPtr pScreen = pDraw->pScreen;
-    ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
-    I830Ptr pI830 = I830PTR(pScrn);
-
-    if (pI830->shadow_present)
-	return FALSE;
-    if (pDraw->width != pScrn->virtualX)
-	return FALSE;
-    if (pDraw->height != pScrn->virtualY)
-	return FALSE;
-    if (pDraw->depth != pScrn->depth)
-	return FALSE;
-
-    return TRUE;
-}
 
 /*
  * DRI2SwapBuffers should try to do a buffer swap if possible, however:
@@ -385,9 +366,12 @@ i830_flip_ok(DrawablePtr pDraw)
  *     and back buffers
  */
 static Bool
-I830DRI2SwapBuffers(DrawablePtr pDraw, DRI2BufferPtr front, DRI2BufferPtr back)
+I830DRI2SwapBuffers(DrawablePtr pDraw,
+		    DRI2BufferPtr front, DRI2BufferPtr back, void *data)
 {
     ScreenPtr pScreen = pDraw->pScreen;
+    ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+    I830Ptr pI830 = I830PTR(pScrn);
     I830DRI2BufferPrivatePtr front_priv, back_priv;
     dri_bo *tmp_bo;
     int tmp;
@@ -395,7 +379,7 @@ I830DRI2SwapBuffers(DrawablePtr pDraw, DRI2BufferPtr front, DRI2BufferPtr back)
     front_priv = front->driverPrivate;
     back_priv = back->driverPrivate;
 
-    if (!i830_flip_ok(pDraw))
+    if (pI830->shadow_present)
 	return FALSE;
 
     /* Swap BO names so DRI works */
@@ -416,7 +400,7 @@ I830DRI2SwapBuffers(DrawablePtr pDraw, DRI2BufferPtr front, DRI2BufferPtr back)
 
     /* Page flip the full screen buffer */
     return drmmode_do_pageflip(pDraw, i830_get_pixmap_bo(front_priv->pPixmap),
-			       i830_get_pixmap_bo(back_priv->pPixmap));
+			       i830_get_pixmap_bo(back_priv->pPixmap), data);
 }
 #endif
 

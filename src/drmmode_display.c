@@ -44,6 +44,10 @@ typedef struct {
     uint32_t fb_id;
     drmModeResPtr mode_res;
     int cpp;
+    
+    drmEventContext event_context;
+    void *swap_data;
+    int old_fb_id;
 } drmmode_rec, *drmmode_ptr;
 
 typedef struct {
@@ -1093,7 +1097,8 @@ drmmode_xf86crtc_resize (ScrnInfoPtr scrn, int width, int height)
 }
 
 Bool
-drmmode_do_pageflip(DrawablePtr pDraw, dri_bo *new_front, dri_bo *old_front)
+drmmode_do_pageflip(DrawablePtr pDraw, dri_bo *new_front, dri_bo *old_front,
+		    void *data)
 {
     ScreenPtr pScreen = pDraw->pScreen;
     ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
@@ -1102,15 +1107,13 @@ drmmode_do_pageflip(DrawablePtr pDraw, dri_bo *new_front, dri_bo *old_front)
     drmmode_crtc_private_ptr drmmode_crtc = config->crtc[0]->driver_private;
     drmmode_ptr drmmode = drmmode_crtc->drmmode;
     unsigned int pitch = pScrn->displayWidth * pI830->cpp;
-    int i, old_fb_id;
+    int i;
     unsigned int crtc_id;
-    struct pollfd drmpoll;
-    drmEventContext handler = { .page_flip_handler = NULL };
 
     /*
      * Create a new handle for the back buffer
      */
-    old_fb_id = drmmode->fb_id;
+    drmmode->old_fb_id = drmmode->fb_id;
     if (drmModeAddFB(drmmode->fd, pScrn->virtualX, pScrn->virtualY,
 		     pScrn->depth, pScrn->bitsPerPixel, pitch,
 		     new_front->handle, &drmmode->fb_id))
@@ -1133,40 +1136,23 @@ drmmode_do_pageflip(DrawablePtr pDraw, dri_bo *new_front, dri_bo *old_front)
 
 	    drmmode_crtc = crtc->driver_private;
 	    crtc_id = drmmode_crtc->mode_crtc->crtc_id;
-	    if (drmModePageFlip(drmmode->fd, crtc_id, drmmode->fb_id, NULL)) {
+	    drmmode->swap_data = data;
+	    if (drmModePageFlip(drmmode->fd, crtc_id, drmmode->fb_id, drmmode)) {
 		    xf86DrvMsg(pScrn->scrnIndex, X_WARNING,
 			       "flip queue failed: %s\n", strerror(errno));
 		    goto error_undo;
 	    }
     }
 
-retry:
-    drmpoll.fd = drmmode->fd;
-    drmpoll.events = POLLIN;
-    if (poll(&drmpoll, 1, -1) < 0) {
-	    if (errno == EINTR)
-		    goto retry;
-	    xf86DrvMsg(pScrn->scrnIndex, X_WARNING, "poll failed: %s\n",
-		       strerror(errno));
-	    goto error_undo;
-    }
-
-    drmHandleEvent(drmmode->fd, &handler);
-
-    dri_bo_pin(new_front, 0);
-    dri_bo_unpin(new_front);
-
     pScrn->fbOffset = new_front->offset;
     pI830->front_buffer->bo = new_front;
     pI830->front_buffer->offset = new_front->offset;
-
-    drmModeRmFB(drmmode->fd, old_fb_id);
 
     return TRUE;
 
 error_undo:
     drmModeRmFB(drmmode->fd, drmmode->fb_id);
-    drmmode->fb_id = old_fb_id;
+    drmmode->fb_id = drmmode->old_fb_id;
 
 error_out:
     xf86DrvMsg(pScrn->scrnIndex, X_WARNING, "Page flip failed: %s\n",
@@ -1177,6 +1163,30 @@ error_out:
 static const xf86CrtcConfigFuncsRec drmmode_xf86crtc_config_funcs = {
 	drmmode_xf86crtc_resize
 };
+
+static void
+drmmode_page_flip_handler(int fd,
+			  unsigned int frame, 
+			  unsigned int tv_sec,
+			  unsigned int tv_usec,
+			  void *user_data)
+{
+    drmmode_ptr drmmode = user_data;
+
+    drmModeRmFB(drmmode->fd, drmmode->old_fb_id);
+
+    DRI2SwapComplete(drmmode->swap_data);
+}
+
+static void
+drm_wakeup_handler(pointer data, int err, pointer p)
+{
+    drmmode_ptr drmmode = data;
+    fd_set *read_mask = p;
+
+    if (err >= 0 && FD_ISSET(drmmode->fd, read_mask))
+	drmHandleEvent(drmmode->fd, &drmmode->event_context);
+}
 
 Bool drmmode_pre_init(ScrnInfoPtr pScrn, int fd, int cpp)
 {
@@ -1217,6 +1227,14 @@ Bool drmmode_pre_init(ScrnInfoPtr pScrn, int fd, int cpp)
 		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
 			   "Kernel page flipping support detected, enabling\n");
 		pI830->use_swap_buffers = TRUE;
+
+		drmmode->event_context.version = DRM_EVENT_CONTEXT_VERSION;
+		drmmode->event_context.page_flip_handler =
+		    drmmode_page_flip_handler;
+		AddGeneralSocket(fd);
+		RegisterBlockAndWakeupHandlers((BlockHandlerProcPtr)NoopDDA,
+					       drm_wakeup_handler,
+					       drmmode);
 	}
 
 	return TRUE;
