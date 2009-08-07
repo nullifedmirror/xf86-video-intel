@@ -48,6 +48,7 @@ typedef struct {
     drmEventContext event_context;
     void *swap_data;
     int old_fb_id;
+    int flip_count;
 } drmmode_rec, *drmmode_ptr;
 
 typedef struct {
@@ -1142,6 +1143,7 @@ drmmode_do_pageflip(DrawablePtr pDraw, dri_bo *new_front, dri_bo *old_front,
 			       "flip queue failed: %s\n", strerror(errno));
 		    goto error_undo;
 	    }
+	    drmmode->flip_count++;
     }
 
     pScrn->fbOffset = new_front->offset;
@@ -1172,6 +1174,10 @@ drmmode_page_flip_handler(int fd,
 			  void *user_data)
 {
     drmmode_ptr drmmode = user_data;
+
+    drmmode->flip_count--;
+    if (drmmode->flip_count > 0)
+	return;
 
     drmModeRmFB(drmmode->fd, drmmode->old_fb_id);
 
