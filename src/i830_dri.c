@@ -273,6 +273,29 @@ I830DRI2DestroyBuffer(DrawablePtr pDraw, DRI2Buffer2Ptr buffer)
 
 #endif
 
+static int
+I830DRI2DrawablePipe(DrawablePtr pDraw)
+{
+    ScreenPtr pScreen = pDraw->pScreen;
+    ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+    BoxRec box, crtcbox;
+    xf86CrtcPtr crtc;
+    int pipe = -1;
+
+    box.x1 = pDraw->x;
+    box.y1 = pDraw->y;
+    box.x2 = box.x1 + pDraw->width;
+    box.y2 = box.y1 + pDraw->height;
+
+    crtc = i830_covering_crtc(pScrn, &box, NULL, &crtcbox);
+
+    /* Make sure the CRTC is valid and this is the real front buffer */
+    if (crtc != NULL && !crtc->rotatedData)
+	pipe = i830_crtc_to_pipe(crtc);
+
+    return pipe;
+}
+
 static void
 I830DRI2CopyRegion(DrawablePtr pDraw, RegionPtr pRegion,
 		   DRI2BufferPtr pDstBuffer, DRI2BufferPtr pSrcBuffer)
@@ -359,6 +382,86 @@ I830DRI2CopyRegion(DrawablePtr pDraw, RegionPtr pRegion,
 #if DRI2INFOREC_VERSION >= 4
 
 /*
+ * Request a DRM event when the requested conditions will be satisfied.
+ * Event will be handled by the server and wake up any clients waiting
+ * on the specified frame count.
+ */
+static int
+I830DRI2SetupSwap(DrawablePtr pDraw, CARD64 target_msc, CARD64 divisor,
+		  CARD64 remainder, void *data, CARD64 *event_frame)
+{
+    ScreenPtr pScreen = pDraw->pScreen;
+    ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+    I830Ptr pI830 = I830PTR(pScrn);
+    drmVBlank vbl;
+    int ret, pipe = I830DRI2DrawablePipe(pDraw);
+
+    /* Get current count */
+    vbl.request.type = DRM_VBLANK_RELATIVE;
+    if (pipe > 0)
+	vbl.request.type |= DRM_VBLANK_SECONDARY;
+    vbl.request.sequence = 0;
+    ret = drmWaitVBlank(pI830->drmSubFD, &vbl);
+    if (ret) {
+	xf86DrvMsg(pScrn->scrnIndex, X_WARNING,
+		   "get vblank counter failed: %s\n", strerror(errno));
+	return FALSE;
+    }
+
+    /*
+     * If divisor is zero, we just need to make sure target_msc passes
+     * before waking up the client.
+     */
+    if (divisor == 0) {
+	vbl.request.type = DRM_VBLANK_ABSOLUTE | DRM_VBLANK_EVENT;
+	if (pipe > 0)
+	    vbl.request.type |= DRM_VBLANK_SECONDARY;
+	vbl.request.sequence = target_msc;
+	vbl.request.signal = (unsigned long)data;
+	ret = drmWaitVBlank(pI830->drmSubFD, &vbl);
+	if (ret) {
+	    xf86DrvMsg(pScrn->scrnIndex, X_WARNING,
+		       "get vblank counter failed: %s\n", strerror(errno));
+	    return FALSE;
+	}
+	return TRUE;
+    }
+
+    /*
+     * If we get here, target_msc has already passed or we don't have one,
+     * so we queue an event that will satisfy the divisor/remainder equation.
+     */
+    if ((vbl.reply.sequence % divisor) == remainder)
+	return FALSE;
+
+    vbl.request.type = DRM_VBLANK_ABSOLUTE | DRM_VBLANK_EVENT;
+    if (pipe > 0)
+	vbl.request.type |= DRM_VBLANK_SECONDARY;
+
+    /*
+     * If we have no remainder, and the test above failed, it means we've
+     * passed the last point where seq % divisor == remainder, so we need
+     * to wait for the next time that will happen.
+     */
+    if (!remainder)
+	vbl.request.sequence += divisor;
+
+    vbl.request.sequence = vbl.reply.sequence - (vbl.reply.sequence % divisor) +
+	remainder;
+    vbl.request.signal = (unsigned long)data;
+    ret = drmWaitVBlank(pI830->drmSubFD, &vbl);
+    if (ret) {
+	xf86DrvMsg(pScrn->scrnIndex, X_WARNING,
+		   "get vblank counter failed: %s\n", strerror(errno));
+	return FALSE;
+    }
+
+    *event_frame = vbl.reply.sequence;
+
+    return TRUE;
+}
+
+/*
  * DRI2SwapBuffers should try to do a buffer swap if possible, however:
  *   - if we're swapping buffers smaller than the screen, we have to blit
  *   - if the back buffer doesn't match the screen depth, we have to blit
@@ -366,10 +469,9 @@ I830DRI2CopyRegion(DrawablePtr pDraw, RegionPtr pRegion,
  *     and back buffers
  */
 static Bool
-I830DRI2SwapBuffers(DrawablePtr pDraw,
+I830DRI2SwapBuffers(ScreenPtr pScreen,
 		    DRI2BufferPtr front, DRI2BufferPtr back, void *data)
 {
-    ScreenPtr pScreen = pDraw->pScreen;
     ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
     I830Ptr pI830 = I830PTR(pScrn);
     I830DRI2BufferPrivatePtr front_priv, back_priv;
@@ -399,8 +501,124 @@ I830DRI2SwapBuffers(DrawablePtr pDraw,
 	FatalError("swapbuffers with bad front\n");
 
     /* Page flip the full screen buffer */
-    return drmmode_do_pageflip(pDraw, i830_get_pixmap_bo(front_priv->pPixmap),
+    return drmmode_do_pageflip(pScreen, i830_get_pixmap_bo(front_priv->pPixmap),
 			       i830_get_pixmap_bo(back_priv->pPixmap), data);
+}
+
+/*
+ * Get current frame count and frame count timestamp, based on drawable's
+ * crtc.
+ */
+static int
+I830DRI2GetMSC(DrawablePtr pDraw, CARD64 *ust, CARD64 *msc)
+{
+    ScreenPtr pScreen = pDraw->pScreen;
+    ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+    I830Ptr pI830 = I830PTR(pScrn);
+    drmVBlank vbl;
+    int ret, pipe = I830DRI2DrawablePipe(pDraw);
+
+    /* FIXME: we shouldn't be called if the window isn't mapped or is
+       redirected */
+    if (pipe < 0) {
+	*ust = 0;
+	*msc = 0;
+	return TRUE;
+    }
+
+    vbl.request.type = DRM_VBLANK_RELATIVE;
+    if (pipe > 0)
+	vbl.request.type |= DRM_VBLANK_SECONDARY;
+    vbl.request.sequence = 0;
+
+    ret = drmWaitVBlank(pI830->drmSubFD, &vbl);
+    if (ret) {
+	xf86DrvMsg(pScrn->scrnIndex, X_WARNING,
+		   "get vblank counter failed: %s\n", strerror(errno));
+	return FALSE;
+    }
+
+    *ust = ((CARD64)vbl.reply.tval_sec * 1000000) + vbl.reply.tval_usec;
+    *msc = vbl.reply.sequence;
+
+    return TRUE;
+}
+
+/*
+ * Request a DRM event when the requested conditions will be satisfied.
+ * Event will be handled by the server and wake up any clients waiting
+ * on the specified frame count.
+ */
+static int
+I830DRI2SetupWaitMSC(DrawablePtr pDraw, CARD64 target_msc, CARD64 divisor,
+		     CARD64 remainder, void *data, CARD64 *event_frame)
+{
+    ScreenPtr pScreen = pDraw->pScreen;
+    ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+    I830Ptr pI830 = I830PTR(pScrn);
+    drmVBlank vbl;
+    int ret, pipe = I830DRI2DrawablePipe(pDraw);
+
+    /* Get current count */
+    vbl.request.type = DRM_VBLANK_RELATIVE;
+    if (pipe > 0)
+	vbl.request.type |= DRM_VBLANK_SECONDARY;
+    vbl.request.sequence = 0;
+    ret = drmWaitVBlank(pI830->drmSubFD, &vbl);
+    if (ret) {
+	xf86DrvMsg(pScrn->scrnIndex, X_WARNING,
+		   "get vblank counter failed: %s\n", strerror(errno));
+	return FALSE;
+    }
+
+    /*
+     * If divisor is zero, we just need to make sure target_msc passes
+     * before waking up the client.
+     */
+    if (divisor == 0) {
+	vbl.request.type = DRM_VBLANK_ABSOLUTE | DRM_VBLANK_EVENT;
+	if (pipe > 0)
+	    vbl.request.type |= DRM_VBLANK_SECONDARY;
+	vbl.request.sequence = target_msc;
+	vbl.request.signal = (unsigned long)data;
+	ret = drmWaitVBlank(pI830->drmSubFD, &vbl);
+	if (ret) {
+	    xf86DrvMsg(pScrn->scrnIndex, X_WARNING,
+		       "get vblank counter failed: %s\n", strerror(errno));
+	    return FALSE;
+	}
+	return TRUE;
+    }
+
+    /*
+     * If we get here, target_msc has already passed or we don't have one,
+     * so we queue an event that will satisfy the divisor/remainder equation.
+     */
+    vbl.request.type = DRM_VBLANK_ABSOLUTE | DRM_VBLANK_EVENT;
+    if (pipe > 0)
+	vbl.request.type |= DRM_VBLANK_SECONDARY;
+
+    /*
+     * If we have no remainder and the condition isn't satisified, it means
+     * we've passed the last point where seq % divisor == remainder, so we need
+     * to wait for the next time that will happen.
+     */
+    if (((vbl.reply.sequence % divisor) != remainder) && !remainder)
+	vbl.request.sequence += divisor;
+
+    vbl.request.sequence = vbl.reply.sequence - (vbl.reply.sequence % divisor) +
+	remainder;
+    vbl.request.signal = (unsigned long)data;
+    ret = drmWaitVBlank(pI830->drmSubFD, &vbl);
+    if (ret) {
+	xf86DrvMsg(pScrn->scrnIndex, X_WARNING,
+		   "get vblank counter failed: %s\n", strerror(errno));
+	return FALSE;
+    }
+
+    *event_frame = vbl.reply.sequence;
+
+    return TRUE;
 }
 #endif
 
@@ -474,10 +692,16 @@ Bool I830DRI2ScreenInit(ScreenPtr pScreen)
 #endif
 
 #if DRI2INFOREC_VERSION >= 4
+    info.version = 4;
+    info.SetupSwap = I830DRI2SetupSwap;
     if (pI830->use_swap_buffers) {
-	info.version = 4;
 	info.SwapBuffers = I830DRI2SwapBuffers;
+    } else {
+	info.SwapBuffers = NULL;
     }
+
+    info.GetMSC = I830DRI2GetMSC;
+    info.SetupWaitMSC = I830DRI2SetupWaitMSC;
 #endif
 
     info.CopyRegion = I830DRI2CopyRegion;

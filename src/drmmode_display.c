@@ -1098,10 +1098,9 @@ drmmode_xf86crtc_resize (ScrnInfoPtr scrn, int width, int height)
 }
 
 Bool
-drmmode_do_pageflip(DrawablePtr pDraw, dri_bo *new_front, dri_bo *old_front,
+drmmode_do_pageflip(ScreenPtr pScreen, dri_bo *new_front, dri_bo *old_front,
 		    void *data)
 {
-    ScreenPtr pScreen = pDraw->pScreen;
     ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
     I830Ptr pI830 = I830PTR(pScrn);
     xf86CrtcConfigPtr config = XF86_CRTC_CONFIG_PTR(pScrn);
@@ -1180,8 +1179,6 @@ drmmode_page_flip_handler(int fd,
 	return;
 
     drmModeRmFB(drmmode->fd, drmmode->old_fb_id);
-
-    DRI2SwapComplete(drmmode->swap_data);
 }
 
 static void
