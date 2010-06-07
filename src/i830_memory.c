@@ -1069,7 +1069,7 @@ i830_allocate_framebuffer(ScrnInfoPtr pScrn)
     /* We'll allocate the fb such that the root window will fit regardless of
      * rotation.
      */
-    fb_height = pScrn->virtualY;
+    fb_height = ALIGN(pScrn->virtualY, 8);
 
     /* Calculate how much framebuffer memory to allocate.  For the
      * initial allocation, calculate a reasonable minimum.  This is
