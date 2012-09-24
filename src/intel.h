@@ -350,6 +350,8 @@ typedef struct intel_screen_private {
 	InputHandlerProc uevent_handler;
 #endif
 	Bool has_prime_vmap_flush;
+
+	struct xwl_screen *xwl_screen;
 } intel_screen_private;
 
 #ifndef I915_PARAM_HAS_PRIME_VMAP_FLUSH

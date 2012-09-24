@@ -33,6 +33,7 @@
 #include <xf86Parser.h>
 #include <xf86drm.h>
 #include <xf86drmMode.h>
+#include <xf86Priv.h>
 #include <i915_drm.h>
 
 #include <xorgVersion.h>
@@ -376,6 +377,11 @@ static Bool intel_driver_func(ScrnInfoPtr pScrn,
 #else
 		(*flag) = HW_IO | HW_MMIO;
 #endif
+
+#ifdef XORG_WAYLAND
+		if (xorgWayland)
+			(*flag) = HW_SKIP_CONSOLE;
+#endif
 		return TRUE;
 	default:
 		/* Unknown or deprecated function */
@@ -481,7 +487,11 @@ static Bool intel_pci_probe(DriverPtr		driver,
 	PciChipsets intel_pci_chipsets[NUM_CHIPSETS];
 	unsigned i;
 
-	if (!has_kernel_mode_setting(device)) {
+	if (!has_kernel_mode_setting(device)
+#ifdef XORG_WAYLAND
+	    && !xorgWayland
+#endif
+	    ) {
 #if KMS_ONLY
 		return FALSE;
 #else

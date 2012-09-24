@@ -70,12 +70,17 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "intel_hwmc.h"
 #endif
 
+#ifdef XORG_WAYLAND
+#include <xwayland.h>
+#endif
+
 #include "legacy/legacy.h"
 #include "uxa.h"
 
 #include <sys/ioctl.h>
 #include "i915_drm.h"
 #include <xf86drmMode.h>
+#include <xf86Priv.h>
 
 #include "intel_glamor.h"
 #include "intel_options.h"
@@ -167,10 +172,16 @@ static Bool i830CreateScreenResources(ScreenPtr screen)
 	if (!(*screen->CreateScreenResources) (screen))
 		return FALSE;
 
+#ifdef XORG_WAYLAND
+	if (intel->xwl_screen)
+		xwl_screen_init(intel->xwl_screen, screen);
+#endif
+
 	if (!intel_uxa_create_screen_resources(screen))
 		return FALSE;
 
-	intel_copy_fb(scrn);
+	if (!intel->xwl_screen)
+		intel_copy_fb(scrn);
 	return TRUE;
 }
 
@@ -451,6 +462,27 @@ static void intel_setup_capabilities(ScrnInfoPtr scrn)
 #endif
 }
 
+#ifdef XORG_WAYLAND
+static int intel_create_window_buffer(struct xwl_window *xwl_window,
+				      PixmapPtr pixmap)
+{
+	uint32_t name;
+	dri_bo *bo;
+
+	bo = intel_get_pixmap_bo(pixmap);
+	if (bo == NULL || dri_bo_flink(bo, &name) != 0)
+		return BadDrawable;
+
+	return xwl_create_window_buffer_drm(xwl_window, pixmap, name);
+}
+
+static struct xwl_driver xwl_driver = {
+	.version = 1,
+	.use_drm = 1,
+	.create_window_buffer = intel_create_window_buffer
+};
+#endif
+
 /**
  * This is called before ScreenInit to do any require probing of screen
  * configuration.
@@ -505,12 +537,6 @@ static Bool I830PreInit(ScrnInfoPtr scrn, int flags)
 
 	intel->PciInfo = xf86GetPciInfoForEntity(intel->pEnt->index);
 
-	if (!intel_open_drm_master(scrn)) {
-		xf86DrvMsg(scrn->scrnIndex, X_ERROR,
-			   "Failed to become DRM master.\n");
-		return FALSE;
-	}
-
 	scrn->monitor = scrn->confScreen->monitor;
 	scrn->progClock = TRUE;
 	scrn->rgbBits = 8;
@@ -548,6 +574,31 @@ static Bool I830PreInit(ScrnInfoPtr scrn, int flags)
 	intel_setup_capabilities(scrn);
 	intel_check_chipset_option(scrn);
 	intel_check_dri_option(scrn);
+
+#ifdef XORG_WAYLAND
+	if (xorgWayland) {
+		intel->xwl_screen = xwl_screen_create();
+		if (!intel->xwl_screen) {
+			xf86DrvMsg(scrn->scrnIndex, X_ERROR,
+				   "Failed to initialize xwayland.\n");
+			return FALSE;
+		}
+
+		if (!xwl_screen_pre_init(scrn, intel->xwl_screen,
+					 0, &xwl_driver)) {
+			xf86DrvMsg(scrn->scrnIndex, X_ERROR,
+				   "Failed to pre-init xwayland screen\n");
+			xwl_screen_destroy(intel->xwl_screen);
+		}
+
+		intel->drmSubFD = xwl_screen_get_drm_fd(intel->xwl_screen);
+	}
+#endif
+
+	if (!intel->xwl_screen && !intel_open_drm_master(scrn))
+		xf86DrvMsg(scrn->scrnIndex, X_ERROR,
+			   "Failed to become DRM master.\n");
+
 
 	if (!intel_init_bufmgr(intel)) {
 		PreInitCleanup(scrn);
@@ -590,6 +641,9 @@ static Bool I830PreInit(ScrnInfoPtr scrn, int flags)
 	intel->swapbuffers_wait = xf86ReturnOptValBool(intel->Options,
 						       OPTION_SWAPBUFFERS_WAIT,
 						       TRUE);
+	if (!intel->xwl_screen)
+		intel->swapbuffers_wait = TRUE;
+
 	xf86DrvMsg(scrn->scrnIndex, X_CONFIG, "Wait on SwapBuffers? %s\n",
 		   intel->swapbuffers_wait ? "enabled" : "disabled");
 
@@ -611,7 +665,8 @@ static Bool I830PreInit(ScrnInfoPtr scrn, int flags)
 
 	I830XvInit(scrn);
 
-	if (!intel_mode_pre_init(scrn, intel->drmSubFD, intel->cpp)) {
+	if (!intel->xwl_screen &&
+	    !intel_mode_pre_init(scrn, intel->drmSubFD, intel->cpp)) {
 		PreInitCleanup(scrn);
 		return FALSE;
 	}
@@ -738,6 +793,11 @@ I830BlockHandler(BLOCKHANDLER_ARGS_DECL)
 #ifdef INTEL_PIXMAP_SHARING
 	intel_dirty_update(screen);
 #endif
+
+#ifdef XORG_WAYLAND
+	if (intel->xwl_screen)
+		xwl_screen_post_damage(intel->xwl_screen);
+#endif
 }
 
 static Bool
@@ -773,9 +833,16 @@ intel_flush_callback(CallbackListPtr *list,
 		     pointer user_data, pointer call_data)
 {
 	ScrnInfoPtr scrn = user_data;
+	intel_screen_private *intel = intel_get_screen_private(scrn);
+
 	if (scrn->vtSema) {
 		intel_batch_submit(scrn);
 		intel_glamor_flush(intel_get_screen_private(scrn));
+
+#ifdef XORG_WAYLAND
+		if (intel->xwl_screen)
+			xwl_screen_post_damage(intel->xwl_screen);
+#endif
 	}
 }
 
@@ -1049,7 +1116,8 @@ I830ScreenInit(SCREEN_INIT_ARGS_DECL)
 	if (serverGeneration == 1)
 		xf86ShowUnusedOptions(scrn->scrnIndex, scrn->options);
 
-	intel_mode_init(intel);
+	if (!intel->xwl_screen)
+		intel_mode_init(intel);
 
 	intel->suspended = FALSE;
 
@@ -1162,7 +1230,8 @@ static Bool I830CloseScreen(CLOSE_SCREEN_ARGS_DECL)
 	}
 
 	if (intel->front_buffer) {
-		intel_mode_remove_fb(intel);
+		if (!intel->xwl_screen)
+			intel_mode_remove_fb(intel);
 		drm_intel_bo_unreference(intel->front_buffer);
 		intel->front_buffer = NULL;
 	}

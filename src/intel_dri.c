@@ -50,6 +50,7 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "xf86.h"
 #include "xf86_OSproc.h"
+#include "xf86Priv.h"
 
 #include "xf86Pci.h"
 #include "xf86drm.h"
@@ -57,6 +58,10 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "windowstr.h"
 #include "shadow.h"
 #include "fb.h"
+
+#ifdef XORG_WAYLAND
+#include <xwayland.h>
+#endif
 
 #include "intel.h"
 #include "i830_reg.h"
@@ -1506,6 +1511,21 @@ out_complete:
 	return TRUE;
 }
 
+#ifdef XORG_WAYLAND
+static int intel_auth_magic2(ScreenPtr screen, uint32_t magic)
+{
+	ScrnInfoPtr scrn = xf86Screens[screen->myNum];
+	intel_screen_private *intel = intel_get_screen_private(scrn);
+
+	/* Not wayland, go stragight to drm */
+	if (!xorgWayland)
+		return drmAuthMagic(intel->drmSubFD, magic);
+
+        /* Forward the request to our host */
+        return xwl_drm_authenticate(intel->xwl_screen, magic);
+}
+#endif
+
 static int dri2_server_generation;
 #endif
 
@@ -1587,6 +1607,13 @@ Bool I830DRI2ScreenInit(ScreenPtr screen)
 	info.numDrivers = 1;
 	info.driverNames = driverNames;
 	driverNames[0] = info.driverName;
+#endif
+
+#if defined(XORG_WAYLAND) /* If we have XORG_WAYLAND, we have AuthMagic2 */
+	info.version = 4;
+	info.AuthMagic2 = intel_auth_magic2;
+	info.GetMSC = NULL;
+	info.ScheduleWaitMSC = NULL;
 #endif
 
 	return DRI2ScreenInit(screen, &info);
