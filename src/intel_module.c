@@ -30,6 +30,7 @@
 
 #include <xf86.h>
 #include <xf86Parser.h>
+#include <xf86Priv.h>
 #include <xorgVersion.h>
 
 #if XORG_VERSION_CURRENT < XORG_VERSION_NUMERIC(1,6,99,0,0)
@@ -387,6 +388,10 @@ static Bool intel_driver_func(ScrnInfoPtr pScrn,
 			(*flag) = HW_SKIP_CONSOLE;
 #endif
 
+#ifdef HW_WAYLAND
+		if (xorgWayland)
+			(*flag) = HW_WAYLAND;
+#endif
 		return TRUE;
 	default:
 		/* Unknown or deprecated function */
@@ -414,6 +419,9 @@ static enum accel_method { UXA, SNA } get_accel_method(void)
 {
 	enum accel_method accel_method = DEFAULT_ACCEL_METHOD;
 	XF86ConfDevicePtr dev;
+
+	if (xorgWayland)
+		return UXA;
 
 	if (hosted())
 		return SNA;

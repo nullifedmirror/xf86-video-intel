@@ -129,6 +129,10 @@ void intel_put_device(ScrnInfoPtr scrn);
 
 void __intel_uxa_release_device(ScrnInfoPtr scrn);
 
-#define hosted() (0)
+#include <xorg-server.h>
+#ifdef XORG_WAYLAND
+#include <xf86Priv.h>
+#define hosted() (xorgWayland)
+#endif
 
 #endif /* INTEL_DRIVER_H */

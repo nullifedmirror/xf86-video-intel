@@ -181,14 +181,18 @@ int intel_open_device(int entity_num,
 	if (dev)
 		return dev->fd;
 
-	local_path = path ? strdup(path) : NULL;
+	if (!xorgWayland) {
+		local_path = path ? strdup(path) : NULL;
 
-	fd = __intel_open_device(pci, &local_path);
-	if (fd == -1)
-		goto err_path;
+		fd = __intel_open_device(pci, &local_path);
+		if (fd == -1)
+			goto err_path;
 
-	if (!__intel_check_device(fd))
-		goto err_close;
+		if (!__intel_check_device(fd))
+			goto err_close;
+	} else {
+		fd = -1;
+	}
 
 	dev = malloc(sizeof(*dev));
 	if (dev == NULL)
@@ -207,7 +211,7 @@ int intel_open_device(int entity_num,
 
 	xf86GetEntityPrivate(entity_num, intel_device_key)->ptr = dev;
 
-	return fd;
+	return xorgWayland ? 0 : fd;
 
 err_close:
 	close(fd);

@@ -50,6 +50,7 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "xf86.h"
 #include "xf86_OSproc.h"
+#include "xf86Priv.h"
 
 #include "xf86Pci.h"
 #include "xf86drm.h"
@@ -57,6 +58,10 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "windowstr.h"
 #include "shadow.h"
 #include "fb.h"
+
+#ifdef XORG_WAYLAND
+#include <xwayland.h>
+#endif
 
 #include "intel.h"
 #include "i830_reg.h"
@@ -1520,6 +1525,22 @@ out_complete:
 	return TRUE;
 }
 
+#if DRI2INFOREC_VERSION >= 10
+static int intel_auth_magic3(ClientPtr client, ScreenPtr screen, uint32_t magic)
+
+{
+	ScrnInfoPtr scrn = xf86Screens[screen->myNum];
+	intel_screen_private *intel = intel_get_screen_private(scrn);
+
+	/* Not wayland, go stragight to drm */
+	if (!xorgWayland)
+		return drmAuthMagic(intel->drmSubFD, magic);
+
+        /* Forward the request to our host */
+        return xwl_drm_authenticate(client, intel->xwl_screen, magic);
+}
+#endif
+
 static int dri2_server_generation;
 #endif
 
@@ -1617,12 +1638,23 @@ Bool I830DRI2ScreenInit(ScreenPtr screen)
 	info.CopyRegion = I830DRI2CopyRegion;
 #if DRI2INFOREC_VERSION >= 4
 	info.version = 4;
-	info.ScheduleSwap = I830DRI2ScheduleSwap;
-	info.GetMSC = I830DRI2GetMSC;
-	info.ScheduleWaitMSC = I830DRI2ScheduleWaitMSC;
+	if (!xorgWayland) {
+		info.ScheduleSwap = I830DRI2ScheduleSwap;
+		info.GetMSC = I830DRI2GetMSC;
+		info.ScheduleWaitMSC = I830DRI2ScheduleWaitMSC;
+	} else {
+		info.ScheduleSwap = NULL;
+		info.GetMSC = NULL;
+		info.ScheduleWaitMSC = NULL;
+	}
 	info.numDrivers = 1;
 	info.driverNames = driverNames;
 	driverNames[0] = info.driverName;
+#endif
+
+#if DRI2INFOREC_VERSION >= 10
+	info.version = 10;
+	info.AuthMagic3 = intel_auth_magic3;
 #endif
 
 	return DRI2ScreenInit(screen, &info);
