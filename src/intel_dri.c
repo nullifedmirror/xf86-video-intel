@@ -1512,7 +1512,8 @@ out_complete:
 }
 
 #ifdef XORG_WAYLAND
-static int intel_auth_magic2(ScreenPtr screen, uint32_t magic)
+static int intel_auth_magic3(ClientPtr client, ScreenPtr screen, uint32_t magic)
+
 {
 	ScrnInfoPtr scrn = xf86Screens[screen->myNum];
 	intel_screen_private *intel = intel_get_screen_private(scrn);
@@ -1522,7 +1523,7 @@ static int intel_auth_magic2(ScreenPtr screen, uint32_t magic)
 		return drmAuthMagic(intel->drmSubFD, magic);
 
         /* Forward the request to our host */
-        return xwl_drm_authenticate(intel->xwl_screen, magic);
+        return xwl_drm_authenticate(client, intel->xwl_screen, magic);
 }
 #endif
 
@@ -1611,7 +1612,7 @@ Bool I830DRI2ScreenInit(ScreenPtr screen)
 
 #if defined(XORG_WAYLAND) /* If we have XORG_WAYLAND, we have AuthMagic2 */
 	info.version = 4;
-	info.AuthMagic2 = intel_auth_magic2;
+	info.AuthMagic3 = intel_auth_magic3;
 	info.GetMSC = NULL;
 	info.ScheduleWaitMSC = NULL;
 #endif
