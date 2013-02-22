@@ -1614,6 +1614,7 @@ Bool I830DRI2ScreenInit(ScreenPtr screen)
 	info.version = 4;
 	info.AuthMagic3 = intel_auth_magic3;
 	info.GetMSC = NULL;
+	info.ScheduleSwap = NULL;
 	info.ScheduleWaitMSC = NULL;
 #endif
 
