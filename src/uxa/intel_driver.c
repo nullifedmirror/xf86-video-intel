@@ -1175,6 +1175,9 @@ static void I830LeaveVT(VT_FUNC_ARGS_DECL)
 	intel_screen_private *intel = intel_get_screen_private(scrn);
 	int ret;
 
+	if (xorgWayland)
+	  return TRUE;
+
 	xf86RotateFreeShadow(scrn);
 
 	xf86_hide_cursors(scrn);
@@ -1193,6 +1196,9 @@ static Bool I830EnterVT(VT_FUNC_ARGS_DECL)
 	SCRN_INFO_PTR(arg);
 	intel_screen_private *intel = intel_get_screen_private(scrn);
 	int ret;
+
+	if (xorgWayland)
+	  return TRUE;
 
 	ret = drmSetMaster(intel->drmSubFD);
 	if (ret) {
