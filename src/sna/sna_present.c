@@ -226,7 +226,7 @@ static CARD32 sna_fake_vblank_handler(OsTimerPtr timer, CARD32 now, void *data)
 	assert(info->queued);
 
 	VG_CLEAR(vbl);
-	vbl.request.type = DRM_VBLANK_RELATIVE;
+	vbl.request.type = (uint32_t)DRM_VBLANK_RELATIVE;
 	vbl.request.sequence = 0;
 	if (sna_wait_vblank(info->sna, &vbl, sna_crtc_pipe(info->crtc)) == 0) {
 		ust = ust64(vbl.reply.tval_sec, vbl.reply.tval_usec);
@@ -261,7 +261,7 @@ static CARD32 sna_fake_vblank_handler(OsTimerPtr timer, CARD32 now, void *data)
 			 * Less than a millisecond for (hopefully) a rare case.
 			 */
 			DBG(("%s: blocking wait!\n", __FUNCTION__));
-			vbl.request.type = DRM_VBLANK_ABSOLUTE;
+			vbl.request.type = (uint32_t)DRM_VBLANK_ABSOLUTE;
 			vbl.request.sequence = info->target_msc;
 			if (sna_wait_vblank(info->sna, &vbl, sna_crtc_pipe(info->crtc)) == 0) {
 				ust = ust64(vbl.reply.tval_sec, vbl.reply.tval_usec);
@@ -430,7 +430,7 @@ sna_present_get_ust_msc(RRCrtcPtr crtc, CARD64 *ust, CARD64 *msc)
 	}
 
 	VG_CLEAR(vbl);
-	vbl.request.type = DRM_VBLANK_RELATIVE;
+	vbl.request.type = (uint32_t)DRM_VBLANK_RELATIVE;
 	vbl.request.sequence = 0;
 	if (sna_wait_vblank(sna, &vbl, sna_crtc_pipe(crtc->devPrivate)) == 0) {
 		*ust = ust64(vbl.reply.tval_sec, vbl.reply.tval_usec);
