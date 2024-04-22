@@ -7276,7 +7276,18 @@ retry_flip:
 		DBG(("%s: crtc %d id=%d, pipe=%d  --> fb %d\n",
 		     __FUNCTION__, i, __sna_crtc_id(crtc), __sna_crtc_pipe(crtc), arg.fb_id));
 		if (drmIoctl(sna->kgem.fd, DRM_IOCTL_MODE_PAGE_FLIP, &arg)) {
-			ERR(("%s: pageflip failed with err=%d\n", __FUNCTION__, errno));
+			/*
+			 * Avoid printing to Xorg log as this will happen often due to Intel stupidity.
+			 */
+			if (errno == EINVAL && async) {
+				ERR(("%s: pageflip failed with %d, attempting a synchronous fallback...\n", __FUNCTION__, errno));
+				arg.flags &= DRM_MODE_PAGE_FLIP_ASYNC;
+				async = false;
+
+				goto retry_flip;
+			}
+
+			ERR(("%s: pageflip failed with err=%d async=%d\n", __FUNCTION__, errno, async));
 
 			if (errno == EBUSY) {
 				struct drm_mode_crtc mode;
