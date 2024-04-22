@@ -7277,11 +7277,16 @@ retry_flip:
 		     __FUNCTION__, i, __sna_crtc_id(crtc), __sna_crtc_pipe(crtc), arg.fb_id));
 		if (drmIoctl(sna->kgem.fd, DRM_IOCTL_MODE_PAGE_FLIP, &arg)) {
 			/*
+			 * Intel introduced asynchronous page-flipping to their hardware late 2022.
+			 * This only works well if the GPU is your primary and only GPU, PRIME and NVIDIA break this.
+			 *
+			 * Try once more synchronously to workaround potential hangs that otherwise occur.
+			 *
 			 * Avoid printing to Xorg log as this will happen often due to Intel stupidity.
 			 */
 			if (errno == EINVAL && async) {
 				ERR(("%s: pageflip failed with %d, attempting a synchronous fallback...\n", __FUNCTION__, errno));
-				arg.flags &= DRM_MODE_PAGE_FLIP_ASYNC;
+				arg.flags = DRM_MODE_PAGE_FLIP_EVENT;
 				async = false;
 
 				goto retry_flip;
