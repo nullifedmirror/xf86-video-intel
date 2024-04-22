@@ -208,7 +208,7 @@ struct sna_crtc {
 	bool hwcursor;
 	bool flip_pending;
 
-	struct pict_f_transform cursor_to_fb, fb_to_cursor;
+	struct pixman_f_transform cursor_to_fb, fb_to_cursor;
 
 	RegionRec crtc_damage;
 	uint16_t shadow_bo_width, shadow_bo_height;
