@@ -3708,8 +3708,15 @@ static const char *dri_driver_name(struct sna *sna)
 			return has_i830_dri() ? "i830" : "i915";
 		else if (sna->kgem.gen < 040)
 			return "i915";
+#ifndef INTEL_USE_LEGACY_DRIVERS
+		else if (sna->kgem.gen < 080)
+			return "crocus";
+		else
+			return "iris";
+#else
 		else
 			return "i965";
+#endif
 	}
 
 	return s;
