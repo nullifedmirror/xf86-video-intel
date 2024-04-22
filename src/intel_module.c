@@ -320,6 +320,7 @@ static const SymTabRec intel_chipsets[] = {
 	{0x5A85, "HD Graphics 500"},
 
 	/* Kabylake */
+	{0x5912, "HD Graphics 630"},
 	{0x5916, "HD Graphics 620"},
 	{0x591E, "HD Graphics 615"},
 
