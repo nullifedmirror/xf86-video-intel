@@ -4793,11 +4793,6 @@ try_upload__tiled_x(PixmapPtr pixmap, RegionRec *region,
 	box = region_rects(region);
 	n = region_num_rects(region);
 
-	if (!n) {
-		DBG(("%s: Refusing to upload a NULL amount of regions!\n", __FUNCTION__));
-		return false;
-	]
-
 	DBG(("%s: upload(%d, %d, %d, %d) x %d\n", __FUNCTION__, x, y, w, h, n));
 
 	if (sigtrap_get())
@@ -5253,6 +5248,12 @@ sna_put_zpixmap_blt(DrawablePtr drawable, GCPtr gc, RegionPtr region,
 	/* Region is pre-clipped and translated into pixmap space */
 	box = region_rects(region);
 	n = region_num_rects(region);
+	
+	if (!n) {
+		DBG(("%s: Refusing to blit a NULL amount of regions!\n", __FUNCTION__));
+		return false;
+	}
+	
 	DBG(("%s: upload(%d, %d, %d, %d) x %d boxes\n", __FUNCTION__, x, y, w, h, n));
 	do {
 		DBG(("%s: copy box (%d, %d)->(%d, %d)x(%d, %d)\n",
