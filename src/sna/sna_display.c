@@ -2376,7 +2376,7 @@ static bool use_shadow(struct sna *sna, xf86CrtcPtr crtc)
 {
 	RRTransformPtr transform;
 	PictTransform crtc_to_fb;
-	struct pict_f_transform f_crtc_to_fb, f_fb_to_crtc;
+	struct pixman_f_transform f_crtc_to_fb, f_fb_to_crtc;
 	unsigned pitch_limit;
 	BoxRec b;
 
@@ -2846,7 +2846,7 @@ affine_is_pixel_exact(const struct pixman_f_transform *t)
 static void sna_crtc_randr(xf86CrtcPtr crtc)
 {
 	struct sna_crtc *sna_crtc = to_sna_crtc(crtc);
-	struct pict_f_transform f_crtc_to_fb, f_fb_to_crtc;
+	struct pixman_f_transform f_crtc_to_fb, f_fb_to_crtc;
 	PictTransform crtc_to_fb;
 	PictFilterPtr filter;
 	xFixed *params;
@@ -6666,7 +6666,7 @@ sna_set_cursor_position(ScrnInfoPtr scrn, int x, int y)
 		if (crtc->transform_in_use) {
 			int xhot = sna->cursor.ref->bits->xhot;
 			int yhot = sna->cursor.ref->bits->yhot;
-			struct pict_f_vector v, hot;
+			struct pixman_f_vector v, hot;
 
 			v.v[0] = x + xhot + .5;
 			v.v[1] = y + yhot + .5;
