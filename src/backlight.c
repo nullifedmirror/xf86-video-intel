@@ -366,7 +366,7 @@ static int __backlight_helper_init(struct backlight *b, char *iface)
 		return 0;
 
 	if ((st.st_mode & (S_IFREG | S_ISUID | S_IXUSR)) != (S_IFREG | S_ISUID | S_IXUSR)) {
-		if (System("pkexec --version"))
+		if (system("pkexec --version"))
 			return 0;
 
 		use_pkexec = 1;
