@@ -7285,7 +7285,7 @@ retry_flip:
 			 * Avoid printing to Xorg log as this will happen often due to Intel stupidity.
 			 */
 			if (errno == EINVAL && async) {
-				ERR(("%s: pageflip failed with %d, attempting a synchronous fallback...\n", __FUNCTION__, errno));
+				DBG(("%s: pageflip failed with err=%d, attempting a synchronous fallback...\n", __FUNCTION__, errno));
 				arg.flags = DRM_MODE_PAGE_FLIP_EVENT;
 				async = false;
 
