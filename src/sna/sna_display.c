@@ -6220,8 +6220,15 @@ static struct sna_cursor *__sna_get_cursor(struct sna *sna, xf86CrtcPtr crtc)
 		       sna->cursor.ref->bits->width,
 		       sna->cursor.ref->bits->height,
 		       box.x2 - box.x1, box.y2 - box.y1));
-	} else
+	} else {
 		size = sna->cursor.size;
+	}
+	
+	if (size > sna->cursor.max_size) {
+		__DBG(("%s: refusing to create cursor of size=%d, max=%d\n",
+		       __FUNCTION__, size, sna->cursor.max_size));
+		return NULL;
+	}
 
 	if (crtc->transform_in_use) {
 		RRTransformPtr T = NULL;
@@ -6828,6 +6835,26 @@ transformable_cursor(struct sna *sna, CursorPtr cursor)
 	return true;
 }
 
+static bool __sna_cursor_possible(struct sna *sna, CursorPtr cursor)
+{
+	assert(cursor);
+	assert(sna->cursor.size == __cursor_size(cursor->bits->width, cursor->bits->height));
+
+	if (sna->cursor.size > sna->cursor.max_size) {
+		DBG(("%s: cursor size=%d too large, max %d: using sw cursor\n",
+		     __FUNCTION__, sna->cursor.size, sna->cursor.max_size));
+		return false;
+	}
+
+	if (sna->mode.rr_active && !transformable_cursor(sna, cursor)) {
+		DBG(("%s: RandR active [%d] and non-transformable cursor: using sw cursor\n",
+		     __FUNCTION__, sna->mode.rr_active));
+		return false;
+	}
+
+	return true;
+}
+
 static Bool
 sna_use_hw_cursor(ScreenPtr screen, CursorPtr cursor)
 {
@@ -6850,15 +6877,8 @@ sna_use_hw_cursor(ScreenPtr screen, CursorPtr cursor)
 
 	sna->cursor.size =
 		__cursor_size(cursor->bits->width, cursor->bits->height);
-	if (sna->cursor.size > sna->cursor.max_size) {
-		DBG(("%s: cursor size=%d too large, max %d: using sw cursor\n",
-		     __FUNCTION__, sna->cursor.size, sna->cursor.max_size));
-		return FALSE;
-	}
-
-	if (sna->mode.rr_active && !transformable_cursor(sna, cursor)) {
-		DBG(("%s: RandR active [%d] and non-transformable cursor: using sw cursor\n",
-		     __FUNCTION__, sna->mode.rr_active));
+	if (!__sna_cursor_possible(sna, cursor)) {
+		DBG(("%s: cursor too large, using sw cursor\n", __FUNCTION__));
 		return FALSE;
 	}
 
@@ -7003,10 +7023,20 @@ static void
 sna_cursors_reload(struct sna *sna)
 {
 	DBG(("%s: active?=%d\n", __FUNCTION__, sna->cursor.active));
-	if (sna->cursor.active)
+	if (sna->cursor.active) {
+		if (sna->cursor.ref &&
+		    !__sna_cursor_possible(sna, sna->cursor.ref)) {
+			DBG(("%s: CRTC change incompatible with hw cursors, disabling\n", __FUNCTION__));
+			sna->cursor.disable = true;
+			restore_swcursor(sna);
+			return;
+		}
+	
 		sna_set_cursor_position(sna->scrn,
 					sna->cursor.last_x,
 					sna->cursor.last_y);
+					
+	}
 }
 
 static void

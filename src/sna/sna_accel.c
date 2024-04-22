@@ -4794,7 +4794,7 @@ try_upload__tiled_x(PixmapPtr pixmap, RegionRec *region,
 	n = region_num_rects(region);
 
 	if (!n) {
-		DBG(("%s: Refusing to upload a NULL amount of regions!", __FUNCTION__));
+		DBG(("%s: Refusing to upload a NULL amount of regions!\n", __FUNCTION__));
 	]
 
 	DBG(("%s: upload(%d, %d, %d, %d) x %d\n", __FUNCTION__, x, y, w, h, n));
