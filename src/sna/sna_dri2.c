@@ -3709,7 +3709,8 @@ static const char *dri_driver_name(struct sna *sna)
 		else if (sna->kgem.gen < 040)
 			return "i915";
 #ifndef INTEL_USE_LEGACY_DRIVERS
-		else if (sna->kgem.gen < 080)
+	/* TODO(nullifed): This doesn't cover Cherryview. */
+		else if (sna->kgem.gen < 0100)
 			return "crocus";
 		else
 			return "iris";
