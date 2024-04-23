@@ -61,6 +61,10 @@
 #define bit_SSSE3	(1 << 9)
 #endif
 
+#ifndef bit_FMA3
+#define bit_FMA3	(1 << 12)
+#endif
+
 #ifndef bit_SSE4_1
 #define bit_SSE4_1	(1 << 19)
 #endif

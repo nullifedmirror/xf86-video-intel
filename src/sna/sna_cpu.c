@@ -53,6 +53,9 @@ unsigned sna_cpu_detect(void)
 		if (ecx & bit_SSSE3)
 			features |= SSSE3;
 
+		if (ecx & bit_FMA3)
+			features |= FMA3;
+
 		if (ecx & bit_SSE4_1)
 			features |= SSE4_1;
 
@@ -109,6 +112,8 @@ char *sna_cpu_features_to_string(unsigned features, char *line)
 		line += sprintf (line, ", sse4.1");
 	if (features & SSE4_2)
 		line += sprintf (line, ", sse4.2");
+	if (features & FMA3)
+		line += sprintf (line, ", fma3");
 	if (features & AVX)
 		line += sprintf (line, ", avx");
 	if (features & AVX2)
