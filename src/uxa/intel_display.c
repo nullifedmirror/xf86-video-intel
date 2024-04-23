@@ -1484,7 +1484,7 @@ drmmode_create_name(ScrnInfoPtr pScrn, drmModeConnectorPtr koutput, char *name,
 		else
 			output_name = "UNKNOWN";
 
-		snprintf(name, 32, "%s%d",
+		snprintf(name, 32, "%s-%d",
 			 output_name, koutput->connector_type_id);
 	}
 }
