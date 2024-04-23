@@ -5248,7 +5248,7 @@ sna_output_add(struct sna *sna, unsigned id, unsigned serial)
 		output_name = output_names[compat_conn.conn.connector_type];
 	else
 		output_name = "UNKNOWN";
-	len = snprintf(name, 32, "%s%d", output_name, compat_conn.conn.connector_type_id);
+	len = snprintf(name, 32, "%s-%d", output_name, compat_conn.conn.connector_type_id);
 	if (output_ignored(scrn, name))
 		return 0;
 
