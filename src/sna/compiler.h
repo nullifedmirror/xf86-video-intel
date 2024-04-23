@@ -70,7 +70,7 @@
 #endif
 
 #if HAS_GCC(4, 7)
-#define avx2 fast __attribute__((target("avx2,avx,sse4.2,sse2,fpmath=sse")))
+#define avx2 fast __attribute__((target("avx2,avx,fma,sse4.2,sse2,fpmath=sse")))
 #define assume_aligned(ptr, align) __builtin_assume_aligned((ptr), (align))
 #define assume_misaligned(ptr, align, offset) __builtin_assume_aligned((ptr), (align), (offset))
 #else
