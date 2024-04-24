@@ -886,7 +886,7 @@ DoRestore(ScrnInfoPtr scrn, vgaRegPtr vgaReg, I810RegPtr i810Reg,
       i810PrintMode(vgaReg, i810Reg);
    }
 
-   vgaHWProtect(scrn, TRUE);
+   _vgaHWProtect(scrn, TRUE);
 
    usleep(50000);
 
@@ -1051,7 +1051,7 @@ DoRestore(ScrnInfoPtr scrn, vgaRegPtr vgaReg, I810RegPtr i810Reg,
 	 vgaHWRestore(scrn, vgaReg, VGA_SR_MODE | VGA_SR_CMAP);
    }
 
-   vgaHWProtect(scrn, FALSE);
+   _vgaHWProtect(scrn, FALSE);
 
    temp = hwp->readCrtc(hwp, IO_CTNL);
    temp &= ~(EXTENDED_ATTR_CNTL | EXTENDED_CRTC_CNTL);
