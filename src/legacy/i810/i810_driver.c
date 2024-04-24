@@ -77,6 +77,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #endif
 
 #include "../legacy.h"
+#include "ugly_workaround.h"
 
 static Bool I810PreInit(ScrnInfoPtr pScrn, int flags);
 static Bool I810ScreenInit(SCREEN_INIT_ARGS_DECL);
@@ -193,7 +194,7 @@ I810ProbeDDC(ScrnInfoPtr scrn, int index)
    if (xf86LoadSubModule(scrn, "vbe")) {
       pVbe = VBEInit(NULL, index);
       ConfiguredMonitor = vbeDoEDID(pVbe, NULL);
-      vbeFree(pVbe);
+      _vbeFree(pVbe);
    }
 }
 
@@ -213,7 +214,7 @@ I810DoDDC(ScrnInfoPtr scrn, int index)
       MonInfo = vbeDoEDID(pVbe, NULL);
       xf86PrintEDID(MonInfo);
       xf86SetDDCproperties(scrn, MonInfo);
-      vbeFree(pVbe);
+      _vbeFree(pVbe);
    } else {
       xf86DrvMsg(scrn->scrnIndex, X_INFO,
 		 "this driver cannot do DDC without VBE\n");
