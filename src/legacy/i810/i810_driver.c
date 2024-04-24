@@ -193,7 +193,7 @@ I810ProbeDDC(ScrnInfoPtr scrn, int index)
    if (xf86LoadSubModule(scrn, "vbe")) {
       pVbe = VBEInit(NULL, index);
       ConfiguredMonitor = vbeDoEDID(pVbe, NULL);
-      _vbeFree(pVbe);
+      vbeFree(pVbe);
    }
 }
 
@@ -213,7 +213,7 @@ I810DoDDC(ScrnInfoPtr scrn, int index)
       MonInfo = vbeDoEDID(pVbe, NULL);
       xf86PrintEDID(MonInfo);
       xf86SetDDCproperties(scrn, MonInfo);
-      _vbeFree(pVbe);
+      vbeFree(pVbe);
    } else {
       xf86DrvMsg(scrn->scrnIndex, X_INFO,
 		 "this driver cannot do DDC without VBE\n");
