@@ -9,9 +9,9 @@ void _vbeFree(vbeInfoPtr pVbe) {
 #endif
 }
 
-void _vgaHWProtectProc(ScrnInfoPtr pScrn, Bool on) {
+void _vgaHWProtect(ScrnInfoPtr pScrn, Bool on) {
 #if defined (HAS_VGA_HW_PROTECT)
-		vgaHWProtectProc(pScrn, on);
+		vgaHWProtect(pScrn, on);
 #else
 		abort();
 #endif
