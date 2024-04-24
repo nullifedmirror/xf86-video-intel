@@ -77,7 +77,6 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #endif
 
 #include "../legacy.h"
-#include "ugly_workaround.h"
 
 static Bool I810PreInit(ScrnInfoPtr pScrn, int flags);
 static Bool I810ScreenInit(SCREEN_INIT_ARGS_DECL);
@@ -886,7 +885,7 @@ DoRestore(ScrnInfoPtr scrn, vgaRegPtr vgaReg, I810RegPtr i810Reg,
       i810PrintMode(vgaReg, i810Reg);
    }
 
-   _vgaHWProtect(scrn, TRUE);
+   vgaHWProtect(scrn, TRUE);
 
    usleep(50000);
 
@@ -1051,7 +1050,7 @@ DoRestore(ScrnInfoPtr scrn, vgaRegPtr vgaReg, I810RegPtr i810Reg,
 	 vgaHWRestore(scrn, vgaReg, VGA_SR_MODE | VGA_SR_CMAP);
    }
 
-   _vgaHWProtect(scrn, FALSE);
+   vgaHWProtect(scrn, FALSE);
 
    temp = hwp->readCrtc(hwp, IO_CTNL);
    temp &= ~(EXTENDED_ATTR_CNTL | EXTENDED_CRTC_CNTL);
