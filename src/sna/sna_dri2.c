@@ -3812,7 +3812,11 @@ bool sna_dri2_open(struct sna *sna, ScreenPtr screen)
 	} else
 #endif
 	{
-		xf86DrvMsg(sna->scrn->scrnIndex, X_INFO, "experimental async swap not requested by user or available, disabling.\n");
+#ifdef ASYNC_SWAP_FEATURE_TOO_OLD
+		xf86DrvMsg(sna->scrn->scrnIndex, X_NONE, "experimental async swap unavailable, disabling.\n");
+#else
+		xf86DrvMsg(sna->scrn->scrnIndex, X_NONE, "experimental async swap not requested by user, disabling.\n");
+#endif
 		sna->enable_async_swap = false;
 	}
 
