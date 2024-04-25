@@ -116,9 +116,6 @@ endif
 if get_option('use-create2')
   config.set('USE_CREATE2', 1)
 endif
-if get_option('async-swap')
-  config.set('USE_ASYNC_SWAP', 1)
-endif
 
 subdir('brw')
 subdir('fb')
