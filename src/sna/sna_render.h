@@ -300,6 +300,9 @@ struct sna_render {
 		     PixmapPtr dst, struct kgem_bo *dst_bo,
 		     struct sna_copy_op *op);
 
+	/* Only used in gen7_render.c */
+	bool has_mitigations_active;
+
 	void (*flush)(struct sna *sna);
 	void (*reset)(struct sna *sna);
 	void (*fini)(struct sna *sna);

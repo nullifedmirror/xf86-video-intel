@@ -40,6 +40,8 @@
 #include "sna_render_inline.h"
 #include "sna_video.h"
 
+#include "gen7_render_mitigations.h"
+
 #include "brw/brw.h"
 #include "gen7_render.h"
 #include "gen4_common.h"
@@ -2957,10 +2959,48 @@ prefer_blt_copy(struct sna *sna,
 		struct kgem_bo *dst_bo,
 		unsigned flags)
 {
-	if (sna->kgem.ring != KGEM_BLT)
-		return false;
+	if (sna->render->has_mitigations_active) {
+		if (sna->kgem.ring != KGEM_BLT)
+			return false;
 
-	return true; /* avoid clear-residuals context overhead */
+		return true; /* avoid clear-residuals context overhead */
+	} else {
+		/* Allow Haswell to still take advantage of the BLT engine. */
+		if (sna->kgem.mode == KGEM_BLT)
+			return true;
+
+		assert((flags & COPY_SYNC) == 0);
+
+		if (untiled_tlb_miss(src_bo) || untiled_tlb_miss(dst_bo))
+			return true;
+
+		if (flags & COPY_DRI && !sna->kgem.has_semaphores)
+			return false;
+
+		if (force_blt_ring(sna, dst_bo, src_bo))
+			return true;
+
+		if ((flags & COPY_SMALL ||
+	     (sna->render_state.gt < 3 && src_bo == dst_bo)) &&
+            can_switch_to_blt(sna, dst_bo, flags))
+			return true;
+
+		if (kgem_bo_is_render(dst_bo) || kgem_bo_is_render(src_bo))
+			return false;
+
+		if (flags & COPY_LAST &&
+	    	sna->render_state.gt < 3 &&
+            can_switch_to_blt(sna, dst_bo, flags))
+			return true;
+
+		if (prefer_render_ring(sna, dst_bo))
+			return false;
+
+		if (!prefer_blt_ring(sna, dst_bo, flags))
+			return false;
+
+		return prefer_blt_bo(sna, src_bo, dst_bo);
+	}
 }
 
 static bool
@@ -4001,5 +4041,8 @@ const char *gen7_render_init(struct sna *sna, const char *backend)
 
 	sna->render.max_3d_size = GEN7_MAX_SIZE;
 	sna->render.max_3d_pitch = 1 << 18;
+
+	sna->render->has_mitigations_active = has_mitigations_active();
+
 	return sna->render_state.gen7.info->name;
 }
