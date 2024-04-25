@@ -3790,8 +3790,9 @@ bool sna_dri2_open(struct sna *sna, ScreenPtr screen)
 		info.bufferAge = 1;
 
 		sna->enable_async_swap = true;
-	} else {
+	} else
 #endif
+	{
 		sna->enable_async_swap = false;
 	}
 
