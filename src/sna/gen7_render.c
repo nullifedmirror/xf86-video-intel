@@ -2959,7 +2959,7 @@ prefer_blt_copy(struct sna *sna,
 		struct kgem_bo *dst_bo,
 		unsigned flags)
 {
-	if (sna->render->has_mitigations_active) {
+	if (sna->render.has_mitigations_active) {
 		if (sna->kgem.ring != KGEM_BLT)
 			return false;
 
@@ -4038,7 +4038,7 @@ const char *gen7_render_init(struct sna *sna, const char *backend)
 	sna->render.max_3d_size = GEN7_MAX_SIZE;
 	sna->render.max_3d_pitch = 1 << 18;
 
-	sna->render->has_mitigations_active = has_mitigations_active();
+	sna->render.has_mitigations_active = has_mitigations_active();
 
 	return sna->render_state.gen7.info->name;
 }
