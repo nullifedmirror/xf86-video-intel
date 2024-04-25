@@ -737,17 +737,6 @@ if test "x$CREATE2" = "xyes"; then
 	xp_msg="$xp_msg create2"
 fi
 
-AC_ARG_ENABLE(async-swap,
-	      AS_HELP_STRING([--enable-async-swap],
-			     [Enable use of asynchronous swaps (experimental) [default=no]]),
-	      [ASYNC_SWAP="$enableval"],
-	      [ASYNC_SWAP="no"])
-AM_CONDITIONAL(USE_ASYNC_SWAP, test "x$ASYNC_SWAP" = "xyes")
-if test "x$ASYNC_SWAP" = "xyes"; then
-	AC_DEFINE(USE_ASYNC_SWAP,1,[Assume asynchronous swap support])
-	xp_msg="$xp_msg async-swap"
-fi
-
 AC_ARG_ENABLE(debug,
 	      AS_HELP_STRING([--enable-debug],
 			     [Enables internal debugging [default=no]]),

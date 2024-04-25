@@ -150,9 +150,6 @@ struct sna_dri2_event {
 #define ASYNC_SWAP_FEATURE_TOO_OLD 1
 #endif
 
-#define APPLY_DAMAGE 1
-#define APPLY_DAMAGE_ASYNC 0
-
 #define KEEPALIVE_ASYNC 8 /* wait ~100ms before discarding swap caches */
 #define KEEPALIVE 1
 
@@ -384,7 +381,6 @@ inline static DRI2BufferPtr dri2_window_get_front(WindowPtr win)
 }
 #else
 inline static void *dri2_window_get_front(WindowPtr win) { return NULL; }
-#define APPLY_DAMAGE 1
 #endif
 
 #if DRI2INFOREC_VERSION < 6
@@ -995,7 +991,7 @@ static void set_bo(PixmapPtr pixmap, struct kgem_bo *bo)
 	assert((priv->pinned & (PIN_PRIME | PIN_DRI3)) == 0);
 	assert(priv->flush);
 
-	if (APPLY_DAMAGE) {
+	if (!sna->enable_async_swap) {
 		RegionRec region;
 
 		/* Post damage on the new front buffer so that listeners, such
@@ -1042,7 +1038,7 @@ static void set_bo(PixmapPtr pixmap, struct kgem_bo *bo)
 		bo->domain = DOMAIN_NONE;
 	assert(bo->flush);
 
-	if (APPLY_DAMAGE) {
+	if (!sna->enable_async_swap) {
 		sna->ignore_copy_area = false;
 		DamageRegionProcessPending(&pixmap->drawable);
 	}
@@ -1362,7 +1358,7 @@ __sna_dri2_copy_region(struct sna *sna, DrawablePtr draw, RegionPtr region,
 		boxes = &clip.extents;
 		n = 1;
 	}
-	if (APPLY_DAMAGE || flags & DRI2_DAMAGE) {
+	if (!sna->enable_async_swap || flags & DRI2_DAMAGE) {
 		DBG(("%s: marking region as damaged\n", __FUNCTION__));
 		sna->ignore_copy_area = sna->flags & SNA_TEAR_FREE;
 		DamageRegionAppend(&pixmap->drawable, region);
@@ -1400,7 +1396,7 @@ __sna_dri2_copy_region(struct sna *sna, DrawablePtr draw, RegionPtr region,
 		}
 	}
 
-	if (APPLY_DAMAGE || flags & DRI2_DAMAGE) {
+	if (!sna->enable_async_swap || flags & DRI2_DAMAGE) {
 		sna->ignore_copy_area = false;
 		DamageRegionProcessPending(&pixmap->drawable);
 	}
@@ -2006,7 +2002,7 @@ sna_dri2_flip(struct sna_dri2_event *info)
 	assert(get_private(info->back)->bo->refcnt);
 	assert(get_private(info->front)->bo != get_private(info->back)->bo);
 
-	info->keepalive = KEEPALIVE;
+	info->keepalive = info->sna->enable_async_swap ? KEEPALIVE_ASYNC : KEEPALIVE;
 	info->queued = true;
 	return true;
 }
@@ -2424,13 +2420,13 @@ static void sna_dri2_xchg_crtc(struct sna *sna, DrawablePtr draw, xf86CrtcPtr cr
 	     get_window_pixmap(win)->drawable.height));
 	assert(can_xchg_crtc(sna, draw, crtc, front, back));
 
-	if (APPLY_DAMAGE) {
+	if (!sna->enable_async_swap) {
 		DBG(("%s: marking drawable as damaged\n", __FUNCTION__));
 		sna->ignore_copy_area = sna->flags & SNA_TEAR_FREE;
 		DamageRegionAppend(&win->drawable, &win->clipList);
 	}
 	sna_shadow_set_crtc(sna, crtc, get_private(back)->bo);
-	if (APPLY_DAMAGE) {
+	if (!sna->enable_async_swap) {
 		sna->ignore_copy_area = false;
 		DamageRegionProcessPending(&win->drawable);
 	}
@@ -2754,7 +2750,7 @@ sna_dri2_immediate_blit(struct sna *sna,
 
 	info->type = SWAP_COMPLETE;
 	info->sync = sync;
-	info->keepalive = KEEPALIVE;
+	info->keepalive = sna->enable_async_swap ? KEEPALIVE_ASYNC : KEEPALIVE;
 
 	if (chain == info) {
 		DBG(("%s: no pending blit, starting chain\n", __FUNCTION__));
@@ -3145,7 +3141,7 @@ sna_dri2_schedule_flip(ClientPtr client, DrawablePtr draw, xf86CrtcPtr crtc,
 			assert(info->front != info->back);
 			DBG(("%s: executing xchg of pending flip: flip_continue=%d, keepalive=%d, chain?=%d\n", __FUNCTION__, info->flip_continue, info->keepalive, current_msc < *target_msc));
 			sna_dri2_xchg(draw, front, back);
-			info->keepalive = KEEPALIVE;
+			info->keepalive = sna->enable_async_swap ? KEEPALIVE_ASYNC : KEEPALIVE;
 			if (xorg_can_triple_buffer() &&
 			    current_msc < *target_msc) {
 				DBG(("%s: chaining flip\n", __FUNCTION__));
@@ -3218,7 +3214,7 @@ out:
 	}
 
 queue:
-	if (KEEPALIVE > 1 && sna->dri2.flip_pending) {
+	if ((sna->enable_async_swap ? KEEPALIVE_ASYNC : KEEPALIVE) > 1 && sna->dri2.flip_pending) {
 		info = sna->dri2.flip_pending;
 		info->keepalive = 1;
 	}
