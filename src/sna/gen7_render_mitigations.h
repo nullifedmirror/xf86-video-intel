@@ -33,18 +33,18 @@ static bool has_mitigations_active(void) {
 		bool are_mitigations_inactive;
 
 		size_t len = 0;
-        char *line = NULL;
-        while (getline(&line, &len, file) != -1) {
-        	if (strcmp(&line, "off") == 0) {
-        		are_mitigations_inactive = true;
-        		break;
-        	}
-        }
+		char *line = NULL;
+		while (getline(&line, &len, file) != -1) {
+			if (strcmp(&line, "off") == 0) {
+				are_mitigations_inactive = true;
+				break;
+			}
+		}
 
-        free(line);
-        fclose(file);
+		free(line);
+		fclose(file);
 
-        return !are_mitigations_inactive;
+		return !are_mitigations_inactive;
 	} else {
 		return true;
 	}
