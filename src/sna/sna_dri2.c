@@ -591,15 +591,6 @@ sna_dri2_pixmap_update_bo(struct sna *sna, PixmapPtr pixmap, struct kgem_bo *bo)
 }
 
 static DRI2Buffer2Ptr
-sna_dri2_create_buffer(DrawablePtr draw,
-		       unsigned int attachment,
-		       unsigned int format)
-{
-	return sna_dri2_create_buffer2(draw->pScreen, draw, attachment,
-                                  format);
-}
-
-static DRI2Buffer2Ptr
 sna_dri2_create_buffer2(ScreenPtr screen, DrawablePtr draw,
                        unsigned int attachment, unsigned int format)
 {
@@ -813,6 +804,15 @@ err:
 	kgem_bo_destroy(&sna->kgem, bo);
 	free(buffer);
 	return NULL;
+}
+
+static DRI2Buffer2Ptr
+sna_dri2_create_buffer(DrawablePtr draw,
+		       unsigned int attachment,
+		       unsigned int format)
+{
+	return sna_dri2_create_buffer2(draw->pScreen, draw, attachment,
+                                  format);
 }
 
 static void
