@@ -3784,7 +3784,7 @@ bool sna_dri2_open(struct sna *sna, ScreenPtr screen)
 
 #ifndef ASYNC_SWAP_FEATURE_TOO_OLD
 	if (xf86ReturnOptValBool(sna->Options, OPTION_ASYNC_SWAP, FALSE)) {
-		xf86DrvMsg(sna->scrn->scrnIndex, X_WARNING, "enabled async swap and buffer age\n");
+		xf86DrvMsg(sna->scrn->scrnIndex, X_INFO, "enabled async swap and buffer age\n");
 		info.version = 10;
 		info.scheduleSwap0 = 1;
 		info.bufferAge = 1;
@@ -3793,6 +3793,7 @@ bool sna_dri2_open(struct sna *sna, ScreenPtr screen)
 	} else
 #endif
 	{
+		xf86DrvMsg(sna->scrn->scrnIndex, X_INFO, "experimental async swap not requested by user or available, disabling.\n");
 		sna->enable_async_swap = false;
 	}
 
