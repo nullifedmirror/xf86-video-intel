@@ -595,6 +595,14 @@ sna_dri2_create_buffer(DrawablePtr draw,
 		       unsigned int attachment,
 		       unsigned int format)
 {
+	return sna_dri2_create_buffer2(draw->pScreen, draw, attachment,
+                                  format);
+}
+
+static DRI2Buffer2Ptr
+sna_dri2_create_buffer2(ScreenPtr screen, DrawablePtr drawable,
+                       unsigned int attachment, unsigned int format)
+{
 	struct sna *sna = to_sna_from_drawable(draw);
 	DRI2Buffer2Ptr buffer;
 	struct sna_dri2_private *private;
@@ -941,6 +949,11 @@ static void _sna_dri2_destroy_buffer(struct sna *sna,
 }
 
 static void sna_dri2_destroy_buffer(DrawablePtr draw, DRI2Buffer2Ptr buffer)
+{
+	_sna_dri2_destroy_buffer(to_sna_from_drawable(draw), draw, buffer);
+}
+
+static void sna_dri2_destroy_buffer2(ScreenPtr unused, DrawablePtr draw, DRI2Buffer2Ptr buffer)
 {
 	_sna_dri2_destroy_buffer(to_sna_from_drawable(draw), draw, buffer);
 }
@@ -3780,6 +3793,12 @@ bool sna_dri2_open(struct sna *sna, ScreenPtr screen)
 		info.SwapLimitValidate = sna_dri2_swap_limit_validate;
 		info.ReuseBufferNotify = sna_dri2_reuse_buffer;
 	}
+#endif
+
+#if DRI2INFOREC_VERSION >= 9
+	info.version = 9;
+	info.CreateBuffer2 = sna_dri2_create_buffer2;
+	info.DestroyBuffer2 = sna_dri2_destroy_buffer2;
 #endif
 
 #ifndef ASYNC_SWAP_FEATURE_TOO_OLD
