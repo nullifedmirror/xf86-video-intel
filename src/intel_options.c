@@ -35,6 +35,7 @@ const OptionInfoRec intel_options[] = {
 	{OPTION_VIRTUAL,	"VirtualHeads",	OPTV_INTEGER,	{0},	0},
 	{OPTION_TEAR_FREE,	"TearFree",	OPTV_BOOLEAN,	{0},	0},
 	{OPTION_CRTC_PIXMAPS,	"PerCrtcPixmaps", OPTV_BOOLEAN,	{0},	0},
+	{OPTION_ASYNC_SWAP,	"ExperimentalAsyncSwap", OPTV_BOOLEAN, {0}, 0},
 #endif
 #ifdef USE_UXA
 	{OPTION_FALLBACKDEBUG,	"FallbackDebug",OPTV_BOOLEAN,	{0},	0},

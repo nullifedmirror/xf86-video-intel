@@ -147,17 +147,14 @@ struct sna_dri2_event {
 };
 
 #if DRI2INFOREC_VERSION < 10
-#undef USE_ASYNC_SWAP
+#define ASYNC_SWAP_FEATURE_TOO_OLD 1
 #endif
 
-#if USE_ASYNC_SWAP
-#define KEEPALIVE 8 /* wait ~100ms before discarding swap caches */
-#define APPLY_DAMAGE 0
-#else
-#define USE_ASYNC_SWAP 0
-#define KEEPALIVE 1
 #define APPLY_DAMAGE 1
-#endif
+#define APPLY_DAMAGE_ASYNC 0
+
+#define KEEPALIVE_ASYNC 8 /* wait ~100ms before discarding swap caches */
+#define KEEPALIVE 1
 
 static void sna_dri2_flip_event(struct sna_dri2_event *flip);
 inline static DRI2BufferPtr dri2_window_get_front(WindowPtr win);
@@ -319,7 +316,8 @@ sna_dri2_get_back(struct sna *sna,
 		}
 
 		flags = 0;
-		if (USE_ASYNC_SWAP && back->flags) {
+#ifndef ASYNC_SWAP_FEATURE_TOO_OLD
+		if (sna->enable_async_swap && back->flags) {
 			BoxRec box;
 
 			box.x1 = 0;
@@ -334,6 +332,7 @@ sna_dri2_get_back(struct sna *sna,
 						   &box, 1, COPY_LAST | COPY_DRI))
 				flags = back->flags;
 		}
+#endif
 	}
 	assert(bo->active_scanout == 0);
 
@@ -3787,12 +3786,18 @@ bool sna_dri2_open(struct sna *sna, ScreenPtr screen)
 	}
 #endif
 
-#if USE_ASYNC_SWAP
-	DBG(("%s: enabled async swap and buffer age\n", __FUNCTION__));
-	info.version = 10;
-	info.scheduleSwap0 = 1;
-	info.bufferAge = 1;
+#ifndef ASYNC_SWAP_FEATURE_TOO_OLD
+	if (xf86ReturnOptValBool(sna->Options, OPTION_ASYNC_SWAP, FALSE)) {
+		xf86DrvMsg(sna->scrn->scrnIndex, X_WARNING, "enabled async swap and buffer age\n");
+		info.version = 10;
+		info.scheduleSwap0 = 1;
+		info.bufferAge = 1;
+
+		sna->enable_async_swap = true;
+	} else {
 #endif
+		sna->enable_async_swap = false;
+	}
 
 	return DRI2ScreenInit(screen, &info);
 }
