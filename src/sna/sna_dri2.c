@@ -600,7 +600,7 @@ sna_dri2_create_buffer(DrawablePtr draw,
 }
 
 static DRI2Buffer2Ptr
-sna_dri2_create_buffer2(ScreenPtr screen, DrawablePtr drawable,
+sna_dri2_create_buffer2(ScreenPtr screen, DrawablePtr draw,
                        unsigned int attachment, unsigned int format)
 {
 	struct sna *sna = to_sna_from_drawable(draw);
