@@ -361,11 +361,31 @@ will assign xrandr outputs HDMI1 and DP2 and CRTCs 0 and 2 to this instance of t
 .TP
 .BI "Option \*qExperimentalAsyncSwap\*q \*q" boolean \*q
 This option enables very experimental asynchronous swapping, originally a build time option.
-Known regressions: DRI2 damage is disabled to mitigate issues, \*qKEEPALIVE\*q duration is increased.
+.br
+Known regressions:
+.br
+- DRI2 damage is disabled to mitigate issues
+.br
+- \*qKEEPALIVE\*q duration is increased.
 
 .B This relies on an unreleased DRI2 extension set.
 .IP
 Not supported.
+.br
+SNA only.
+.TP
+
+.BI "Option \*qExperimentalReduceFlushes\*q \*q" boolean \*q
+This option enables a previously broken optimization for flushing.
+.br
+It was originally disabled due to Mesa not implementing the \*qglXWaitX()\*q call, causing a plethora of issues.
+
+.B Enabling this is not a good idea.
+.IP
+Default: Disabled.
+.br
+SNA only.
+.TP
 
 .SH OUTPUT CONFIGURATION
 On 830M and better chipsets, the driver supports runtime configuration of

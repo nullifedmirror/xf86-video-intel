@@ -284,6 +284,7 @@ struct sna {
 
 	bool ignore_copy_area : 1;
 	bool enable_async_swap : 1;
+	bool enable_reduced_flushing : 1;
 
 	unsigned watch_shm_flush;
 	unsigned watch_dri_flush;
