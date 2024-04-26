@@ -636,8 +636,10 @@ static inline uint32_t default_tiling(struct sna *sna, PixmapPtr pixmap)
 
 	return I915_TILING_Y;
 #else
+	if (sna->)
+
 	/* Use Y tiling only on GPUs that can benefit from it. */
-	if (sna->info.prefers_32k_alignment) {
+	if (sna->info->prefers_32k_alignment) {
 		return I915_TILING_Y;
 	}
 
@@ -1676,13 +1678,17 @@ static bool sna_pixmap_alloc_gpu(struct sna *sna,
 				 struct sna_pixmap *priv,
 				 unsigned flags)
 {
+	/* "However, prior to Sky Lake, Y-tiling was not available for scanout so X tiling was
+	 *  used for any sort of window-system buffers. Starting with Sky Lake, we can scan out from Y-tiled buffers."
+	 */
+	uint32_t scanout_tile = sna->info->gen >= 0110 ? I915_TILING_Y : I915_TILING_X;
 	uint32_t tiling;
 
 	/* Use tiling by default, but disable per user request */
 	if (pixmap->usage_hint == SNA_CREATE_FB && (sna->flags & SNA_LINEAR_FB) == 0) {
 		flags |= CREATE_SCANOUT;
 		tiling = kgem_choose_tiling(&sna->kgem,
-					    -DEFAULT_SCANOUT_TILING,
+					    -scanout_tile,
 					    pixmap->drawable.width,
 					    pixmap->drawable.height,
 					    pixmap->drawable.bitsPerPixel);
