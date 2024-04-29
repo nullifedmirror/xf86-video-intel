@@ -264,7 +264,7 @@ I830DRI2DestroyBuffers(DrawablePtr drawable, DRI2BufferPtr buffers, int count)
 #else
 
 static DRI2Buffer2Ptr
-I830DRI2CreateBuffer2(ScreenPtr screen, DrawablePtr draw,
+I830DRI2CreateBuffer2(ScreenPtr screen, DrawablePtr drawable,
                        unsigned int attachment, unsigned int format)
 {
 	ScrnInfoPtr scrn = xf86ScreenToScrn(screen);
@@ -382,7 +382,7 @@ I830DRI2CreateBuffer2(ScreenPtr screen, DrawablePtr draw,
 static void I830DRI2CreateBuffer(DrawablePtr draw,
 		       unsigned int attachment,
 		       unsigned int format) {
-	ScreenPtr screen = drawable->pScreen;
+	ScreenPtr screen = draw->pScreen;
 	I830DRI2CreateBuffer2(screen, draw, attachment, format);
 }
 
