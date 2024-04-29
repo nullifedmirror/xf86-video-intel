@@ -165,6 +165,15 @@ static int sna_dri3_open_device(ScreenPtr screen,
 	return Success;
 }
 
+static int sna_dri3_open_client(ClientPtr client,
+				ScreenPtr screen,
+				RRProviderPtr provider,
+				int *out)
+{
+	/* glamor ignores 'ClientPtr client', behave the same way. */
+	return sna_dri3_open_device(NULL, client, screen, provider, out);
+}
+
 static PixmapPtr sna_dri3_pixmap_from_fd(ScreenPtr screen,
 					 int fd,
 					 CARD16 width,
@@ -290,6 +299,27 @@ free_bo:
 	return NULL;
 }
 
+static PixmapPtr sna_dri3_pixmap_from_fds(ScreenPtr screen,
+					 CARD8 num_fd,
+					 const int *fds,
+					 CARD16 width,
+					 CARD16 height,
+					 const CARD32 *strides,
+					 const CARD32 *offsets,
+					 CARD8 depth,
+					 CARD8 bpp,
+					 CARD64 modifier)
+{
+	if (num_fds == 0) {
+		return NULL;
+	} else if (num_fds == 1) {
+		return sna_dri3_pixmap_from_fd(screen, fds[0], width, height, strides[0], depth, bpp);
+	} else {
+		/* TODO */
+		return BadImplementation;
+	}
+}
+
 static int sna_dri3_fd_from_pixmap(ScreenPtr screen,
 				   PixmapPtr pixmap,
 				   CARD16 *stride,
@@ -364,9 +394,14 @@ static int sna_dri3_fd_from_pixmap(ScreenPtr screen,
 static dri3_screen_info_rec sna_dri3_info = {
 	.version = DRI3_SCREEN_INFO_VERSION,
 
+	/* version zero */
+
 	.open = sna_dri3_open_device,
 	.pixmap_from_fd = sna_dri3_pixmap_from_fd,
 	.fd_from_pixmap = sna_dri3_fd_from_pixmap,
+
+	/* version one */
+	.open_client = sna_dri3_open_client,
 };
 
 bool sna_dri3_open(struct sna *sna, ScreenPtr screen)
