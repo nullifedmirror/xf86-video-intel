@@ -170,8 +170,8 @@ static int sna_dri3_open_client(ClientPtr client,
 				RRProviderPtr provider,
 				int *out)
 {
-	/* glamor ignores 'ClientPtr client', behave the same way. */
-	return sna_dri3_open_device(NULL, client, screen, provider, out);
+	/* glamor ignores 'client', behave the same way. */
+	return sna_dri3_open_device(screen, provider, out);
 }
 
 static PixmapPtr sna_dri3_pixmap_from_fd(ScreenPtr screen,
