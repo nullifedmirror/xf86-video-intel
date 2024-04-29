@@ -18289,6 +18289,11 @@ bool sna_accel_init(ScreenPtr screen, struct sna *sna)
 		   "SNA initialized with %s backend\n",
 		   backend);
 
+	/* Tell Ivy Bridge/Baytrail/Haswell users if the old BLT logic was re-enabled */
+	if (sna->kgem.gen >= 070 && sna->kgem.gen < 0100) {
+		xf86DrvMsg(sna->scrn->scrnIndex, X_INFO, "SNA: Full BLT mode: %s", (sna->render.has_mitigations_active ? "DISABLED" : "ENABLED"));
+	}
+
 	return true;
 }
 

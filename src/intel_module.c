@@ -104,10 +104,12 @@ static const struct intel_device_info intel_sandybridge_info = {
 
 static const struct intel_device_info intel_ivybridge_info = {
 	.gen = 070,
+	.prefers_32k_alignment = 1,
 };
 
 static const struct intel_device_info intel_valleyview_info = {
 	.gen = 071,
+	.prefers_32k_alignment = 1,
 };
 
 static const struct intel_device_info intel_haswell_info = {
