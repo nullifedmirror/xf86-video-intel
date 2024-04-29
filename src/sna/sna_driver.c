@@ -632,7 +632,7 @@ static Bool sna_pre_init(ScrnInfoPtr scrn, int probe)
 
 	kgem_init(&sna->kgem, fd,
 		  xf86GetPciInfoForEntity(pEnt->index),
-		  sna->info->gen);
+		  sna->info->gen, sna->info->force_crocus_driver);
 
 	if (xf86ReturnOptValBool(sna->Options, OPTION_TILING_FB, FALSE))
 		sna->flags |= SNA_LINEAR_FB;

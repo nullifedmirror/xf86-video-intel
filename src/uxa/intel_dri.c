@@ -264,10 +264,9 @@ I830DRI2DestroyBuffers(DrawablePtr drawable, DRI2BufferPtr buffers, int count)
 #else
 
 static DRI2Buffer2Ptr
-I830DRI2CreateBuffer(DrawablePtr drawable, unsigned int attachment,
-		     unsigned int format)
+I830DRI2CreateBuffer2(ScreenPtr screen, DrawablePtr draw,
+                       unsigned int attachment, unsigned int format)
 {
-	ScreenPtr screen = drawable->pScreen;
 	ScrnInfoPtr scrn = xf86ScreenToScrn(screen);
 	intel_screen_private *intel = intel_get_screen_private(scrn);
 	DRI2Buffer2Ptr buffer;
@@ -380,7 +379,15 @@ I830DRI2CreateBuffer(DrawablePtr drawable, unsigned int attachment,
 	return buffer;
 }
 
-static void I830DRI2DestroyBuffer(DrawablePtr drawable, DRI2Buffer2Ptr buffer)
+static void I830DRI2CreateBuffer(DrawablePtr draw,
+		       unsigned int attachment,
+		       unsigned int format) {
+	ScreenPtr screen = drawable->pScreen;
+	I830DRI2CreateBuffer2(screen, draw, attachment, format);
+}
+
+
+static void I830DRI2DestroyBuffer2(ScreenPtr unused, DrawablePtr draw, DRI2Buffer2Ptr buffer)
 {
 	if (buffer && buffer->driverPrivate) {
 		I830DRI2BufferPrivatePtr private = buffer->driverPrivate;
@@ -393,6 +400,11 @@ static void I830DRI2DestroyBuffer(DrawablePtr drawable, DRI2Buffer2Ptr buffer)
 		}
 	} else
 		free(buffer);
+}
+
+static void I830DRI2DestroyBuffer(DrawablePtr drawable, DRI2Buffer2Ptr buffer)
+{
+	I830DRI2DestroyBuffer2(NULL, drawable, buffer);
 }
 
 #endif
@@ -1540,8 +1552,15 @@ static const char *dri_driver_name(intel_screen_private *intel)
 			return has_i830_dri() ? "i830" : "i915";
 		else if (INTEL_INFO(intel)->gen < 040)
 			return "i915";
+#ifndef INTEL_USE_LEGACY_DRIVERS
+		else if (INTEL_INFO(intel)->gen < 0100 || INTEL_INFO(intel)->force_crocus_driver)
+			return "crocus";
+		else
+			return "iris";
+#else
 		else
 			return "i965";
+#endif
 	}
 
 	return s;
@@ -1626,6 +1645,12 @@ Bool I830DRI2ScreenInit(ScreenPtr screen)
 	info.driverNames = driverNames;
 	driverNames[0] = info.driverName;
 	driverNames[1] = "va_gl";
+#endif
+
+#if DRI2INFOREC_VERSION >= 9
+	info.version = 9;
+	info.CreateBuffer2 = I830DRI2CreateBuffer2;
+	info.DestroyBuffer2 = I830DRI2DestroyBuffer2;
 #endif
 
 	return DRI2ScreenInit(screen, &info);

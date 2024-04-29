@@ -122,6 +122,8 @@ static const struct intel_device_info intel_broadwell_info = {
 
 static const struct intel_device_info intel_cherryview_info = {
 	.gen = 0101,
+	.prefers_32k_alignment = 1,
+	.force_crocus_driver = 1,
 };
 
 static const struct intel_device_info intel_skylake_info = {
@@ -140,14 +142,17 @@ static const struct intel_device_info intel_kabylake_info = {
 
 static const struct intel_device_info intel_geminilake_info = {
 	.gen = 0113,
+	.prefers_32k_alignment = 1,
 };
 
 static const struct intel_device_info intel_coffeelake_info = {
 	.gen = 0114,
+	.prefers_32k_alignment = 1,
 };
 
 static const struct intel_device_info intel_cannonlake_info = {
 	.gen = 0120,
+	.prefers_32k_alignment = 1,
 };
 
 static const struct intel_device_info intel_icelake_info = {

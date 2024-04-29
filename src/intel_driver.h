@@ -119,6 +119,9 @@ struct intel_device_info {
 
 	/* These iGPUs benefit from having rendering blocks be cache aligned */
 	unsigned int prefers_32k_alignment : 1;
+
+	/* Cherryview is an outlier that isn't supported by the modern Iris driver. */
+	unsigned int force_crocus_driver : 1;
 };
 struct intel_device;
 

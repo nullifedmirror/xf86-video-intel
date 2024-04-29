@@ -1957,7 +1957,7 @@ static int get_gtt_type(int fd)
 	return val;
 }
 
-void kgem_init(struct kgem *kgem, int fd, struct pci_device *dev, unsigned gen)
+void kgem_init(struct kgem *kgem, int fd, struct pci_device *dev, unsigned gen, unsigned int force_crocus_driver)
 {
 	size_t totalram;
 	unsigned half_gpu_max;
@@ -1968,6 +1968,7 @@ void kgem_init(struct kgem *kgem, int fd, struct pci_device *dev, unsigned gen)
 
 	kgem->fd = fd;
 	kgem->gen = gen;
+	kgem->force_crocus_driver = force_crocus_driver;
 
 	kgem->retire = no_retire;
 	kgem->expire = no_expire;

@@ -123,6 +123,7 @@ struct kgem {
 	unsigned wedged;
 	int fd;
 	unsigned gen;
+	unsigned int force_crocus_driver : 1;
 
 	uint32_t unique_id;
 
@@ -252,7 +253,7 @@ struct kgem {
 #define KGEM_EXEC_SIZE(K) (int)(ARRAY_SIZE((K)->exec)-KGEM_EXEC_RESERVED)
 #define KGEM_RELOC_SIZE(K) (int)(ARRAY_SIZE((K)->reloc)-KGEM_RELOC_RESERVED)
 
-void kgem_init(struct kgem *kgem, int fd, struct pci_device *dev, unsigned gen);
+void kgem_init(struct kgem *kgem, int fd, struct pci_device *dev, unsigned gen, unsigned int force_crocus_driver);
 void kgem_reset(struct kgem *kgem);
 
 struct kgem_bo *kgem_create_map(struct kgem *kgem,
