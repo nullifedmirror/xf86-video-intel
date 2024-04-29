@@ -310,9 +310,9 @@ static PixmapPtr sna_dri3_pixmap_from_fds(ScreenPtr screen,
 					 CARD8 bpp,
 					 CARD64 modifier)
 {
-	if (num_fds == 0) {
+	if (num_fd == 0) {
 		return NULL;
-	} else if (num_fds == 1) {
+	} else if (num_fd == 1) {
 		return sna_dri3_pixmap_from_fd(screen, fds[0], width, height, strides[0], depth, bpp);
 	} else {
 		/* TODO */
