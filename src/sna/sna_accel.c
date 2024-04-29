@@ -18251,6 +18251,9 @@ bool sna_accel_init(ScreenPtr screen, struct sna *sna)
 	if (!sna_picture_init(screen))
 		return false;
 
+	/* Kernel enables mitigations for affected generations by default. */
+	sna->render.has_mitigations_active = true;
+
 	backend = no_render_init(sna);
 	if (sna_option_accel_none(sna)) {
 		backend = "disabled";
