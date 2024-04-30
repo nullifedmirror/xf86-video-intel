@@ -1422,7 +1422,7 @@ __sna_dri2_copy_region(struct sna *sna, DrawablePtr draw, RegionPtr region,
 
 static void
 sna_dri2_copy_region2(ScreenPtr screen,
-			 DrawablePtr draw,
+		     DrawablePtr draw,
 		     RegionPtr region,
 		     DRI2BufferPtr dst,
 		     DRI2BufferPtr src)
