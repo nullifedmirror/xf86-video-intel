@@ -1421,7 +1421,8 @@ __sna_dri2_copy_region(struct sna *sna, DrawablePtr draw, RegionPtr region,
 }
 
 static void
-sna_dri2_copy_region(DrawablePtr draw,
+sna_dri2_copy_region2(ScreenPtr screen,
+			 DrawablePtr draw,
 		     RegionPtr region,
 		     DRI2BufferPtr dst,
 		     DRI2BufferPtr src)
@@ -1465,6 +1466,15 @@ sna_dri2_copy_region(DrawablePtr draw,
 	     region_num_rects(region)));
 
 	__sna_dri2_copy_region(sna, draw, region, src, dst, DRI2_DAMAGE);
+}
+
+static void
+sna_dri2_copy_region(DrawablePtr draw,
+		     RegionPtr region,
+		     DRI2BufferPtr dst,
+		     DRI2BufferPtr src)
+{
+	sna_dri2_copy_region2(draw->pScreen, draw, region, dst, src);
 }
 
 inline static uint32_t pipe_select(int pipe)
@@ -1577,7 +1587,7 @@ draw_current_msc(DrawablePtr draw, xf86CrtcPtr crtc, uint64_t msc)
 		}
 		msc -= priv->msc_delta;
 	}
-	return  msc;
+	return msc;
 }
 
 static uint32_t
@@ -3798,6 +3808,7 @@ bool sna_dri2_open(struct sna *sna, ScreenPtr screen)
 	info.version = 9;
 	info.CreateBuffer2 = sna_dri2_create_buffer2;
 	info.DestroyBuffer2 = sna_dri2_destroy_buffer2;
+	info.CopyRegion2 = sna_dri2_copy_region2;
 #endif
 
 #ifndef ASYNC_SWAP_FEATURE_TOO_OLD
