@@ -43,7 +43,7 @@ inline static bool can_switch_to_blt(struct sna *sna,
 				     struct kgem_bo *bo,
 				     unsigned flags)
 {
-	if (bo && bo->tiling == I915_TILING_Y)
+	if (bo && bo->tiling == I915_TILING_Y && !sna->info->prefers_32k_alignment)
 		return false;
 
 	if (PREFER_RENDER < 0 && sna->kgem.ring != KGEM_RENDER)

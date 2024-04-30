@@ -359,21 +359,6 @@ Option \*qZaphodHeads\*q \*q0,2:HDMI1,DP2\*q
 will assign xrandr outputs HDMI1 and DP2 and CRTCs 0 and 2 to this instance of the driver.
 .RE
 .TP
-.BI "Option \*qExperimentalAsyncSwap\*q \*q" boolean \*q
-This option enables very experimental asynchronous swapping, originally a build time option.
-.br
-Known regressions:
-.br
-- DRI2 damage is disabled to mitigate issues
-.br
-- \*qKEEPALIVE\*q duration is increased.
-
-.B This relies on an unreleased DRI2 extension set.
-.IP
-Not supported.
-.br
-SNA only.
-.TP
 
 .BI "Option \*qExperimentalReduceFlushes\*q \*q" boolean \*q
 This option enables a previously broken optimization for flushing.

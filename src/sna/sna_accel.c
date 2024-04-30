@@ -122,7 +122,7 @@
 #define FontSetPrivate(font, idx, data) xfont2_font_set_private(font, idx, data)
 #endif
 
-#if 0
+#if defined(DEBUG_VERIFY_DAMAGE_EXTENTS)
 static void __sna_fallback_flush(DrawablePtr d)
 {
 	PixmapPtr pixmap = get_drawable_pixmap(d);
