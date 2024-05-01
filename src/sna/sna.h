@@ -47,6 +47,8 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define HAS_PIXMAP_SHARING 1
 #endif
 
+#define HAS_PRIME_FLIPPING	(GET_ABI_MAJOR(ABI_VIDEODRV_VERSION) >= 23)
+
 #include <windowstr.h>
 #include <glyphstr.h>
 #include <picturestr.h>
