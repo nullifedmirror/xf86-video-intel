@@ -1119,14 +1119,14 @@ static Bool sna_prime_present_shared_pixmap(PixmapPtr pixmap)
 
 static Bool sna_request_shared_pixmap_notify_damage(PixmapPtr ppix)
 {
-	/* TODO(nullifed) */
-	return FALSE;
+	/* TODO(nullifed): I have no clue how to approach this on SNA, for now pretend that it's sunshine and rainbows to see what could go wrong with NVIDIA 550. */
+	return TRUE;
 }
 
 static Bool sna_stop_flipping_pixmap_tracking(PixmapPtr src, PixmapPtr slave_dst1, PixmapPtr slave_dst2)
 {
 	/* TODO(nullifed) */
-	return FALSE;
+	return TRUE;
 }
 #endif
 
@@ -18265,10 +18265,8 @@ bool sna_accel_init(ScreenPtr screen, struct sna *sna)
 
 #if HAS_PRIME_FLIPPING
 	screen->PresentSharedPixmap = sna_prime_present_shared_pixmap;
-#if HAS_PRIME_FLIPPING_ENABLE_INCOMPLETE
 	screen->RequestSharedPixmapNotifyDamage = sna_request_shared_pixmap_notify_damage;
 	screen->StopFlippingPixmapTracking = sna_stop_flipping_pixmap_tracking;
-#endif
 #endif
 
 	assert(screen->GetWindowPixmap == NULL);
