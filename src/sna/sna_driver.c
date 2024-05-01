@@ -664,8 +664,8 @@ static Bool sna_pre_init(ScrnInfoPtr scrn, int probe)
 	}
 
 	if (!xf86ReturnOptValBool(sna->Options, OPTION_THROTTLE, TRUE)) {
-		xf86DrvMsg(scrn->scrnIndex, X_CONFIG, "Throttling %sabled\n", sna->flags & SNA_NO_THROTTLE ? "dis" : "en");
 		sna->flags |= SNA_NO_THROTTLE;
+		xf86DrvMsg(scrn->scrnIndex, X_CONFIG, "Throttling %sabled\n", sna->flags & SNA_NO_THROTTLE ? "dis" : "en");
 	}
 
 	if (!sna_mode_pre_init(scrn, sna)) {
