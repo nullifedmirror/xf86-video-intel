@@ -268,6 +268,7 @@ struct sna {
 #define SNA_HAS_FLIP		0x10000
 #define SNA_HAS_ASYNC_FLIP	0x20000
 #define SNA_LINEAR_FB		0x40000
+#define SNA_NO_THROTTLE	0x80000
 #define SNA_REPROBE		0x80000000
 
 	unsigned cpu_features;

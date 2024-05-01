@@ -17654,6 +17654,9 @@ static bool sna_scanout_do_flush(struct sna *sna)
 
 static bool sna_accel_do_throttle(struct sna *sna)
 {
+	if (sna->flags & SNA_NO_THROTTLE)
+		return false;
+
 	if (sna->timer_active & (1<<(THROTTLE_TIMER))) {
 		int32_t delta = sna->timer_expire[THROTTLE_TIMER] - TIME;
 		if (delta <= 3) {

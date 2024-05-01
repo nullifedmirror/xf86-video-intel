@@ -31,6 +31,7 @@ const OptionInfoRec intel_options[] = {
 	{OPTION_XVMC,		"XvMC",		OPTV_BOOLEAN,	{0},	1},
 #endif
 #ifdef USE_SNA
+	{OPTION_THROTTLE,	"Throttle",	OPTV_BOOLEAN,	{0},	1},
 	{OPTION_ZAPHOD,		"ZaphodHeads",	OPTV_STRING,	{0},	0},
 	{OPTION_VIRTUAL,	"VirtualHeads",	OPTV_INTEGER,	{0},	0},
 	{OPTION_TEAR_FREE,	"TearFree",	OPTV_BOOLEAN,	{0},	0},

@@ -663,6 +663,11 @@ static Bool sna_pre_init(ScrnInfoPtr scrn, int probe)
 		sna->flags |= SNA_FORCE_SHADOW;
 	}
 
+	if (xf86ReturnOptValBool(sna->Options, OPTION_THROTTLE, TRUE)) {
+		xf86DrvMsg(scrn->scrnIndex, X_CONFIG, "Throttling %sabled\n", sna->flags & SNA_NO_THROTTLE ? "dis" : "en");
+		sna->flags |= SNA_NO_THROTTLE;
+	}
+
 	if (!sna_mode_pre_init(scrn, sna)) {
 		xf86DrvMsg(scrn->scrnIndex, X_ERROR,
 			   "No outputs and no modes.\n");

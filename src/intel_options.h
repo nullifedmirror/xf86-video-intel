@@ -35,6 +35,7 @@ enum intel_options {
 #define INTEL_XVMC 1
 #endif
 #ifdef USE_SNA
+	OPTION_THROTTLE,
 	OPTION_ZAPHOD,
 	OPTION_VIRTUAL,
 	OPTION_TEAR_FREE,
