@@ -18348,12 +18348,12 @@ bool sna_accel_init(ScreenPtr screen, struct sna *sna)
 
 #if HAS_PRIME_FLIPPING_SYNC
 	if (dixPrivateKeyRegistered(rrPrivKey)) {
-        rrScrPrivPtr pScrPriv = rrGetScrPriv(screen);
+		rrScrPrivPtr pScrPriv = rrGetScrPriv(screen);
 
-        pScrPriv->rrEnableSharedPixmapFlipping = sna_enable_shared_pixmap_flipping;
-        pScrPriv->rrDisableSharedPixmapFlipping = sna_disable_shared_pixmap_flipping;
-        pScrPriv->rrStartFlippingPixmapTracking = sna_start_flipping_pixmap_tracking;
-    }
+		pScrPriv->rrEnableSharedPixmapFlipping = sna_enable_shared_pixmap_flipping;
+		pScrPriv->rrDisableSharedPixmapFlipping = sna_disable_shared_pixmap_flipping;
+		pScrPriv->rrStartFlippingPixmapTracking = sna_start_flipping_pixmap_tracking;
+	}
 #endif
 #endif
 
