@@ -469,12 +469,12 @@ struct sna {
 };
 
 #if HAS_PRIME_FLIPPING
-typedef struct
+typedef struct _sna_pixmap_priv
 {
 	Bool notify_on_damage;
 } sna_pixmap_priv_rec, *sna_pixmap_priv;
 
-#define sna_get_pixmap_priv(sna, p) ((sna_pixmap_priv_rec)dixGetPrivateAddr(&(p)->devPrivates, &(sna)->pixmapPrivateKeyRec))
+#define sna_get_pixmap_priv(sna, p) ((sna_pixmap_priv)dixGetPrivateAddr(&(p)->devPrivates, &(sna)->pixmapPrivateKeyRec))
 #endif
 
 bool sna_mode_pre_init(ScrnInfoPtr scrn, struct sna *sna);
