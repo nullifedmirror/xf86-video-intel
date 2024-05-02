@@ -1122,7 +1122,18 @@ static Bool sna_prime_present_shared_pixmap(PixmapPtr secondary_dst)
 
 static Bool sna_request_shared_pixmap_notify_damage(PixmapPtr ppix)
 {
-	/* TODO(nullifed): I have no clue how to approach this on SNA, for now pretend that it's sunshine and rainbows to see what could go wrong with NVIDIA 550. */
+	ScreenPtr screen = ppix->drawable.pScreen;
+	struct sna *sna = to_sna_from_screen(screen);
+	if (sna == NULL)
+		return FALSE;
+
+	struct sna_pixmap *priv = sna_pixmap(pixmap);
+	if (priv == NULL)
+		return FALSE;
+
+	sna_pixmap_priv ppriv = sna_get_pixmap_priv(sna, ppix->primary_pixmap);
+	ppriv->notify_on_damage = TRUE;
+
 	return TRUE;
 }
 
@@ -1153,11 +1164,11 @@ sna_enable_shared_pixmap_flipping(RRCrtcPtr crtc, PixmapPtr front, PixmapPtr bac
 	if (!xf86Crtc)
         return FALSE;
 
-    if (!has_page_flipping(sna))
-    	return FALSE;
+	if (!has_page_flipping(sna))
+		return FALSE;
 
-    /* TODO(nullifed) */
-    return TRUE;
+	/* TODO(nullifed) */
+	return TRUE;
 }
 
 static Bool
@@ -17890,6 +17901,14 @@ fallback:
 		DamageRegionProcessPending(&PixmapDirtyDst(dirty)->drawable);
 skip:
 		RegionUninit(&region);
+
+		sna_pixmap_priv ppriv = sna_get_pixmap_priv(sna, ent->secondary_dst->primary_pixmap);
+		if (ppriv->notify_on_damage) {
+			ppriv->notify_on_damage = FALSE;
+
+			ent->secondary_dst->drawable.pScreen->SharedPixmapNotifyDamage(ent->secondary_dst);
+		}
+
 		DamageEmpty(dirty->damage);
 	}
 #endif

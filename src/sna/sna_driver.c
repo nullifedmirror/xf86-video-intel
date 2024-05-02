@@ -1198,6 +1198,10 @@ sna_screen_init(SCREEN_INIT_ARGS_DECL)
 		}
 	}
 
+	if (!dixRegisterScreenSpecificPrivateKey(screen, sna->pixmapPrivateKeyRec, PRIVATE_PIXMAP, sizeof(sna_pixmap_priv_rec))) {
+		return FALSE;
+    }
+
 	assert(screen->CloseScreen == NULL);
 	screen->CloseScreen = sna_late_close_screen;
 	if (!sna_accel_init(screen, sna)) {
