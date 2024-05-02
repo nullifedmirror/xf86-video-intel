@@ -1133,10 +1133,22 @@ static Bool sna_request_shared_pixmap_notify_damage(PixmapPtr ppix)
 	return TRUE;
 }
 
-static Bool sna_stop_flipping_pixmap_tracking(PixmapPtr src, PixmapPtr slave_dst1, PixmapPtr slave_dst2)
+static Bool sna_stop_flipping_pixmap_tracking(DrawablePtr src, PixmapPtr secondary_dst1, PixmapPtr secondary_dst2)
 {
-	/* TODO(nullifed) */
-	return TRUE;
+	ScreenPtr screen = ppix->drawable.pScreen;
+	struct sna *sna = to_sna_from_screen(screen);
+	if (sna == NULL)
+		return FALSE;
+
+	sna_pixmap_priv ppriv1 = sna_get_pixmap_priv(sna, secondary_dst1->primary_pixmap),
+					ppriv2 = sna_get_pixmap_priv(sna, secondary_dst2->primary_pixmap);
+
+	Bool ret = TRUE;
+
+	ret &= PixmapStopDirtyTracking(src, secondary_dst1);
+	ret &= PixmapStopDirtyTracking(src, secondary_dst2);
+
+	return ret;
 }
 
 #if HAS_PRIME_FLIPPING_SYNC
