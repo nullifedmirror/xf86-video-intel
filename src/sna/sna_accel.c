@@ -1107,9 +1107,12 @@ static unsigned small_copy(const RegionRec *region)
 }
 
 #if HAS_PRIME_FLIPPING
-static Bool sna_prime_present_shared_pixmap(PixmapPtr pixmap)
+static Bool sna_prime_present_shared_pixmap(PixmapPtr secondary_dst)
 {
+	PixmapPtr pixmap = secondary_dst->primary_pixmap;
 	struct sna_pixmap *priv = sna_pixmap(pixmap);
+	if (priv == NULL)
+		return FALSE;
 
 	sna_damage_all(&priv->gpu_damage, pixmap);
 	sna_damage_all(&priv->cpu_damage, pixmap);
@@ -1128,6 +1131,52 @@ static Bool sna_stop_flipping_pixmap_tracking(PixmapPtr src, PixmapPtr slave_dst
 	/* TODO(nullifed) */
 	return TRUE;
 }
+
+#if HAS_PRIME_FLIPPING_SYNC
+static Bool has_page_flipping(struct sna *sna)
+{
+	static int page_flip_enabled = -1;
+	if (page_flip_enabled == -1) {
+		page_flip_enabled = xf86ReturnOptValBool(sna->Options, OPTION_PAGEFLIP, TRUE);
+	}
+
+	return page_flip_enabled;
+}
+
+static Bool
+sna_enable_shared_pixmap_flipping(RRCrtcPtr crtc, PixmapPtr front, PixmapPtr back)
+{
+	ScreenPtr screen = crtc->pScreen;
+	struct sna *sna = to_sna_from_screen(screen);
+	xf86CrtcPtr xf86Crtc = crtc->devPrivate;
+
+	if (!xf86Crtc)
+        return FALSE;
+
+    if (!has_page_flipping(sna))
+    	return FALSE;
+
+    /* TODO(nullifed) */
+    return TRUE;
+}
+
+static Bool
+sna_disable_shared_pixmap_flipping(RRCrtcPtr crtc)
+{
+	/* TODO(nullifed) */
+	return TRUE;
+}
+
+static Bool
+sna_start_flipping_pixmap_tracking(RRCrtcPtr crtc, DrawablePtr src,
+                              PixmapPtr secondary_dst1, PixmapPtr secondary_dst2,
+                              int x, int y, int dst_x, int dst_y,
+                              Rotation rotation)
+{
+	/* TODO(nullifed) */
+	return TRUE;
+}
+#endif
 #endif
 
 #ifdef CREATE_PIXMAP_USAGE_SHARED
@@ -18267,6 +18316,16 @@ bool sna_accel_init(ScreenPtr screen, struct sna *sna)
 	screen->PresentSharedPixmap = sna_prime_present_shared_pixmap;
 	screen->RequestSharedPixmapNotifyDamage = sna_request_shared_pixmap_notify_damage;
 	screen->StopFlippingPixmapTracking = sna_stop_flipping_pixmap_tracking;
+
+#if HAS_PRIME_FLIPPING_SYNC
+	if (dixPrivateKeyRegistered(rrPrivKey)) {
+        rrScrPrivPtr pScrPriv = rrGetScrPriv(screen);
+
+        pScrPriv->rrEnableSharedPixmapFlipping = sna_enable_shared_pixmap_flipping;
+        pScrPriv->rrDisableSharedPixmapFlipping = sna_disable_shared_pixmap_flipping;
+        pScrPriv->rrStartFlippingPixmapTracking = sna_start_flipping_pixmap_tracking;
+    }
+#endif
 #endif
 
 	assert(screen->GetWindowPixmap == NULL);
