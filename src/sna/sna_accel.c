@@ -17899,11 +17899,11 @@ skip:
 		RegionUninit(&region);
 
 #if HAS_PRIME_FLIPPING
-		sna_pixmap_priv ppriv = sna_get_pixmap_priv(sna, ent->secondary_dst->primary_pixmap);
+		sna_pixmap_priv ppriv = sna_get_pixmap_priv(sna, dirty->secondary_dst->primary_pixmap);
 		if (ppriv->notify_on_damage) {
 			ppriv->notify_on_damage = FALSE;
 
-			ent->secondary_dst->drawable.pScreen->SharedPixmapNotifyDamage(ent->secondary_dst);
+			dirty->secondary_dst->drawable.pScreen->SharedPixmapNotifyDamage(dirty->secondary_dst);
 		}
 #endif
 
