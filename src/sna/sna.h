@@ -252,7 +252,9 @@ struct sna {
 	struct kgem kgem;
 
 	ScrnInfoPtr scrn;
+#if HAS_PRIME_FLIPPING
 	DevPrivateKeyRec pixmapPrivateKeyRec;
+#endif
 	struct intel_device *dev;
 
 	unsigned flags;
@@ -472,7 +474,7 @@ typedef struct
 	Bool notify_on_damage;
 } sna_pixmap_priv_rec, *sna_pixmap_priv;
 
-#define sna_get_pixmap_priv(sna, p) ((sna_pixmap_priv_ptr)dixGetPrivateAddr(&(p)->devPrivates, &(sna)->pixmapPrivateKeyRec))
+#define sna_get_pixmap_priv(sna, p) ((sna_pixmap_priv_rec)dixGetPrivateAddr(&(p)->devPrivates, &(sna)->pixmapPrivateKeyRec))
 #endif
 
 bool sna_mode_pre_init(ScrnInfoPtr scrn, struct sna *sna);

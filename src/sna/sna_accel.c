@@ -1127,10 +1127,6 @@ static Bool sna_request_shared_pixmap_notify_damage(PixmapPtr ppix)
 	if (sna == NULL)
 		return FALSE;
 
-	struct sna_pixmap *priv = sna_pixmap(pixmap);
-	if (priv == NULL)
-		return FALSE;
-
 	sna_pixmap_priv ppriv = sna_get_pixmap_priv(sna, ppix->primary_pixmap);
 	ppriv->notify_on_damage = TRUE;
 
@@ -17902,12 +17898,14 @@ fallback:
 skip:
 		RegionUninit(&region);
 
+#if HAS_PRIME_FLIPPING
 		sna_pixmap_priv ppriv = sna_get_pixmap_priv(sna, ent->secondary_dst->primary_pixmap);
 		if (ppriv->notify_on_damage) {
 			ppriv->notify_on_damage = FALSE;
 
 			ent->secondary_dst->drawable.pScreen->SharedPixmapNotifyDamage(ent->secondary_dst);
 		}
+#endif
 
 		DamageEmpty(dirty->damage);
 	}
