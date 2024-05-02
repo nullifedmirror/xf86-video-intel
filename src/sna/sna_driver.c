@@ -1199,7 +1199,7 @@ sna_screen_init(SCREEN_INIT_ARGS_DECL)
 	}
 
 #if HAS_PRIME_FLIPPING
-	if (!dixRegisterScreenSpecificPrivateKey(screen, sna->pixmapPrivateKeyRec, PRIVATE_PIXMAP, sizeof(sna_pixmap_priv_rec))) {
+	if (!dixRegisterScreenSpecificPrivateKey(screen, &sna->pixmapPrivateKeyRec, PRIVATE_PIXMAP, sizeof(sna_pixmap_priv_rec))) {
 		return FALSE;
     }
 #endif
