@@ -1135,13 +1135,13 @@ static Bool sna_request_shared_pixmap_notify_damage(PixmapPtr ppix)
 
 static Bool sna_stop_flipping_pixmap_tracking(DrawablePtr src, PixmapPtr secondary_dst1, PixmapPtr secondary_dst2)
 {
-	ScreenPtr screen = ppix->drawable.pScreen;
+	ScreenPtr screen = src->pScreen;
 	struct sna *sna = to_sna_from_screen(screen);
 	if (sna == NULL)
 		return FALSE;
 
 	sna_pixmap_priv ppriv1 = sna_get_pixmap_priv(sna, secondary_dst1->primary_pixmap),
-					ppriv2 = sna_get_pixmap_priv(sna, secondary_dst2->primary_pixmap);
+			ppriv2 = sna_get_pixmap_priv(sna, secondary_dst2->primary_pixmap);
 
 	Bool ret = TRUE;
 
