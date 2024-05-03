@@ -410,8 +410,9 @@ static void I830DRI2DestroyBuffer(DrawablePtr drawable, DRI2Buffer2Ptr buffer)
 #endif
 
 static void
-I830DRI2CopyRegion(DrawablePtr drawable, RegionPtr pRegion,
-		   DRI2BufferPtr destBuffer, DRI2BufferPtr sourceBuffer)
+I830DRI2CopyRegion2(ScreenPtr screen,
+	DrawablePtr drawable, RegionPtr pRegion,
+	DRI2BufferPtr destBuffer, DRI2BufferPtr sourceBuffer)
 {
 	I830DRI2BufferPrivatePtr srcPrivate = sourceBuffer->driverPrivate;
 	I830DRI2BufferPrivatePtr dstPrivate = destBuffer->driverPrivate;
@@ -531,6 +532,13 @@ I830DRI2CopyRegion(DrawablePtr drawable, RegionPtr pRegion,
 	 * modesetting/dpms operations on the pipe.
 	 */
 	intel_batch_submit(scrn);
+}
+
+static void
+I830DRI2CopyRegion(DrawablePtr drawable, RegionPtr pRegion,
+		   DRI2BufferPtr destBuffer, DRI2BufferPtr sourceBuffer)
+{
+	I830DRI2CopyRegion2(drawable->pScreen, drawable, pRegion, destBuffer, sourceBuffer);
 }
 
 static void
@@ -1651,6 +1659,7 @@ Bool I830DRI2ScreenInit(ScreenPtr screen)
 	info.version = 9;
 	info.CreateBuffer2 = I830DRI2CreateBuffer2;
 	info.DestroyBuffer2 = I830DRI2DestroyBuffer2;
+	info.CopyRegion2 = I830DRI2CopyRegion2;
 #endif
 
 	return DRI2ScreenInit(screen, &info);
