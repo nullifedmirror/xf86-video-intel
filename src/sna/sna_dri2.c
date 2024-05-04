@@ -465,8 +465,6 @@ static bool swap_limit(DrawablePtr draw, int limit)
 }
 #endif
 
-#define COLOR_PREFER_TILING_Y 0
-
 /* Prefer to enable TILING_Y if this buffer will never be a
  * candidate for pageflipping
  */
@@ -477,7 +475,7 @@ static uint32_t color_tiling(struct sna *sna, DrawablePtr draw)
 	if (!sna->kgem.can_fence)
 		return I915_TILING_NONE;
 
-	if (COLOR_PREFER_TILING_Y &&
+	if (sna->info->prefers_32k_alignment &&
 	    (draw->width  != sna->front->drawable.width ||
 	     draw->height != sna->front->drawable.height))
 		tiling = I915_TILING_Y;
