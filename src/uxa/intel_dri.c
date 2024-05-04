@@ -416,7 +416,6 @@ I830DRI2CopyRegion2(ScreenPtr screen,
 {
 	I830DRI2BufferPrivatePtr srcPrivate = sourceBuffer->driverPrivate;
 	I830DRI2BufferPrivatePtr dstPrivate = destBuffer->driverPrivate;
-	ScreenPtr screen = drawable->pScreen;
 	ScrnInfoPtr scrn = xf86ScreenToScrn(screen);
 	intel_screen_private *intel = intel_get_screen_private(scrn);
 	DrawablePtr src = (sourceBuffer->attachment == DRI2BufferFrontLeft)
