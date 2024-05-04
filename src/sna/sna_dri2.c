@@ -157,7 +157,7 @@ static void sna_dri2_flip_event(struct sna_dri2_event *flip);
 inline static DRI2BufferPtr dri2_window_get_front(WindowPtr win);
 
 static struct kgem_bo *
-__sna_dri2_copy_region(struct sna *sna, DrawablePtr draw, RegionPtr region,
+__sna_dri2_copy_region(struct sna *sna, ScreenPtr screen, DrawablePtr draw, RegionPtr region,
 		      DRI2BufferPtr src, DRI2BufferPtr dst,
 		      unsigned flags);
 
@@ -166,7 +166,7 @@ __sna_dri2_copy_event(struct sna_dri2_event *info, unsigned flags)
 {
 	DBG(("%s: flags = %x\n", __FUNCTION__, flags));
 	assert(info->front != info->back);
-	info->bo = __sna_dri2_copy_region(info->sna, info->draw, NULL,
+	info->bo = __sna_dri2_copy_region(info->sna, info->draw->pScreen, info->draw, NULL,
 					  info->back, info->front,
 					  flags);
 	info->front->flags = info->back->flags;
@@ -1159,7 +1159,7 @@ static bool is_front(int attachment)
 #define DRI2_DAMAGE 0x2
 #define DRI2_BO 0x4
 static struct kgem_bo *
-__sna_dri2_copy_region(struct sna *sna, DrawablePtr draw, RegionPtr region,
+__sna_dri2_copy_region(struct sna *sna, ScreenPtr screen, DrawablePtr draw, RegionPtr region,
 		      DRI2BufferPtr src, DRI2BufferPtr dst,
 		      unsigned flags)
 {
@@ -1251,7 +1251,7 @@ __sna_dri2_copy_region(struct sna *sna, DrawablePtr draw, RegionPtr region,
 	} else
 		flags &= ~DRI2_SYNC;
 
-	scratch.pScreen = draw->pScreen;
+	scratch.pScreen = screen;
 	scratch.x = scratch.y = 0;
 	scratch.width = scratch.height = 0;
 	scratch.depth = draw->depth;
@@ -1463,7 +1463,7 @@ sna_dri2_copy_region2(ScreenPtr screen,
 	     region->extents.x2, region->extents.y2,
 	     region_num_rects(region)));
 
-	__sna_dri2_copy_region(sna, draw, region, src, dst, DRI2_DAMAGE);
+	__sna_dri2_copy_region(sna, screen, draw, region, src, dst, DRI2_DAMAGE);
 }
 
 static void
@@ -3466,7 +3466,7 @@ blit:
 	if (can_xchg(sna, draw, front, back)) {
 		sna_dri2_xchg(draw, front, back);
 	} else {
-		__sna_dri2_copy_region(sna, draw, NULL, back, front, 0);
+		__sna_dri2_copy_region(sna, draw->pScreen, draw, NULL, back, front, 0);
 		front->flags = back->flags;
 		type = DRI2_BLIT_COMPLETE;
 	}
