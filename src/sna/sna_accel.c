@@ -1183,7 +1183,6 @@ static void
 sna_disable_shared_pixmap_flipping(RRCrtcPtr crtc)
 {
 	/* TODO(nullifed) */
-	return TRUE;
 }
 
 static Bool
