@@ -379,11 +379,11 @@ I830DRI2CreateBuffer2(ScreenPtr screen, DrawablePtr drawable,
 	return buffer;
 }
 
-static void I830DRI2CreateBuffer(DrawablePtr draw,
+static DRI2BufferPtr I830DRI2CreateBuffer(DrawablePtr draw,
 		       unsigned int attachment,
 		       unsigned int format) {
 	ScreenPtr screen = draw->pScreen;
-	I830DRI2CreateBuffer2(screen, draw, attachment, format);
+	return I830DRI2CreateBuffer2(screen, draw, attachment, format);
 }
 
 
