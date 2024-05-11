@@ -117,8 +117,10 @@ struct xf86_platform_device;
 struct intel_device_info {
 	int gen;
 
-	/* These iGPUs benefit from having rendering blocks be cache aligned */
-	unsigned int prefers_32k_alignment : 1;
+	/* prefers_32k_alignment was removed since I have no logical clue on how to implement Software Tiling in Intel hardware. */
+
+	/* These iGPUs should work fine with Y-tiling (Skylake and newer can even do scan-out) */
+	unsigned int prefer_y_tiling : 1;
 
 	/* Cherryview is an outlier that isn't supported by the modern Iris driver. */
 	unsigned int force_crocus_driver : 1;

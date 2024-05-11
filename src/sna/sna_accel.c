@@ -637,7 +637,7 @@ static inline uint32_t default_tiling(struct sna *sna, PixmapPtr pixmap)
 	return I915_TILING_Y;
 #else
 	/* Use Y tiling only on GPUs that can benefit from it. */
-	if (sna->info->prefers_32k_alignment) {
+	if (sna->info->prefer_y_tiling) {
 		return I915_TILING_Y;
 	}
 

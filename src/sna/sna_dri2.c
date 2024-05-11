@@ -475,7 +475,7 @@ static uint32_t color_tiling(struct sna *sna, DrawablePtr draw)
 	if (!sna->kgem.can_fence)
 		return I915_TILING_NONE;
 
-	if (sna->info->prefers_32k_alignment &&
+	if (sna->info->prefer_y_tiling &&
 	    (draw->width  != sna->front->drawable.width ||
 	     draw->height != sna->front->drawable.height))
 		tiling = I915_TILING_Y;

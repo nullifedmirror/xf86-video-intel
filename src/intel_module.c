@@ -104,33 +104,33 @@ static const struct intel_device_info intel_sandybridge_info = {
 
 static const struct intel_device_info intel_ivybridge_info = {
 	.gen = 070,
-	.prefers_32k_alignment = 1,
+	.prefer_y_tiling = 1,
 };
 
 static const struct intel_device_info intel_valleyview_info = {
 	.gen = 071,
-	.prefers_32k_alignment = 1,
+	.prefer_y_tiling = 1,
 };
 
 static const struct intel_device_info intel_haswell_info = {
 	.gen = 075,
-	.prefers_32k_alignment = 1,
+	.prefer_y_tiling = 1,
 };
 
 static const struct intel_device_info intel_broadwell_info = {
 	.gen = 0100,
-	.prefers_32k_alignment = 1,
+	.prefer_y_tiling = 1,
 };
 
 static const struct intel_device_info intel_cherryview_info = {
 	.gen = 0101,
-	.prefers_32k_alignment = 1,
+	.prefer_y_tiling = 1,
 	.force_crocus_driver = 1,
 };
 
 static const struct intel_device_info intel_skylake_info = {
 	.gen = 0110,
-	.prefers_32k_alignment = 1,
+	.prefer_y_tiling = 1,
 };
 
 static const struct intel_device_info intel_broxton_info = {
@@ -139,22 +139,22 @@ static const struct intel_device_info intel_broxton_info = {
 
 static const struct intel_device_info intel_kabylake_info = {
 	.gen = 0112,
-	.prefers_32k_alignment = 1,
+	.prefer_y_tiling = 1,
 };
 
 static const struct intel_device_info intel_geminilake_info = {
 	.gen = 0113,
-	.prefers_32k_alignment = 1,
+	.prefer_y_tiling = 1,
 };
 
 static const struct intel_device_info intel_coffeelake_info = {
 	.gen = 0114,
-	.prefers_32k_alignment = 1,
+	.prefer_y_tiling = 1,
 };
 
 static const struct intel_device_info intel_cannonlake_info = {
 	.gen = 0120,
-	.prefers_32k_alignment = 1,
+	.prefer_y_tiling = 1,
 };
 
 static const struct intel_device_info intel_icelake_info = {
