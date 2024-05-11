@@ -316,7 +316,7 @@ static PixmapPtr sna_dri3_pixmap_from_fds(ScreenPtr screen,
 		return sna_dri3_pixmap_from_fd(screen, fds[0], width, height, strides[0], depth, bpp);
 	} else {
 		/* TODO */
-		return BadImplementation;
+		return NULL;
 	}
 }
 
