@@ -1179,7 +1179,7 @@ sna_enable_shared_pixmap_flipping(RRCrtcPtr crtc, PixmapPtr front, PixmapPtr bac
 	return TRUE;
 }
 
-static Bool
+static void
 sna_disable_shared_pixmap_flipping(RRCrtcPtr crtc)
 {
 	/* TODO(nullifed) */
