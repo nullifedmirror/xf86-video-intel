@@ -2775,7 +2775,7 @@ out_shadow:
 							region.extents.y2,
 							scrn->bitsPerPixel,
 							kgem_choose_tiling(&sna->kgem,
-									   sna->info->prefer_y_tiling ? I915_TILING_Y : I915_TILING_X,
+									   prefer_y_tiling(sna) ? I915_TILING_Y : I915_TILING_X,
 									   region.extents.x2,
 									   region.extents.y2,
 									   sna->scrn->bitsPerPixel),

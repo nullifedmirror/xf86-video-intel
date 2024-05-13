@@ -373,6 +373,17 @@ Default: Disabled.
 SNA only.
 .TP
 
+.BI "Option \*qPreferYTiling\*q \*q" boolean \*q
+This option tells SNA to prefer using Y-tiling mode, which is faster than typical X-tiling mode on Intel hardware.
+.br
+Ivy Bridge and newer can use this feature typically without issues, with Skylake being able to directly scan-out Y-tiles.
+
+.IP
+Default: Enabled on qualifiying hardware.
+.br
+SNA only.
+.TP
+
 .SH OUTPUT CONFIGURATION
 On 830M and better chipsets, the driver supports runtime configuration of
 detected outputs.  You can use the

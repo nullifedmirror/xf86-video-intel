@@ -38,6 +38,7 @@ const OptionInfoRec intel_options[] = {
 	{OPTION_CRTC_PIXMAPS,	"PerCrtcPixmaps", OPTV_BOOLEAN,	{0},	0},
 	{OPTION_ASYNC_SWAP,	"ExperimentalAsyncSwap", OPTV_BOOLEAN, {0}, 0},
 	{OPTION_REDUCE_FLUSHES, "ExperimentalReduceFlushes", OPTV_BOOLEAN, {0}, 0},
+	{OPTION_PREFER_Y_TILING, "PreferYTiling", OPTV_BOOLEAN, {0}, 1},
 #endif
 #ifdef USE_UXA
 	{OPTION_FALLBACKDEBUG,	"FallbackDebug",OPTV_BOOLEAN,	{0},	0},

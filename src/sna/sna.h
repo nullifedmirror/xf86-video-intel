@@ -1437,4 +1437,18 @@ static inline uint32_t sna_br13_color_depth(int bpp)
 	}
 }
 
+static inline bool prefer_y_tiling(struct sna *sna) {
+	static int should_prefer_y_tiling = -1;
+
+	if (should_prefer_y_tiling == -1) {
+		if (!sna->info->prefer_y_tiling) {
+			should_prefer_y_tiling = 0;
+		} else {
+			should_prefer_y_tiling = xf86ReturnOptValBool(sna->Options, OPTION_PREFER_Y_TILING, TRUE);
+		}
+	}
+
+	return should_prefer_y_tiling;
+}
+
 #endif /* _SNA_H */
