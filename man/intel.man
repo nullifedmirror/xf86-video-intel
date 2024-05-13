@@ -379,7 +379,7 @@ This option tells SNA to prefer using Y-tiling mode, which is faster than typica
 Ivy Bridge and newer can use this feature typically without issues, with Skylake being able to directly scan-out Y-tiles.
 
 .IP
-Default: Enabled on qualifiying hardware.
+Default: Enabled on qualifying hardware.
 .br
 SNA only.
 .TP
