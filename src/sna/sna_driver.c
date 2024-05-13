@@ -1129,6 +1129,12 @@ sna_mode_init(struct sna *sna, ScreenPtr screen)
 		sna->mode.rrGetInfo = rp->rrGetInfo;
 		rp->rrGetInfo = sna_randr_getinfo;
 
+#if HAS_PRIME_FLIPPING_SYNC
+		rp->rrEnableSharedPixmapFlipping = sna_enable_shared_pixmap_flipping;
+		rp->rrDisableSharedPixmapFlipping = sna_disable_shared_pixmap_flipping;
+		rp->rrStartFlippingPixmapTracking = sna_start_flipping_pixmap_tracking;
+#endif
+
 		/* Simulate a hotplug event on wakeup to force a RR probe */
 		TimerSet(NULL, 0, COLDPLUG_DELAY_MS, sna_mode_coldplug, sna);
 	}

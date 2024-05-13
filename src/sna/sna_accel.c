@@ -18344,16 +18344,6 @@ bool sna_accel_init(ScreenPtr screen, struct sna *sna)
 	screen->PresentSharedPixmap = sna_prime_present_shared_pixmap;
 	screen->RequestSharedPixmapNotifyDamage = sna_request_shared_pixmap_notify_damage;
 	screen->StopFlippingPixmapTracking = sna_stop_flipping_pixmap_tracking;
-
-#if HAS_PRIME_FLIPPING_SYNC
-	if (dixPrivateKeyRegistered(rrPrivKey)) {
-		rrScrPrivPtr pScrPriv = rrGetScrPriv(screen);
-
-		pScrPriv->rrEnableSharedPixmapFlipping = sna_enable_shared_pixmap_flipping;
-		pScrPriv->rrDisableSharedPixmapFlipping = sna_disable_shared_pixmap_flipping;
-		pScrPriv->rrStartFlippingPixmapTracking = sna_start_flipping_pixmap_tracking;
-	}
-#endif
 #endif
 
 	assert(screen->GetWindowPixmap == NULL);
