@@ -1150,51 +1150,6 @@ static Bool sna_stop_flipping_pixmap_tracking(DrawablePtr src, PixmapPtr seconda
 
 	return ret;
 }
-
-#if HAS_PRIME_FLIPPING_SYNC
-static Bool has_page_flipping(struct sna *sna)
-{
-	static int page_flip_enabled = -1;
-	if (page_flip_enabled == -1) {
-		page_flip_enabled = xf86ReturnOptValBool(sna->Options, OPTION_PAGEFLIP, TRUE);
-	}
-
-	return page_flip_enabled;
-}
-
-static Bool
-sna_enable_shared_pixmap_flipping(RRCrtcPtr crtc, PixmapPtr front, PixmapPtr back)
-{
-	ScreenPtr screen = crtc->pScreen;
-	struct sna *sna = to_sna_from_screen(screen);
-	xf86CrtcPtr xf86Crtc = crtc->devPrivate;
-
-	if (!xf86Crtc)
-        return FALSE;
-
-	if (!has_page_flipping(sna))
-		return FALSE;
-
-	/* TODO(nullifed) */
-	return TRUE;
-}
-
-static void
-sna_disable_shared_pixmap_flipping(RRCrtcPtr crtc)
-{
-	/* TODO(nullifed) */
-}
-
-static Bool
-sna_start_flipping_pixmap_tracking(RRCrtcPtr crtc, DrawablePtr src,
-                              PixmapPtr secondary_dst1, PixmapPtr secondary_dst2,
-                              int x, int y, int dst_x, int dst_y,
-                              Rotation rotation)
-{
-	/* TODO(nullifed) */
-	return TRUE;
-}
-#endif
 #endif
 
 #ifdef CREATE_PIXMAP_USAGE_SHARED
