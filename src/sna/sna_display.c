@@ -7278,15 +7278,15 @@ retry_flip:
 		if (drmIoctl(sna->kgem.fd, DRM_IOCTL_MODE_PAGE_FLIP, &arg)) {
 			/*
 			 * Intel introduced asynchronous page-flipping to their hardware late 2022.
-			 * This only works well if the GPU is your primary and only GPU, PRIME and NVIDIA break this.
+			 * This only works well if the GPU is your primary and only GPU, PRIME breaks this.
 			 *
-			 * Try once more synchronously to workaround potential hangs that otherwise occur.
+			 * Try once more (synchronously) to workaround potential hangs that otherwise occur.
 			 *
-			 * Avoid printing to Xorg log as this will happen often due to Intel stupidity.
+			 * Avoid printing to Xorg log as this will happen often.
 			 */
 			if (errno == EINVAL && async) {
 				DBG(("%s: pageflip failed with err=%d, attempting a synchronous fallback...\n", __FUNCTION__, errno));
-				arg.flags = DRM_MODE_PAGE_FLIP_EVENT;
+				arg.flags ^= DRM_MODE_PAGE_FLIP_ASYNC;
 				async = false;
 
 				goto retry_flip;
@@ -8276,6 +8276,16 @@ xf86CrtcPtr sna_primary_crtc(struct sna *sna)
 }
 
 #define MI_LOAD_REGISTER_IMM			(0x22<<23)
+
+static bool sna_emit_wait_for_scanline_skl(struct sna *sna,
+					   xf86CrtcPtr crtc,
+					   int pipe, int y1, int y2,
+					   bool full_height)
+{
+	/* TODO(nullifed) */
+	/* SKL+ should be using FORCEWAKE_ACK_RENDER_GEN9 instead of FORCEWAKE_MT. */
+	return false;
+}
 
 static bool sna_emit_wait_for_scanline_hsw(struct sna *sna,
 					   xf86CrtcPtr crtc,
