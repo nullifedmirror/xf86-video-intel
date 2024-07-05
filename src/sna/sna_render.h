@@ -294,6 +294,7 @@ struct sna_render {
 #define COPY_NO_OVERLAP 0x4
 #define COPY_SMALL 0x8
 #define COPY_DRI 0x10
+#define COPY_AVOID_BLT 0x20
 
 	bool (*copy)(struct sna *sna, uint8_t alu,
 		     PixmapPtr src, struct kgem_bo *src_bo,

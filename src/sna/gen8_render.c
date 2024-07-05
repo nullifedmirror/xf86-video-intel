@@ -2793,6 +2793,9 @@ prefer_blt_copy(struct sna *sna,
 {
 	assert((flags & COPY_SYNC) == 0);
 
+	if (flags & COPY_AVOID_BLT)
+		return false;
+
 	if (untiled_tlb_miss(src_bo) ||
 	    untiled_tlb_miss(dst_bo)) {
 		DBG(("%s: TLB miss -> blt\n", __func__));

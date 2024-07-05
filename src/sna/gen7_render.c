@@ -2959,6 +2959,9 @@ prefer_blt_copy(struct sna *sna,
 		struct kgem_bo *dst_bo,
 		unsigned flags)
 {
+	if (flags & COPY_AVOID_BLT)
+		return false;
+
 	if (sna->render.has_mitigations_active) {
 		if (sna->kgem.ring != KGEM_BLT)
 			return false;

@@ -1146,13 +1146,52 @@ sna_disable_shared_pixmap_flipping(RRCrtcPtr crtc)
 	/* TODO(nullifed) */
 }
 
+static PixmapDirtyUpdatePtr sna_dirty_get_ent(ScreenPtr screen, PixmapPtr secondary_dst)
+{
+    PixmapDirtyUpdatePtr ent;
+
+    if (xorg_list_is_empty(&screen->pixmap_dirty_list))
+        return NULL;
+
+    xorg_list_for_each_entry(ent, &screen->pixmap_dirty_list, ent) {
+        if (ent->secondary_dst == secondary_dst)
+            return ent;
+    }
+
+    return NULL;
+}
+
 static Bool
 sna_start_flipping_pixmap_tracking(RRCrtcPtr crtc, DrawablePtr src,
                               PixmapPtr secondary_dst1, PixmapPtr secondary_dst2,
                               int x, int y, int dst_x, int dst_y,
                               Rotation rotation)
 {
-	/* TODO(nullifed) */
+	ScreenPtr screen = src->pScreen;
+	struct sna *sna = to_sna_from_screen(screen);
+	if (sna == NULL)
+		return FALSE;
+
+	sna_pixmap_priv ppriv1 = sna_get_pixmap_priv(sna, secondary_dst1->primary_pixmap);
+	sna_pixmap_priv ppriv2 = sna_get_pixmap_priv(sna, secondary_dst2->primary_pixmap);
+
+	if (!PixmapStartDirtyTracking(src, secondary_dst1, x, y,
+                                  dst_x, dst_y, rotation)) {
+		return FALSE;
+	}
+
+	if (!PixmapStartDirtyTracking(src, secondary_dst2, x, y,
+                                  dst_x, dst_y, rotation)) {
+		PixmapStopDirtyTracking(src, secondary_dst1);
+		return FALSE;
+	}
+
+	ppriv1->dirty = sna_dirty_get_ent(screen, secondary_dst1);
+	ppriv2->dirty = sna_dirty_get_ent(screen, secondary_dst2);
+
+	ppriv1->defer_dirty_update = TRUE;
+	ppriv2->defer_dirty_update = TRUE;
+
 	return TRUE;
 }
 #endif

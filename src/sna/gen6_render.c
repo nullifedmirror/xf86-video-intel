@@ -2741,6 +2741,9 @@ static inline bool prefer_blt_copy(struct sna *sna,
 				   struct kgem_bo *dst_bo,
 				   unsigned flags)
 {
+	if (flags & COPY_AVOID_BLT)
+		return false;
+
 	if (flags & COPY_SYNC)
 		return false;
 

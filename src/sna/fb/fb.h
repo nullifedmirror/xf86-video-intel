@@ -517,6 +517,9 @@ fbPolySegment(DrawablePtr drawable, GCPtr gc, int n, xSegment *seg);
 extern RegionPtr
 fbBitmapToRegion(PixmapPtr pixmap);
 
+extern RegionPtr
+fbPixmapToRegion(PixmapPtr pixmap);
+
 extern void
 fbPolyPoint(DrawablePtr drawable, GCPtr gc,
 	    int mode, int n, xPoint *pt,

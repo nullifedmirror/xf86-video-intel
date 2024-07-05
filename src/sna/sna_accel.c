@@ -1109,15 +1109,99 @@ static unsigned small_copy(const RegionRec *region)
 #if HAS_PRIME_FLIPPING
 static Bool sna_prime_present_shared_pixmap(PixmapPtr secondary_dst)
 {
-	PixmapPtr pixmap = secondary_dst->primary_pixmap;
-	struct sna_pixmap *priv = sna_pixmap(pixmap);
-	if (priv == NULL)
+	const BoxRec *box;
+	int n;
+	int16_t dx, dy;
+	bool RET = FALSE;
+
+	struct sna *sna = to_sna_from_pixmap(secondary_dst->primary_pixmap);
+	if (sna == NULL) {
 		return FALSE;
+	}
 
-	sna_damage_all(&priv->gpu_damage, pixmap);
-	sna_damage_all(&priv->cpu_damage, pixmap);
+	sna_pixmap_priv ppriv = sna_get_pixmap_priv(sna, secondary_dst->primary_pixmap);
+	PixmapDirtyUpdatePtr dirty = ppriv->dirty;
 
-	return TRUE;
+	RegionRec region, *damage = DamageRegion(dirty->damage);
+
+	PixmapPtr src, dst;
+
+#ifdef HAS_DIRTYTRACKING_DRAWABLE_SRC
+	src = get_drawable_pixmap(dirty->src);
+#else
+	src = dirty->src;
+#endif
+	dst = PixmapDirtyPrimary(dirty);
+
+	if (RegionNil(damage)) {
+		/* We didn't get any damage, yell at the driver to try harder. */
+		return FALSE;
+	}
+
+	region.extents.x1 = dirty->x;
+	region.extents.x2 = dirty->x + dst->drawable.width;
+	region.extents.y1 = dirty->y;
+	region.extents.y2 = dirty->y + dst->drawable.height;
+	region.data = NULL;
+
+	RegionIntersect(&region, &region, damage);
+	if (RegionNil(&region)) {
+#if 1
+		xf86Msg(X_NONE, "[sna_prime_present_shared_pixmap] RegionNil(&region)\n");
+#endif
+		goto skip;
+	}
+
+	dx = -dirty->x;
+	dy = -dirty->y;
+#if HAS_DIRTYTRACKING2
+	dx += dirty->dst_x;
+	dy += dirty->dst_y;
+#endif
+
+	RegionTranslate(&region, dx, dy);
+	DamageRegionAppend(&PixmapDirtyDst(dirty)->drawable, &region);
+
+	box = region_rects(&region);
+	n = region_num_rects(&region);
+
+	if (wedged(sna)) {
+fallback:
+		if (!sna_pixmap_move_to_cpu(src, MOVE_READ))
+			goto skip;
+
+		if (!sna_pixmap_move_to_cpu(dst, MOVE_READ | MOVE_WRITE | MOVE_INPLACE_HINT))
+			goto skip;
+	} else {
+		if (!sna_pixmap_move_to_gpu(src, MOVE_READ | MOVE_ASYNC_HINT | __MOVE_FORCE))
+			goto fallback;
+
+		if (!sna_pixmap_move_to_gpu(dst, MOVE_READ | MOVE_WRITE | MOVE_ASYNC_HINT | __MOVE_FORCE))
+			goto fallback;
+
+		if (!sna->render.copy_boxes(sna, GXcopy,
+						    &src->drawable, __sna_pixmap_get_bo(src), -dx, -dy,
+						    &dst->drawable, __sna_pixmap_get_bo(dst),   0,   0,
+						    box, n, COPY_AVOID_BLT))
+			goto fallback;
+
+		/* Before signalling the slave via ProcessPending,
+		 * ensure not only the batch is submitted as the
+		 * slave may be using the Damage callback to perform
+		 * its copy, but also that the memory must be coherent
+		 * - we need to treat it as uncached for the PCI slave
+		 * will bypass LLC.
+		 */
+		kgem_bo_sync__gtt(&sna->kgem, __sna_pixmap_get_bo(dst));
+	}
+
+	DamageRegionProcessPending(&PixmapDirtyDst(dirty)->drawable);
+	RET = TRUE;
+skip:
+
+	RegionUninit(&region);
+	DamageEmpty(dirty->damage);
+	return RET;
 }
 
 static Bool sna_request_shared_pixmap_notify_damage(PixmapPtr ppix)
@@ -1147,6 +1231,14 @@ static Bool sna_stop_flipping_pixmap_tracking(DrawablePtr src, PixmapPtr seconda
 
 	ret &= PixmapStopDirtyTracking(src, secondary_dst1);
 	ret &= PixmapStopDirtyTracking(src, secondary_dst2);
+
+	if (ret) {
+		ppriv1->dirty = NULL;
+		ppriv2->dirty = NULL;
+
+		ppriv1->defer_dirty_update = FALSE;
+		ppriv2->defer_dirty_update = FALSE;
+	}
 
 	return ret;
 }
@@ -17712,8 +17804,9 @@ static bool sna_accel_do_throttle(struct sna *sna)
 		}
 	} else if (!sna->kgem.need_retire) {
 		DBG(("%s -- no pending activity\n", __FUNCTION__));
-	} else
+	} else {
 		timer_enable(sna, THROTTLE_TIMER, 20);
+	}
 
 	return false;
 }
@@ -17750,6 +17843,22 @@ static void sna_accel_post_damage(struct sna *sna)
 		damage = DamageRegion(dirty->damage);
 		if (RegionNil(damage))
 			continue;
+
+#if HAS_PRIME_FLIPPING
+		if (!screen->isGPU) {
+			sna_pixmap_priv ppriv = sna_get_pixmap_priv(sna, dirty->secondary_dst);
+		
+			if (ppriv->notify_on_damage) {
+				ppriv->notify_on_damage = FALSE;
+
+				dirty->secondary_dst->drawable.pScreen->SharedPixmapNotifyDamage(dirty->secondary_dst);
+			}
+
+			if (ppriv->defer_dirty_update) {
+				continue;
+			}
+		}
+#endif
 
 #ifdef HAS_DIRTYTRACKING_DRAWABLE_SRC
 		src = get_drawable_pixmap(dirty->src);
@@ -17863,15 +17972,6 @@ fallback:
 		DamageRegionProcessPending(&PixmapDirtyDst(dirty)->drawable);
 skip:
 		RegionUninit(&region);
-
-#if HAS_PRIME_FLIPPING
-		sna_pixmap_priv ppriv = sna_get_pixmap_priv(sna, dirty->secondary_dst->primary_pixmap);
-		if (ppriv->notify_on_damage) {
-			ppriv->notify_on_damage = FALSE;
-
-			dirty->secondary_dst->drawable.pScreen->SharedPixmapNotifyDamage(dirty->secondary_dst);
-		}
-#endif
 
 		DamageEmpty(dirty->damage);
 	}
