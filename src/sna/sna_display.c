@@ -8282,9 +8282,57 @@ static bool sna_emit_wait_for_scanline_skl(struct sna *sna,
 					   int pipe, int y1, int y2,
 					   bool full_height)
 {
-	/* TODO(nullifed) */
-	/* SKL+ should be using FORCEWAKE_ACK_RENDER_GEN9 instead of FORCEWAKE_MT. */
-	return false;
+	uint32_t event;
+	uint32_t *b;
+
+	if (!sna->kgem.has_secure_batches)
+		return false;
+
+	b = kgem_get_batch(&sna->kgem);
+	sna->kgem.nbatch += 17;
+
+	switch (pipe) {
+	default: assert(0); /* fall through */
+	case 0: event = 1 << 0; break;
+	case 1: event = 1 << 8; break;
+	case 2: event = 1 << 14; break;
+	}
+
+	b[0] = MI_LOAD_REGISTER_IMM | 1;
+	b[1] = 0x44050; /* DERRMR */
+	b[2] = ~event;
+	b[3] = MI_LOAD_REGISTER_IMM | 1;
+	b[4] = 0xa188; /* FORCEWAKE_GT_GEN9 */
+	b[5] = 2 << 16 | 3;
+
+	/* The documentation says that the LOAD_SCAN_LINES command
+	 * always comes in pairs. Don't ask me why. */
+	switch (pipe) {
+	default: assert(0); /* fall through */
+	case 0: event = 0 << 19; break;
+	case 1: event = 1 << 19; break;
+	case 2: event = 4 << 19; break;
+	}
+	b[8] = b[6] = MI_LOAD_SCAN_LINES_INCL | event;
+	b[9] = b[7] = (y1 << 16) | (y2-1);
+
+	switch (pipe) {
+	default: assert(0); /* fall through */
+	case 0: event = 1 << 0; break;
+	case 1: event = 1 << 8; break;
+	case 2: event = 1 << 14; break;
+	}
+	b[10] = MI_WAIT_FOR_EVENT | event;
+
+	b[11] = MI_LOAD_REGISTER_IMM | 1;
+	b[12] = 0xa188; /* FORCEWAKE_GT_GEN9 */
+	b[13] = 2 << 16;
+	b[14] = MI_LOAD_REGISTER_IMM | 1;
+	b[15] = 0x44050; /* DERRMR */
+	b[16] = ~0;
+
+	sna->kgem.batch_flags |= I915_EXEC_SECURE;
+	return true;
 }
 
 static bool sna_emit_wait_for_scanline_hsw(struct sna *sna,
@@ -8567,8 +8615,10 @@ sna_wait_for_scanline(struct sna *sna,
 	DBG(("%s: pipe=%d, y1=%d, y2=%d, full_height?=%d\n",
 	     __FUNCTION__, pipe, y1, y2, full_height));
 
-	if (sna->kgem.gen >= 0110)
+	if (sna->kgem.gen >= 0120)
 		ret = false;
+	else if (sna->kgem.gen >= 0110)
+		ret = sna_emit_wait_for_scanline_skl(sna, crtc, pipe, y1, y2, full_height);
 	else if (sna->kgem.gen == 0101)
 		ret = false; /* chv, vsync method unknown */
 	else if (sna->kgem.gen >= 075)
