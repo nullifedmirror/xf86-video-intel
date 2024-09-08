@@ -289,7 +289,6 @@ struct sna {
 #define SSE4_2 0x40
 #define AVX 0x80
 #define AVX2 0x100
-#define FMA3 0x200
 
 	bool ignore_copy_area : 1;
 	/* Enables an unimplemented DRI2 swap extension. */

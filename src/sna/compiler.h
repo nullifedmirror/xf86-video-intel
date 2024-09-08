@@ -57,10 +57,14 @@
 #endif
 
 #define HAS_GCC(major, minor) defined(__GNUC__) && (__GNUC__ > (major) || __GNUC__ == (major) && __GNUC_MINOR__ >= (minor))
+/* clang doesn't have an equivalent generalization like GCC has, don't bother tuning for Intel. */
 
-#if HAS_GCC(4, 5)
+#if defined (__clang__)
 #define sse2 fast __attribute__((target("sse2,fpmath=sse")))
 #define sse4_2 fast __attribute__((target("sse4.2,sse2,fpmath=sse")))
+#elif HAS_GCC(4, 9)
+#define sse2 fast __attribute__((target("sse2,fpmath=sse,tune=intel")))
+#define sse4_2 fast __attribute__((target("sse4.2,sse2,fpmath=sse,tune=intel")))
 #endif
 
 #if HAS_GCC(4, 6) && defined(__OPTIMIZE__)
@@ -69,8 +73,12 @@
 #define fast
 #endif
 
-#if HAS_GCC(4, 7)
-#define avx2 fast __attribute__((target("avx2,avx,fma,sse4.2,sse2,fpmath=sse")))
+#if defined (__clang__)
+#define avx2 fast __attribute__((target("avx2,avx,sse4.2,sse2,fpmath=sse")))
+#define assume_aligned(ptr, align) __builtin_assume_aligned((ptr), (align))
+#define assume_misaligned(ptr, align, offset) __builtin_assume_aligned((ptr), (align), (offset))
+#elif HAS_GCC(4, 9)
+#define avx2 fast __attribute__((target("avx2,avx,sse4.2,sse2,fpmath=sse,tune=intel")))
 #define assume_aligned(ptr, align) __builtin_assume_aligned((ptr), (align))
 #define assume_misaligned(ptr, align, offset) __builtin_assume_aligned((ptr), (align), (offset))
 #else
