@@ -1650,6 +1650,8 @@ emit_primitive_simple_source__avx2(struct sna *sna,
 	dst.p.y = r->dst.y;
 	v[6] = dst.f;
 	v[8] = ((r->src.y + ty) * yy + y0) * sy;
+
+	__asm__ ("vzeroupper");
 }
 
 avx2 fastcall static void
@@ -1689,6 +1691,8 @@ emit_boxes_simple_source__avx2(const struct sna_composite_op *op,
 		v += 9;
 		box++;
 	} while (--nbox);
+
+	__asm__ ("vzeroupper");
 }
 
 avx2 fastcall static void
@@ -2895,6 +2899,8 @@ emit_span_simple__avx2(struct sna *sna,
 	v[10] = ((box->y1 + ty) * yy + y0) * sy;
 
 	v[11] = v[7] = v[3] = opacity;
+
+	__asm__ ("vzeroupper");
 }
 
 avx2 fastcall static void

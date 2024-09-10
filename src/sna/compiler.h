@@ -28,12 +28,14 @@
 #ifndef _SNA_COMPILER_H_
 #define _SNA_COMPILER_H_
 
+#define HAS_CLANG defined(__clang_major__) && defined(__clang_minor__)
+#define HAS_GCC(major, minor) defined(__GNUC__) && (__GNUC__ > (major) || __GNUC__ == (major) && __GNUC_MINOR__ >= (minor))
+
 #if defined(__GNUC__) && (__GNUC__ > 2) && defined(__OPTIMIZE__)
 #define likely(expr) (__builtin_expect (!!(expr), 1))
 #define unlikely(expr) (__builtin_expect (!!(expr), 0))
 #define noinline __attribute__((noinline))
 #define force_inline inline /* __attribute__((always_inline)) */
-#define fastcall __attribute__((regparm(3)))
 #define must_check __attribute__((warn_unused_result))
 #define constant __attribute__((const))
 #define pure __attribute__((pure))
@@ -41,12 +43,12 @@
 #define flatten __attribute__((flatten))
 #define nonnull __attribute__((nonnull))
 #define page_aligned __attribute__((aligned(4096)))
+#define fastcall __attribute__((regparm(3)))
 #else
 #define likely(expr) (expr)
 #define unlikely(expr) (expr)
 #define noinline
 #define force_inline inline
-#define fastcall
 #define must_check
 #define constant
 #define pure
@@ -54,12 +56,12 @@
 #define flatten
 #define nonnull
 #define page_aligned
+#define fastcall
 #endif
 
-#define HAS_GCC(major, minor) defined(__GNUC__) && (__GNUC__ > (major) || __GNUC__ == (major) && __GNUC_MINOR__ >= (minor))
 /* clang doesn't have an equivalent generalization like GCC has, don't bother tuning for Intel. */
 
-#if defined (__clang__)
+#ifdef HAS_CLANG
 #define sse2 fast __attribute__((target("sse2,fpmath=sse")))
 #define sse4_2 fast __attribute__((target("sse4.2,sse2,fpmath=sse")))
 #elif HAS_GCC(4, 9)
@@ -73,7 +75,7 @@
 #define fast
 #endif
 
-#if defined (__clang__)
+#ifdef HAS_CLANG
 #define avx2 fast __attribute__((target("avx2,avx,sse4.2,sse2,fpmath=sse")))
 #define assume_aligned(ptr, align) __builtin_assume_aligned((ptr), (align))
 #define assume_misaligned(ptr, align, offset) __builtin_assume_aligned((ptr), (align), (offset))
