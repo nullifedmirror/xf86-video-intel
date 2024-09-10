@@ -69,7 +69,9 @@
 #define sse4_2 fast __attribute__((target("sse4.2,sse2,fpmath=sse,tune=intel")))
 #endif
 
-#if HAS_GCC(4, 6) && defined(__OPTIMIZE__)
+#if HAS_GCC(4, 9) && defined(__OPTIMIZE__)
+#define fast __attribute__((optimize("Ofast"))) __attribute__((optimize("live-range-shrinkage")))
+#elif HAS_GCC(4, 6) && defined(__OPTIMIZE__)
 #define fast __attribute__((optimize("Ofast")))
 #else
 #define fast

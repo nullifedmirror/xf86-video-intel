@@ -595,11 +595,7 @@ check_flip__crtc(struct sna *sna,
 	return true;
 }
 
-static Bool
-sna_present_check_flip(RRCrtcPtr crtc,
-		       WindowPtr window,
-		       PixmapPtr pixmap,
-		       Bool sync_flip)
+static Bool sna_present_check_flip2(RRCrtcPtr crtc, WindowPtr window, PixmapPtr pixmap, Bool sync_flip, PresentFlipReason *reason)
 {
 	struct sna *sna = to_sna_from_pixmap(pixmap);
 	struct sna_pixmap *flip;
@@ -654,19 +650,21 @@ sna_present_check_flip(RRCrtcPtr crtc,
 			if (flip->gpu_bo->tiling != I915_TILING_NONE) {
 				DBG(("%s: pined bo, tilng=%d needs NONE\n",
 				     __FUNCTION__, flip->gpu_bo->tiling));
+				*reason = PRESENT_FLIP_REASON_BUFFER_FORMAT;
 				return FALSE;
 			}
 		} else {
 			if (!sna->kgem.can_scanout_y &&
 			    flip->gpu_bo->tiling == I915_TILING_Y) {
-				DBG(("%s: pined bo, tilng=%d and can't scanout Y\n",
+				DBG(("%s: pinned bo, tilng=%d and can't scanout Y\n",
 				     __FUNCTION__, flip->gpu_bo->tiling));
+				*reason = PRESENT_FLIP_REASON_BUFFER_FORMAT;
 				return FALSE;
 			}
 		}
 
 		if (flip->gpu_bo->pitch & 63) {
-			DBG(("%s: pined bo, bad pitch=%d\n",
+			DBG(("%s: pinned bo, bad pitch=%d\n",
 			     __FUNCTION__, flip->gpu_bo->pitch));
 			return FALSE;
 		}
@@ -988,9 +986,12 @@ static present_screen_info_rec present_info = {
 	.flush = sna_present_flush,
 
 	.capabilities = PresentCapabilityNone,
-	.check_flip = sna_present_check_flip,
 	.flip = sna_present_flip,
 	.unflip = sna_present_unflip,
+
+	/* Use the fancier check_flip2 even if we don't implement anything new here */
+	.check_flip = NULL,
+	.check_flip2 = sna_present_check_flip2
 };
 
 bool sna_present_open(struct sna *sna, ScreenPtr screen)
@@ -1012,6 +1013,9 @@ void sna_present_update(struct sna *sna)
 		present_info.capabilities |= PresentCapabilityAsync;
 	else
 		present_info.capabilities &= ~PresentCapabilityAsync;
+
+	if (xf86ReturnOptValBool(sna->Options, OPTION_ASYNC_PRESENT_WIP, FALSE))
+		present_info.capabilities |= PresentCapabilityAsyncMayTear;
 
 	DBG(("%s: has_async_flip? %d\n", __FUNCTION__,
 	     !!(present_info.capabilities & PresentCapabilityAsync)));
