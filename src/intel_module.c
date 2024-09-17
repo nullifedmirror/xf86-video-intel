@@ -135,6 +135,7 @@ static const struct intel_device_info intel_skylake_info = {
 
 static const struct intel_device_info intel_broxton_info = {
 	.gen = 0111,
+	.prefer_y_tiling = 1,
 };
 
 static const struct intel_device_info intel_kabylake_info = {
@@ -154,7 +155,6 @@ static const struct intel_device_info intel_coffeelake_info = {
 
 static const struct intel_device_info intel_cannonlake_info = {
 	.gen = 0120,
-	.prefer_y_tiling = 1,
 };
 
 static const struct intel_device_info intel_icelake_info = {
