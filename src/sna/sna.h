@@ -1440,7 +1440,7 @@ static inline uint32_t sna_br13_color_depth(int bpp)
 	}
 }
 
-static inline bool prefer_y_tiling0(struct sna *sna, bool require_scanout) {
+static inline bool prefer_y_tiling(struct sna *sna) {
 	static int should_prefer_y_tiling = -1;
 
 	if (should_prefer_y_tiling == -1) {
@@ -1451,16 +1451,22 @@ static inline bool prefer_y_tiling0(struct sna *sna, bool require_scanout) {
 		}
 	}
 
-	if (require_scanout && sna->info->gen < 0110) {
-		/* Scanout is only possible from Skylake and newer. */
-		return false;
-	}
-
 	return should_prefer_y_tiling;
 }
 
-static inline bool prefer_y_tiling(struct sna *sna) {
-	return prefer_y_tiling0(sna, false);
+static inline bool prefer_y_tiling_scanout(struct sna *sna) {
+	static int should_prefer_y_tiling = -1;
+
+	if (should_prefer_y_tiling == -1) {
+		/* Pre-Skylake cannot scanout Y-tiles. */
+		if (sna->info->gen < 0110 || !sna->info->prefer_y_tiling) {
+			should_prefer_y_tiling = 0;
+		} else {
+			should_prefer_y_tiling = xf86ReturnOptValBool(sna->Options, OPTION_PREFER_Y_TILING, TRUE);
+		}
+	}
+
+	return should_prefer_y_tiling;
 }
 
 #endif /* _SNA_H */

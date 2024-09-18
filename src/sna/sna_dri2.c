@@ -472,15 +472,17 @@ static uint32_t color_tiling(struct sna *sna, DrawablePtr draw)
 	if (!sna->kgem.can_fence)
 		return I915_TILING_NONE;
 
+	bool can_scanout_y = prefer_y_tiling_scanout(sna);
+
 	/* Prefer to enable TILING_Y if this buffer will never be a
- 	 * candidate for pageflipping
+ 	 * candidate for pageflipping (on pre-SKL)
  	 */
-	if (!prefer_y_tiling0(sna, true) &&
+	if (!can_scanout_y &&
 	    (draw->width  != sna->front->drawable.width ||
 	     draw->height != sna->front->drawable.height))
 		tiling = I915_TILING_Y;
 	else
-		tiling = I915_TILING_X;
+		tiling = can_scanout_y ? I915_TILING_Y : I915_TILING_X;
 
 	return kgem_choose_tiling(&sna->kgem, -tiling,
 				  draw->width,

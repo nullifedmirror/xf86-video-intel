@@ -1817,7 +1817,7 @@ static bool sna_pixmap_alloc_gpu(struct sna *sna,
 	/* "However, prior to Sky Lake, Y-tiling was not available for scanout so X tiling was
 	 *  used for any sort of window-system buffers. Starting with Sky Lake, we can scan out from Y-tiled buffers."
 	 */
-	uint32_t scanout_tile = prefer_y_tiling0(sna, true) ? I915_TILING_Y : I915_TILING_X;
+	uint32_t scanout_tile = prefer_y_tiling_scanout(sna) ? I915_TILING_Y : I915_TILING_X;
 	uint32_t tiling;
 
 	/* Use tiling by default, but disable per user request */
